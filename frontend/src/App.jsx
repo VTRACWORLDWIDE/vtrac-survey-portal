@@ -316,7 +316,12 @@ function SurveyForm({ projectSlug }) {
     }
     audioStartPromiseRef.current = (async () => {
       try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: getAudioStreamConstraints() });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
       let recorder;
       try {
         recorder = new MediaRecorder(stream, getAudioRecorderOptions());
@@ -703,8 +708,19 @@ function deriveAnswers(answers) {
   };
 }
 
+function getAudioStreamConstraints() {
+  return {
+    channelCount: { ideal: 1 },
+    sampleRate: { ideal: 16000 },
+    sampleSize: { ideal: 16 },
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true
+  };
+}
+
 function getAudioRecorderOptions() {
-  const options = { audioBitsPerSecond: 24000 };
+  const options = { audioBitsPerSecond: 16000 };
   const supportedTypes = [
     'audio/webm;codecs=opus',
     'audio/webm',

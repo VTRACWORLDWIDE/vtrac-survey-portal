@@ -371,8 +371,10 @@ app.get('/api/responses/:id(\\d+)/audio', requireAdmin, async (req, res, next) =
     const row = result.rows[0];
     if (!row?.audio_data) return res.status(404).json({ error: 'Audio recording not found.' });
     const audioBuffer = Buffer.from(row.audio_data, 'base64');
-    res.setHeader('Content-Type', row.audio_mime_type || 'audio/webm');
-    res.setHeader('Content-Disposition', `attachment; filename="vtrac-response-${req.params.id}-audio.webm"`);
+    const audioMimeType = normalizeStoredAudioMimeType(row.audio_mime_type);
+    const extension = audioExtensionFromMime(audioMimeType);
+    res.setHeader('Content-Type', audioMimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="vtrac-response-${req.params.id}-audio.${extension}"`);
     res.send(audioBuffer);
   } catch (error) {
     next(error);
@@ -1074,8 +1076,23 @@ function inferAudioMimeType(mimeType) {
   if (value.includes('webm')) return 'audio/webm';
   if (value.includes('mp4')) return 'audio/mp4';
   if (value.includes('ogg')) return 'audio/ogg';
+  if (value.includes('aac')) return 'audio/aac';
   if (value === 'application/octet-stream') return 'audio/webm';
   return '';
+}
+
+function normalizeStoredAudioMimeType(mimeType) {
+  const value = String(mimeType || '').toLowerCase();
+  if (value.startsWith('audio/')) return value;
+  return inferAudioMimeType(value) || 'audio/webm';
+}
+
+function audioExtensionFromMime(mimeType) {
+  const value = String(mimeType || '').toLowerCase();
+  if (value.includes('mp4') || value.includes('aac')) return 'm4a';
+  if (value.includes('ogg')) return 'ogg';
+  if (value.includes('wav')) return 'wav';
+  return 'webm';
 }
 
 function defaultExportRow(questions) {

@@ -735,6 +735,14 @@ function ensureAudioDataUrl(dataUrl, mimeType = 'audio/webm') {
   return value.replace(/^data:[^;]*;base64,/, `data:${mimeType};base64,`);
 }
 
+function audioExtensionFromMime(mimeType) {
+  const value = String(mimeType || '').toLowerCase();
+  if (value.includes('mp4') || value.includes('aac')) return 'm4a';
+  if (value.includes('ogg')) return 'ogg';
+  if (value.includes('wav')) return 'wav';
+  return 'webm';
+}
+
 function getAudioRecorderOptions() {
   const options = { audioBitsPerSecond: 16000 };
   const supportedTypes = [
@@ -1275,6 +1283,7 @@ function AdminDashboard({ token, onLogout }) {
   const [editing, setEditing] = useState(null);
   const [editingClient, setEditingClient] = useState(null);
   const [editingResponse, setEditingResponse] = useState(null);
+  const [audioPreview, setAudioPreview] = useState(null);
   const [filters, setFilters] = useState({ enumerator: '', location: '', dateFrom: '', dateTo: '' });
   const [appliedFilters, setAppliedFilters] = useState(filters);
   const [data, setData] = useState(null);
@@ -1344,6 +1353,42 @@ function AdminDashboard({ token, onLogout }) {
   useEffect(() => {
     loadFilterOptions();
   }, [selectedProject?.id]);
+
+  useEffect(() => {
+    let objectUrl = '';
+    let cancelled = false;
+    setAudioPreview(null);
+
+    if (!editingResponse?.hasAudio) return undefined;
+
+    async function loadAudioPreview() {
+      try {
+        const response = await fetch(`${apiBase}/api/responses/${editingResponse.id}/audio`, { headers: authHeaders });
+        if (response.status === 401) return onLogout();
+        if (!response.ok) {
+          if (!cancelled) setAudioPreview({ error: 'Audio recording is not available.' });
+          return;
+        }
+        const blob = await response.blob();
+        objectUrl = URL.createObjectURL(blob);
+        if (!cancelled) {
+          setAudioPreview({
+            url: objectUrl,
+            mimeType: blob.type || editingResponse.audioMimeType || 'audio/webm'
+          });
+        }
+      } catch {
+        if (!cancelled) setAudioPreview({ error: 'Unable to load audio preview.' });
+      }
+    }
+
+    loadAudioPreview();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [editingResponse?.id, editingResponse?.hasAudio]);
 
   function startNewProject() {
     setEditing({
@@ -1459,7 +1504,7 @@ function AdminDashboard({ token, onLogout }) {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `vtrac-response-${responseId}-audio.webm`;
+    anchor.download = `vtrac-response-${responseId}-audio.${audioExtensionFromMime(blob.type || response.headers.get('Content-Type'))}`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -1571,6 +1616,7 @@ function AdminDashboard({ token, onLogout }) {
           onCancel={() => setEditingResponse(null)}
           onSave={saveResponse}
           onDownloadAudio={downloadAudio}
+          audioPreview={audioPreview}
         />
       )}
       {status && <p className="status success">{status}</p>}
@@ -1748,7 +1794,7 @@ function ClientAccessManager({ clients, projects, editingClient, onStartNew, onE
   );
 }
 
-function ResponseEditor({ response, project, onChange, onCancel, onSave, onDownloadAudio }) {
+function ResponseEditor({ response, project, onChange, onCancel, onSave, onDownloadAudio, audioPreview }) {
   function update(field, value) {
     onChange({ ...response, [field]: value });
   }
@@ -1786,6 +1832,23 @@ function ResponseEditor({ response, project, onChange, onCancel, onSave, onDownl
           <button className="primary" onClick={() => onSave(response)}><Save size={18} /> Save Response</button>
         </div>
       </div>
+
+      {response.hasAudio && (
+        <div className="audio-review-card">
+          <div>
+            <strong>Audio review</strong>
+            <span>{audioPreview?.mimeType ? audioPreview.mimeType : 'Loading recording...'}</span>
+          </div>
+          {audioPreview?.url ? (
+            <audio controls preload="metadata">
+              <source src={audioPreview.url} type={audioPreview.mimeType || response.audioMimeType || 'audio/webm'} />
+              Your browser cannot play this audio. Please download it.
+            </audio>
+          ) : (
+            <p>{audioPreview?.error || 'Preparing audio preview...'}</p>
+          )}
+        </div>
+      )}
 
       <div className="inline-grid">
         <label>

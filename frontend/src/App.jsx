@@ -9,12 +9,14 @@ import {
   Link2,
   LocateFixed,
   MapPin,
+  Mic,
   Plus,
   RefreshCw,
   Save,
   Search,
   Send,
   ShieldCheck,
+  Square,
   Trash2,
   UserRound
 } from 'lucide-react';
@@ -210,6 +212,9 @@ function SurveyForm({ projectSlug }) {
   const [saving, setSaving] = useState(false);
   const [enumeratorStats, setEnumeratorStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [audio, setAudio] = useState(null);
+  const [audioStatus, setAudioStatus] = useState('No recording');
+  const [mediaRecorder, setMediaRecorder] = useState(null);
 
   useEffect(() => {
     fetch(`${apiBase}/api/survey-config?project=${encodeURIComponent(projectSlug)}`)
@@ -285,23 +290,80 @@ function SurveyForm({ projectSlug }) {
       setGpsStatus('GPS is not supported on this device.');
       return;
     }
-    setGpsStatus('Capturing...');
+    setGpsStatus('Capturing quick GPS...');
+    const applyPosition = (position, label = 'Captured') => {
+      const nextGps = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy
+      };
+      setGps(nextGps);
+      if (questions.some((question) => question.id === 'google_coordinates')) {
+        updateAnswer('google_coordinates', `${nextGps.latitude.toFixed(6)}, ${nextGps.longitude.toFixed(6)}`);
+      }
+      setGpsStatus(`${label} within ${Math.round(position.coords.accuracy)}m`);
+    };
+
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const nextGps = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy
-        };
-        setGps(nextGps);
-        if (questions.some((question) => question.id === 'google_coordinates')) {
-          updateAnswer('google_coordinates', `${nextGps.latitude.toFixed(6)}, ${nextGps.longitude.toFixed(6)}`);
-        }
-        setGpsStatus(`Captured within ${Math.round(position.coords.accuracy)}m`);
+        applyPosition(position, 'Captured');
+        navigator.geolocation.getCurrentPosition(
+          (freshPosition) => applyPosition(freshPosition, 'Updated'),
+          () => {},
+          { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+        );
       },
-      () => setGpsStatus('GPS permission denied or unavailable.'),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      () => {
+        setGpsStatus('Trying high accuracy...');
+        navigator.geolocation.getCurrentPosition(
+          (position) => applyPosition(position, 'Captured'),
+          () => setGpsStatus('GPS unavailable. Continue or tap GPS again.'),
+          { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+        );
+      },
+      { enableHighAccuracy: false, timeout: 4000, maximumAge: 600000 }
     );
+  }
+
+  async function startAudioRecording() {
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      setAudioStatus('Audio recording is not supported on this browser.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+        setAudio({
+          dataUrl: await blobToDataUrl(blob),
+          mimeType: blob.type,
+          size: blob.size
+        });
+        setAudioStatus(`Recorded ${formatBytes(blob.size)}`);
+        setMediaRecorder(null);
+      };
+      recorder.start();
+      setMediaRecorder(recorder);
+      setAudio(null);
+      setAudioStatus('Recording...');
+    } catch {
+      setAudioStatus('Microphone permission denied or unavailable.');
+    }
+  }
+
+  function stopAudioRecording() {
+    if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
+  }
+
+  function clearAudio() {
+    setAudio(null);
+    setAudioStatus('No recording');
   }
 
   async function submit(event) {
@@ -312,7 +374,7 @@ function SurveyForm({ projectSlug }) {
       const response = await fetch(`${apiBase}/api/responses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, projectSlug, gps })
+        body: JSON.stringify({ ...form, projectSlug, gps, audio })
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Unable to submit survey.');
@@ -328,6 +390,7 @@ function SurveyForm({ projectSlug }) {
       });
       setGps(null);
       setGpsStatus('Not captured');
+      clearAudio();
     } catch (error) {
       setStatus(error.message);
     } finally {
@@ -395,6 +458,30 @@ function SurveyForm({ projectSlug }) {
             </button>
           </div>
 
+          <div className="gps-row audio-row">
+            <div>
+              <strong>Audio recording</strong>
+              <span>{audioStatus}</span>
+            </div>
+            <div className="audio-actions">
+              {!mediaRecorder && (
+                <button type="button" className="icon-button" onClick={startAudioRecording} aria-label="Start audio recording">
+                  <Mic size={18} />
+                </button>
+              )}
+              {mediaRecorder && (
+                <button type="button" className="icon-button danger-button" onClick={stopAudioRecording} aria-label="Stop audio recording">
+                  <Square size={18} />
+                </button>
+              )}
+              {audio && (
+                <button type="button" className="icon-button" onClick={clearAudio} aria-label="Clear audio recording">
+                  <Trash2 size={18} />
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="form-section">
             <div className="section-kicker"><ClipboardList size={16} /> Questions</div>
             {(config.questions || [])
@@ -411,9 +498,9 @@ function SurveyForm({ projectSlug }) {
             ))}
           </div>
 
-          <button className="primary submit-button" disabled={saving}>
+          <button className="primary submit-button" disabled={saving || Boolean(mediaRecorder)}>
             <Send size={18} />
-            {saving ? 'Submitting...' : 'Submit Survey'}
+            {saving ? 'Submitting...' : mediaRecorder ? 'Stop recording to submit' : 'Submit Survey'}
           </button>
           {status && <p className={status.includes('successfully') ? 'status success' : 'status'}>{status}</p>}
         </form>
@@ -503,6 +590,21 @@ function deriveAnswers(answers) {
       final_destination_time_validation: destinationValidation
     } : {})
   };
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function formatBytes(bytes) {
+  if (!bytes) return '0 KB';
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function questionAppliesToLocation(questionId, location = '') {
@@ -1116,6 +1218,21 @@ function AdminDashboard({ token, onLogout }) {
     await loadDashboard();
   }
 
+  async function downloadAudio(responseId) {
+    const response = await fetch(`${apiBase}/api/responses/${responseId}/audio`, { headers: authHeaders });
+    if (!response.ok) {
+      setStatus('Audio recording is not available.');
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `vtrac-response-${responseId}-audio.webm`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function download(type) {
     const response = await fetch(`${apiBase}/api/responses/export.${type}?${queryString}`, { headers: authHeaders });
     const blob = await response.blob();
@@ -1222,6 +1339,7 @@ function AdminDashboard({ token, onLogout }) {
           onChange={setEditingResponse}
           onCancel={() => setEditingResponse(null)}
           onSave={saveResponse}
+          onDownloadAudio={downloadAudio}
         />
       )}
       {status && <p className="status success">{status}</p>}
@@ -1399,7 +1517,7 @@ function ClientAccessManager({ clients, projects, editingClient, onStartNew, onE
   );
 }
 
-function ResponseEditor({ response, project, onChange, onCancel, onSave }) {
+function ResponseEditor({ response, project, onChange, onCancel, onSave, onDownloadAudio }) {
   function update(field, value) {
     onChange({ ...response, [field]: value });
   }
@@ -1427,6 +1545,11 @@ function ResponseEditor({ response, project, onChange, onCancel, onSave }) {
           <p>Submitted {new Date(response.submittedAt).toLocaleString()}</p>
         </div>
         <div className="actions">
+          {response.hasAudio && (
+            <button className="download audio-download" onClick={() => onDownloadAudio(response.id)}>
+              <Download size={16} /> Audio
+            </button>
+          )}
           <button className="secondary" onClick={autoClean}><RefreshCw size={18} /> Auto-clean</button>
           <button className="secondary" onClick={onCancel}>Cancel</button>
           <button className="primary" onClick={() => onSave(response)}><Save size={18} /> Save Response</button>
@@ -1546,7 +1669,7 @@ function RecentTable({ rows, loading, onReview }) {
               <th>Enumerator</th>
               <th>Location</th>
               <th>Respondent</th>
-              <th>Household</th>
+              <th>Audio</th>
               <th>GPS</th>
               <th>Review</th>
             </tr>
@@ -1559,7 +1682,7 @@ function RecentTable({ rows, loading, onReview }) {
                 <td>{row.enumerator_name}</td>
                 <td>{row.location}</td>
                 <td>{row.respondent_name || '-'}</td>
-                <td>{row.household_id || '-'}</td>
+                <td>{row.audio_mime_type ? 'Yes' : '-'}</td>
                 <td>{row.latitude && row.longitude ? `${row.latitude}, ${row.longitude}` : '-'}</td>
                 <td><button className="secondary compact-button" onClick={() => onReview(row.id)}>Review</button></td>
               </tr>

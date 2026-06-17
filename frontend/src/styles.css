@@ -393,6 +393,21 @@ textarea {
   gap: 2px;
 }
 
+.audio-row {
+  background: #f7faf9;
+}
+
+.audio-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.danger-button {
+  background: #fff1f1;
+  border-color: #efb8b8;
+  color: #9d2424;
+}
+
 .gps-row span {
   color: #5d7175;
   font-size: 0.9rem;

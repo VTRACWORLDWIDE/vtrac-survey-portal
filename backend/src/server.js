@@ -30,7 +30,7 @@ const defaultQuestions = [
 
 app.use(helmet());
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(',') || true }));
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '15mb' }));
 
 await ensureDatabase();
 
@@ -144,7 +144,8 @@ app.post('/api/responses', async (req, res, next) => {
       respondentPhone,
       householdId,
       answers = {},
-      gps
+      gps,
+      audio
     } = req.body;
 
     const project = await loadProjectForPublic(projectSlug || projectId);
@@ -163,6 +164,7 @@ app.post('/api/responses', async (req, res, next) => {
       return res.status(400).json({ error: `Missing required question: ${missingQuestion.label}` });
     }
 
+    const audioPayload = normalizeAudioData(audio);
     const result = await query(
       `INSERT INTO survey_responses (
         project_id,
@@ -174,9 +176,12 @@ app.post('/api/responses', async (req, res, next) => {
         answers,
         latitude,
         longitude,
-        gps_accuracy
+        gps_accuracy,
+        audio_data,
+        audio_mime_type,
+        audio_size
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING id, submitted_at`,
       [
         project.id,
@@ -188,7 +193,10 @@ app.post('/api/responses', async (req, res, next) => {
         answers,
         gps?.latitude ?? null,
         gps?.longitude ?? null,
-        gps?.accuracy ?? null
+        gps?.accuracy ?? null,
+        audioPayload?.data || null,
+        audioPayload?.mimeType || null,
+        audioPayload?.size || null
       ]
     );
 
@@ -275,7 +283,7 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
         filters.params
       ),
       query(
-        `SELECT id, enumerator_name, location, respondent_name, household_id, latitude, longitude, submitted_at
+        `SELECT id, enumerator_name, location, respondent_name, audio_mime_type, latitude, longitude, submitted_at
         FROM survey_responses
         ${filters.where}
         ORDER BY submitted_at DESC
@@ -337,6 +345,26 @@ app.get('/api/responses/:id', requireAdmin, async (req, res, next) => {
     const response = result.rows[0];
     if (!response) return res.status(404).json({ error: 'Response not found.' });
     res.json({ response: normalizeResponse(response) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/responses/:id/audio', requireAdmin, async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT audio_data, audio_mime_type
+      FROM survey_responses
+      WHERE id = $1
+      LIMIT 1`,
+      [req.params.id]
+    );
+    const row = result.rows[0];
+    if (!row?.audio_data) return res.status(404).json({ error: 'Audio recording not found.' });
+    const audioBuffer = Buffer.from(row.audio_data, 'base64');
+    res.setHeader('Content-Type', row.audio_mime_type || 'audio/webm');
+    res.setHeader('Content-Disposition', `attachment; filename="vtrac-response-${req.params.id}-audio.webm"`);
+    res.send(audioBuffer);
   } catch (error) {
     next(error);
   }
@@ -553,6 +581,9 @@ async function ensureDatabase() {
       latitude NUMERIC(10, 7),
       longitude NUMERIC(10, 7),
       gps_accuracy NUMERIC(10, 2),
+      audio_data TEXT,
+      audio_mime_type TEXT,
+      audio_size INT,
       submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -575,6 +606,9 @@ async function ensureDatabase() {
     );
 
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS project_id BIGINT REFERENCES survey_projects(id);
+    ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS audio_data TEXT;
+    ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS audio_mime_type TEXT;
+    ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS audio_size INT;
 
     CREATE INDEX IF NOT EXISTS idx_survey_responses_project ON survey_responses (project_id);
     CREATE INDEX IF NOT EXISTS idx_survey_responses_submitted_at ON survey_responses (submitted_at DESC);
@@ -967,10 +1001,10 @@ function flattenResponse(row, questions) {
     location: row.location || '',
     respondent_name: row.respondent_name || '',
     respondent_phone: row.respondent_phone || '',
-    household_id: row.household_id || '',
     latitude: row.latitude || '',
     longitude: row.longitude || '',
-    gps_accuracy: row.gps_accuracy || ''
+    gps_accuracy: row.gps_accuracy || '',
+    audio_recording: row.audio_data ? 'Yes' : 'No'
   };
 
   for (const question of questions) {
@@ -993,7 +1027,20 @@ function normalizeResponse(row) {
     latitude: row.latitude,
     longitude: row.longitude,
     gpsAccuracy: row.gps_accuracy,
+    hasAudio: Boolean(row.audio_data),
+    audioMimeType: row.audio_mime_type || '',
     submittedAt: formatTimestamp(row.submitted_at)
+  };
+}
+
+function normalizeAudioData(audio) {
+  if (!audio?.dataUrl) return null;
+  const match = String(audio.dataUrl).match(/^data:([^;]+);base64,(.+)$/);
+  if (!match || !match[1].startsWith('audio/')) return null;
+  return {
+    mimeType: match[1],
+    data: match[2],
+    size: Number(audio.size || 0) || null
   };
 }
 

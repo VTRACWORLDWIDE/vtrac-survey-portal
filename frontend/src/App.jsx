@@ -334,10 +334,11 @@ function SurveyForm({ projectSlug }) {
       };
       recorder.onstop = async () => {
         stream.getTracks().forEach((track) => track.stop());
-        const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+        const recordedMimeType = getRecordingMimeType(recorder, chunks);
+        const blob = new Blob(chunks, { type: recordedMimeType });
         const nextAudio = {
-          dataUrl: await blobToDataUrl(blob),
-          mimeType: blob.type,
+          dataUrl: ensureAudioDataUrl(await blobToDataUrl(blob), recordedMimeType),
+          mimeType: recordedMimeType,
           size: blob.size
         };
         audioRef.current = nextAudio;
@@ -717,6 +718,21 @@ function getAudioStreamConstraints() {
     noiseSuppression: true,
     autoGainControl: true
   };
+}
+
+function getRecordingMimeType(recorder, chunks) {
+  const candidate = recorder.mimeType || chunks.find((chunk) => chunk.type)?.type || '';
+  if (candidate.startsWith('audio/')) return candidate;
+  if (candidate.includes('mp4')) return 'audio/mp4';
+  if (candidate.includes('webm')) return 'audio/webm';
+  if (candidate.includes('ogg')) return 'audio/ogg';
+  return 'audio/webm';
+}
+
+function ensureAudioDataUrl(dataUrl, mimeType = 'audio/webm') {
+  const value = String(dataUrl || '');
+  if (value.startsWith('data:audio/')) return value;
+  return value.replace(/^data:[^;]*;base64,/, `data:${mimeType};base64,`);
 }
 
 function getAudioRecorderOptions() {

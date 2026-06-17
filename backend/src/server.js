@@ -1054,12 +1054,28 @@ function normalizeResponse(row) {
 function normalizeAudioData(audio) {
   if (!audio?.dataUrl) return null;
   const match = String(audio.dataUrl).match(/^data:([^;]+);base64,(.+)$/);
-  if (!match || !match[1].startsWith('audio/')) return null;
+  if (!match) return null;
+  const payloadMimeType = String(audio.mimeType || '');
+  const mimeType = match[1].startsWith('audio/')
+    ? match[1]
+    : payloadMimeType.startsWith('audio/')
+    ? payloadMimeType
+    : inferAudioMimeType(match[1]);
+  if (!mimeType) return null;
   return {
-    mimeType: match[1],
+    mimeType,
     data: match[2],
     size: Number(audio.size || 0) || null
   };
+}
+
+function inferAudioMimeType(mimeType) {
+  const value = String(mimeType || '').toLowerCase();
+  if (value.includes('webm')) return 'audio/webm';
+  if (value.includes('mp4')) return 'audio/mp4';
+  if (value.includes('ogg')) return 'audio/ogg';
+  if (value === 'application/octet-stream') return 'audio/webm';
+  return '';
 }
 
 function defaultExportRow(questions) {

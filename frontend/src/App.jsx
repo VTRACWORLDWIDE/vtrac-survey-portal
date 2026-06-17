@@ -79,6 +79,9 @@ function SurveyForm({ projectSlug }) {
       .then((payload) => {
         setConfig(payload);
         if (payload.error) setStatus(payload.error);
+        if (payload.questions?.some((question) => question.id === 'google_coordinates')) {
+          captureGps(payload.questions);
+        }
       })
       .catch(() => setStatus('Unable to load survey questions.'));
   }, [projectSlug]);
@@ -94,7 +97,7 @@ function SurveyForm({ projectSlug }) {
     }));
   }
 
-  function captureGps() {
+  function captureGps(questions = config.questions || []) {
     if (!navigator.geolocation) {
       setGpsStatus('GPS is not supported on this device.');
       return;
@@ -102,11 +105,15 @@ function SurveyForm({ projectSlug }) {
     setGpsStatus('Capturing...');
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setGps({
+        const nextGps = {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
           accuracy: position.coords.accuracy
-        });
+        };
+        setGps(nextGps);
+        if (questions.some((question) => question.id === 'google_coordinates')) {
+          updateAnswer('google_coordinates', `${nextGps.latitude.toFixed(6)}, ${nextGps.longitude.toFixed(6)}`);
+        }
         setGpsStatus(`Captured within ${Math.round(position.coords.accuracy)}m`);
       },
       () => setGpsStatus('GPS permission denied or unavailable.'),
@@ -258,7 +265,21 @@ function QuestionInput({ question, index, value, onChange }) {
         {question.type === 'textarea' && (
           <textarea value={value} onChange={(event) => onChange(event.target.value)} required={question.required} />
         )}
-        {question.type === 'select' && (
+        {question.type === 'select' && question.options.length > 8 && (
+          <>
+            <input
+              list={`${question.id}-options`}
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+              placeholder="Search and select"
+              required={question.required}
+            />
+            <datalist id={`${question.id}-options`}>
+              {question.options.map((option) => <option key={option} value={option} />)}
+            </datalist>
+          </>
+        )}
+        {question.type === 'select' && question.options.length <= 8 && (
           <select value={value} onChange={(event) => onChange(event.target.value)} required={question.required}>
             <option value="">Select answer</option>
             {question.options.map((option) => <option key={option}>{option}</option>)}

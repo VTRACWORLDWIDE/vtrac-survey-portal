@@ -167,8 +167,8 @@ export default function App() {
     setRoute(path);
   }
 
-  const publicSlug = route.startsWith('/p/') ? route.replace('/p/', '') : defaultProjectSlug;
-  const surveyPath = `/p/${defaultProjectSlug}`;
+  const isPublicSurvey = route.startsWith('/p/');
+  const publicSlug = isPublicSurvey ? route.replace('/p/', '') : defaultProjectSlug;
 
   return (
     <main>
@@ -181,16 +181,15 @@ export default function App() {
           </div>
         </div>
         <nav>
-          <button className={!route.startsWith('/admin') && !route.startsWith('/client') ? 'active' : ''} onClick={() => navigate(surveyPath)}>Survey</button>
-          <button className={route.startsWith('/client') ? 'active' : ''} onClick={() => navigate('/client')}>Client</button>
+          <button className={route.startsWith('/client') || route === '/' ? 'active' : ''} onClick={() => navigate('/client')}>Client</button>
           <button className={route.startsWith('/admin') ? 'active' : ''} onClick={() => navigate('/admin')}>Admin</button>
         </nav>
       </header>
-      {route.startsWith('/admin')
+      {isPublicSurvey
+        ? <SurveyForm projectSlug={publicSlug} />
+        : route.startsWith('/admin')
         ? <AdminApp />
-        : route.startsWith('/client')
-          ? <ClientApp />
-          : <SurveyForm projectSlug={publicSlug} />}
+        : <ClientApp />}
     </main>
   );
 }

@@ -1,5 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, LocateFixed, Plus, RefreshCw, Save, Search, Send, Trash2 } from 'lucide-react';
+import {
+  BarChart3,
+  CalendarClock,
+  CheckCircle2,
+  ClipboardList,
+  Download,
+  FileText,
+  Link2,
+  LocateFixed,
+  MapPin,
+  Plus,
+  RefreshCw,
+  Save,
+  Search,
+  Send,
+  ShieldCheck,
+  Trash2,
+  UserRound
+} from 'lucide-react';
 
 const apiBase = import.meta.env.VITE_API_BASE || '';
 const blankQuestion = { id: '', label: '', type: 'text', options: '', required: false };
@@ -23,9 +41,12 @@ export default function App() {
   return (
     <main>
       <header className="topbar">
-        <div>
-          <p className="eyebrow">VTRAC</p>
-          <h1>Survey Portal</h1>
+        <div className="brand-block">
+          <div className="brand-mark">V</div>
+          <div>
+            <p className="eyebrow">VTRAC</p>
+            <h1>Survey Portal</h1>
+          </div>
         </div>
         <nav>
           <button className={!route.startsWith('/admin') ? 'active' : ''} onClick={() => navigate('/')}>Survey</button>
@@ -124,107 +145,136 @@ function SurveyForm({ projectSlug }) {
   }
 
   return (
-    <section className="page-grid">
-      <form className="panel form-panel" onSubmit={submit}>
-        <div className="section-title">
-          <div>
-            <h2>{config.name || 'Survey'}</h2>
-            <p>{new Date().toLocaleString()}</p>
-          </div>
+    <section className="survey-shell">
+      <div className="survey-hero">
+        <div>
+          <p className="eyebrow">Field Collection</p>
+          <h2>{config.name || 'Survey'}</h2>
+          <p>{config.description || 'Submit accurate field data from any mobile browser.'}</p>
         </div>
-
-        <label>
-          Enumerator name
-          <input value={form.enumeratorName} onChange={(event) => update('enumeratorName', event.target.value)} required />
-        </label>
-
-        <label>
-          Survey location
-          <select value={form.location} onChange={(event) => update('location', event.target.value)} required>
-            <option value="">Select location</option>
-            {(config.locations || []).map((location) => <option key={location}>{location}</option>)}
-          </select>
-        </label>
-
-        <div className="inline-grid">
-          <label>
-            Respondent name
-            <input value={form.respondentName} onChange={(event) => update('respondentName', event.target.value)} />
-          </label>
-          <label>
-            Phone
-            <input inputMode="tel" value={form.respondentPhone} onChange={(event) => update('respondentPhone', event.target.value)} />
-          </label>
+        <div className="hero-pill">
+          <CalendarClock size={18} />
+          {new Date().toLocaleDateString()}
         </div>
+      </div>
 
-        <label>
-          Household ID
-          <input value={form.householdId} onChange={(event) => update('householdId', event.target.value)} />
-        </label>
-
-        <div className="gps-row">
-          <div>
-            <strong>GPS</strong>
-            <span>{gpsStatus}</span>
+      <div className="page-grid">
+        <form className="panel form-panel" onSubmit={submit}>
+          <div className="section-title">
+            <div>
+              <h2>Response Details</h2>
+              <p>{new Date().toLocaleString()}</p>
+            </div>
           </div>
-          <button type="button" className="icon-button" onClick={captureGps} aria-label="Capture GPS">
-            <LocateFixed size={18} />
+
+          <div className="form-section">
+            <div className="section-kicker"><UserRound size={16} /> Enumerator</div>
+            <label>
+              Enumerator name
+              <input value={form.enumeratorName} onChange={(event) => update('enumeratorName', event.target.value)} required />
+            </label>
+            <label>
+              Survey location
+              <select value={form.location} onChange={(event) => update('location', event.target.value)} required>
+                <option value="">Select location</option>
+                {(config.locations || []).map((location) => <option key={location}>{location}</option>)}
+              </select>
+            </label>
+          </div>
+
+          <div className="form-section">
+            <div className="section-kicker"><FileText size={16} /> Respondent</div>
+            <div className="inline-grid">
+              <label>
+                Respondent name
+                <input value={form.respondentName} onChange={(event) => update('respondentName', event.target.value)} />
+              </label>
+              <label>
+                Phone
+                <input inputMode="tel" value={form.respondentPhone} onChange={(event) => update('respondentPhone', event.target.value)} />
+              </label>
+            </div>
+            <label>
+              Household ID
+              <input value={form.householdId} onChange={(event) => update('householdId', event.target.value)} />
+            </label>
+          </div>
+
+          <div className="gps-row">
+            <div>
+              <strong>GPS location</strong>
+              <span>{gpsStatus}</span>
+            </div>
+            <button type="button" className="icon-button" onClick={captureGps} aria-label="Capture GPS">
+              <LocateFixed size={18} />
+            </button>
+          </div>
+
+          <div className="form-section">
+            <div className="section-kicker"><ClipboardList size={16} /> Questions</div>
+            {(config.questions || []).map((question, index) => (
+              <QuestionInput
+                key={question.id}
+                question={question}
+                index={index}
+                value={form.answers[question.id] || ''}
+                onChange={(value) => updateAnswer(question.id, value)}
+              />
+            ))}
+          </div>
+
+          <button className="primary submit-button" disabled={saving}>
+            <Send size={18} />
+            {saving ? 'Submitting...' : 'Submit Survey'}
           </button>
-        </div>
+          {status && <p className={status.includes('successfully') ? 'status success' : 'status'}>{status}</p>}
+        </form>
 
-        {(config.questions || []).map((question) => (
-          <QuestionInput
-            key={question.id}
-            question={question}
-            value={form.answers[question.id] || ''}
-            onChange={(value) => updateAnswer(question.id, value)}
-          />
-        ))}
-
-        <button className="primary" disabled={saving}>
-          <Send size={18} />
-          {saving ? 'Submitting...' : 'Submit Survey'}
-        </button>
-        {status && <p className="status">{status}</p>}
-      </form>
-
-      <aside className="panel quiet-panel">
-        <h2>Public Collection</h2>
-        <p>Enumerators can use this public link without logging in. Admin access is only required to create projects, edit forms, view results, and download data.</p>
-        <div className="mini-list">
-          <span>No enumerator login</span>
-          <span>Project-specific form</span>
-          <span>Optional mobile GPS</span>
-          <span>Protected admin exports</span>
-        </div>
-      </aside>
+        <aside className="side-stack">
+          <div className="panel quiet-panel">
+            <h2>Collection Status</h2>
+            <div className="info-list">
+              <span><ShieldCheck size={17} /> Public field link</span>
+              <span><MapPin size={17} /> {config.locations?.length || 0} locations</span>
+              <span><ClipboardList size={17} /> {config.questions?.length || 0} questions</span>
+            </div>
+          </div>
+          <div className="panel accent-panel">
+            <CheckCircle2 size={22} />
+            <strong>Ready for pilot collection</strong>
+            <p>Responses are saved immediately and available in the admin dashboard.</p>
+          </div>
+        </aside>
+      </div>
     </section>
   );
 }
 
-function QuestionInput({ question, value, onChange }) {
+function QuestionInput({ question, index, value, onChange }) {
   return (
-    <label>
-      {question.label}
-      {question.type === 'textarea' && (
-        <textarea value={value} onChange={(event) => onChange(event.target.value)} required={question.required} />
-      )}
-      {question.type === 'select' && (
-        <select value={value} onChange={(event) => onChange(event.target.value)} required={question.required}>
-          <option value="">Select answer</option>
-          {question.options.map((option) => <option key={option}>{option}</option>)}
-        </select>
-      )}
-      {question.type === 'number' && (
-        <input type="number" value={value} onChange={(event) => onChange(event.target.value)} required={question.required} />
-      )}
-      {question.type === 'date' && (
-        <input type="date" value={value} onChange={(event) => onChange(event.target.value)} required={question.required} />
-      )}
-      {question.type === 'text' && (
-        <input value={value} onChange={(event) => onChange(event.target.value)} required={question.required} />
-      )}
-    </label>
+    <div className="question-field">
+      <label>
+        <span>{index + 1}. {question.label}{question.required && <b>Required</b>}</span>
+        {question.type === 'textarea' && (
+          <textarea value={value} onChange={(event) => onChange(event.target.value)} required={question.required} />
+        )}
+        {question.type === 'select' && (
+          <select value={value} onChange={(event) => onChange(event.target.value)} required={question.required}>
+            <option value="">Select answer</option>
+            {question.options.map((option) => <option key={option}>{option}</option>)}
+          </select>
+        )}
+        {question.type === 'number' && (
+          <input type="number" value={value} onChange={(event) => onChange(event.target.value)} required={question.required} />
+        )}
+        {question.type === 'date' && (
+          <input type="date" value={value} onChange={(event) => onChange(event.target.value)} required={question.required} />
+        )}
+        {question.type === 'text' && (
+          <input value={value} onChange={(event) => onChange(event.target.value)} required={question.required} />
+        )}
+      </label>
+    </div>
   );
 }
 
@@ -266,7 +316,11 @@ function AdminLogin({ onLogin }) {
   return (
     <section className="login-wrap">
       <form className="panel login-panel" onSubmit={submit}>
-        <h2>Admin Login</h2>
+        <div className="login-mark"><ShieldCheck size={24} /></div>
+        <div>
+          <p className="eyebrow">VTRAC Admin</p>
+          <h2>Sign in to manage surveys</h2>
+        </div>
         <label>
           Username
           <input value={username} onChange={(event) => setUsername(event.target.value)} required />
@@ -388,8 +442,9 @@ function AdminDashboard({ token, onLogout }) {
     <section className="dashboard">
       <div className="admin-heading">
         <div>
+          <p className="eyebrow">Operations</p>
           <h2>Admin Dashboard</h2>
-          <p>Create projects, design forms, review data, and download exports.</p>
+          <p>{selectedProject ? selectedProject.name : 'Survey operations'}</p>
         </div>
         <button className="secondary" onClick={onLogout}>Logout</button>
       </div>
@@ -401,9 +456,9 @@ function AdminDashboard({ token, onLogout }) {
             {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
           </select>
         </label>
-        <button className="secondary" onClick={() => selectedProject && editProject(selectedProject)}>Edit Form</button>
+        <button className="secondary" onClick={() => selectedProject && editProject(selectedProject)}><FileText size={18} /> Edit Form</button>
         <button className="primary" onClick={startNewProject}><Plus size={18} /> New Project</button>
-        {selectedProject && <span className="public-link">{window.location.origin}{selectedProject.publicUrl}</span>}
+        {selectedProject && <span className="public-link"><Link2 size={16} /> {window.location.origin}{selectedProject.publicUrl}</span>}
       </div>
 
       {editing && (
@@ -430,10 +485,10 @@ function AdminDashboard({ token, onLogout }) {
       </div>
 
       <div className="metric-grid">
-        <Metric label="Total samples" value={data?.totals?.total_samples ?? 0} />
-        <Metric label="Samples today" value={data?.totals?.samples_today ?? 0} />
-        <Metric label="Enumerators" value={data?.byEnumerator?.length ?? 0} />
-        <Metric label="Locations" value={data?.byLocation?.length ?? 0} />
+        <Metric icon={<ClipboardList size={19} />} label="Total samples" value={data?.totals?.total_samples ?? 0} />
+        <Metric icon={<CalendarClock size={19} />} label="Samples today" value={data?.totals?.samples_today ?? 0} />
+        <Metric icon={<UserRound size={19} />} label="Enumerators" value={data?.byEnumerator?.length ?? 0} />
+        <Metric icon={<MapPin size={19} />} label="Locations" value={data?.byLocation?.length ?? 0} />
       </div>
 
       <div className="chart-grid">
@@ -443,7 +498,7 @@ function AdminDashboard({ token, onLogout }) {
       </div>
 
       <RecentTable rows={data?.recent || []} loading={loading} />
-      {status && <p className="status">{status}</p>}
+      {status && <p className="status success">{status}</p>}
     </section>
   );
 }
@@ -468,9 +523,12 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
   }
 
   return (
-    <div className="panel editor-panel">
+    <div className="editor-panel">
       <div className="section-title">
-        <h2>{project.id ? 'Edit Project Form' : 'New Project Form'}</h2>
+        <div>
+          <p className="eyebrow">Form Designer</p>
+          <h2>{project.id ? 'Edit Project Form' : 'New Project Form'}</h2>
+        </div>
         <div className="actions">
           <button className="secondary" onClick={onCancel}>Cancel</button>
           <button className="primary" onClick={() => onSave(project)}><Save size={18} /> Save</button>
@@ -500,7 +558,7 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
         {project.questions.map((question, index) => (
           <div className="question-card" key={index}>
             <div className="question-header">
-              <strong>Question {index + 1}</strong>
+              <strong><ClipboardList size={16} /> Question {index + 1}</strong>
               <button className="icon-button" onClick={() => removeQuestion(index)} aria-label="Remove question"><Trash2 size={16} /></button>
             </div>
             <div className="inline-grid">
@@ -533,7 +591,7 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
         ))}
       </div>
 
-      <button className="secondary" onClick={addQuestion}><Plus size={18} /> Add Question</button>
+      <button className="secondary add-question" onClick={addQuestion}><Plus size={18} /> Add Question</button>
     </div>
   );
 }
@@ -577,10 +635,10 @@ function RecentTable({ rows, loading }) {
   );
 }
 
-function Metric({ label, value }) {
+function Metric({ icon, label, value }) {
   return (
     <div className="metric">
-      <span>{label}</span>
+      <span>{icon}{label}</span>
       <strong>{value}</strong>
     </div>
   );
@@ -590,7 +648,7 @@ function Breakdown({ title, rows, labelKey, valueKey }) {
   const max = Math.max(...rows.map((row) => Number(row[valueKey])), 1);
   return (
     <div className="panel breakdown">
-      <h2>{title}</h2>
+      <h2><BarChart3 size={17} /> {title}</h2>
       {rows.length === 0 && <p className="empty">No samples yet.</p>}
       {rows.map((row) => (
         <div className="bar-row" key={row[labelKey]}>

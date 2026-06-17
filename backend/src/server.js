@@ -1053,7 +1053,7 @@ function normalizeResponse(row) {
 
 function normalizeAudioData(audio) {
   if (!audio?.dataUrl) return null;
-  const match = String(audio.dataUrl).match(/^data:([^;]+);base64,(.+)$/);
+  const match = String(audio.dataUrl).match(/^data:([^;,]+)(?:;[^,]*)?;base64,(.+)$/);
   if (!match) return null;
   const payloadMimeType = String(audio.mimeType || '');
   const mimeType = match[1].startsWith('audio/')

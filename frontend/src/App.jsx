@@ -215,6 +215,7 @@ function SurveyForm({ projectSlug }) {
   const [audioStatus, setAudioStatus] = useState('No recording');
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const audioRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
   const audioStartAttemptedRef = useRef(false);
   const audioStartPromiseRef = useRef(null);
   const [pendingCount, setPendingCount] = useState(0);
@@ -376,9 +377,11 @@ function SurveyForm({ projectSlug }) {
         audioRef.current = nextAudio;
         setAudio(nextAudio);
         setAudioStatus(`Recorded ${formatBytes(blob.size)}`);
+        mediaRecorderRef.current = null;
         setMediaRecorder(null);
       };
       recorder.start();
+      mediaRecorderRef.current = recorder;
       setMediaRecorder(recorder);
       audioRef.current = null;
       setAudio(null);
@@ -401,10 +404,11 @@ function SurveyForm({ projectSlug }) {
   }
 
   function finalizeAudioRecording() {
-    if (!mediaRecorder || mediaRecorder.state !== 'recording') return Promise.resolve(audio);
+    const activeRecorder = mediaRecorderRef.current || mediaRecorder;
+    if (!activeRecorder || activeRecorder.state !== 'recording') return Promise.resolve(audioRef.current || audio);
     setAudioStatus('Stopping recording...');
     return new Promise((resolve) => {
-      const recorder = mediaRecorder;
+      const recorder = activeRecorder;
       const previousStop = recorder.onstop;
       recorder.onstop = async (event) => {
         if (previousStop) await previousStop(event);
@@ -416,6 +420,9 @@ function SurveyForm({ projectSlug }) {
 
   function clearAudio() {
     audioRef.current = null;
+    mediaRecorderRef.current = null;
+    audioStartAttemptedRef.current = false;
+    audioStartPromiseRef.current = null;
     setAudio(null);
     setAudioStatus('No recording');
   }
@@ -498,8 +505,11 @@ function SurveyForm({ projectSlug }) {
     event.preventDefault();
     setSaving(true);
     setStatus('');
-    if (!mediaRecorder && !audioRef.current) {
-      await startAudioRecording();
+    if (!mediaRecorderRef.current && !mediaRecorder && !audioRef.current) {
+      const started = await startAudioRecording();
+      if (started && mediaRecorderRef.current) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
     }
     const finalAudio = await finalizeAudioRecording();
     if (!finalAudio) {

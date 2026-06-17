@@ -166,6 +166,10 @@ app.post('/api/responses', async (req, res, next) => {
     }
 
     const audioPayload = normalizeAudioData(audio);
+    if (!audioPayload) {
+      return res.status(400).json({ error: 'Audio recording is required. Please allow microphone access and submit again.' });
+    }
+
     const result = await query(
       `INSERT INTO survey_responses (
         project_id,
@@ -520,14 +524,19 @@ app.get('/api/responses/export.xlsx', requireAdmin, async (req, res, next) => {
     const { rows, questions } = await loadExportRows(req.query);
     const records = rows.map((row) => flattenResponse(row, questions));
     const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('Survey Responses');
-    sheet.columns = Object.keys(records[0] || defaultExportRow(questions)).map((key) => ({
-      header: key,
-      key,
-      width: Math.min(Math.max(key.length + 4, 14), 30)
-    }));
-    sheet.addRows(records);
-    sheet.getRow(1).font = { bold: true };
+    addExportWorksheet(workbook, 'All Responses', records, questions);
+    addExportWorksheet(
+      workbook,
+      'Departures',
+      records.filter((record) => String(record.location || '').includes(' - Departures')),
+      questions
+    );
+    addExportWorksheet(
+      workbook,
+      'Arrivals',
+      records.filter((record) => String(record.location || '').includes(' - Arrivals')),
+      questions
+    );
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="vtrac-survey-responses.xlsx"');
@@ -1053,6 +1062,23 @@ function normalizeAudioData(audio) {
 
 function defaultExportRow(questions) {
   return flattenResponse({ answers: {} }, questions);
+}
+
+function addExportWorksheet(workbook, name, records, questions = []) {
+  const sheet = workbook.addWorksheet(name);
+  const columns = Object.keys(records[0] || defaultExportRow(questions)).map((key) => ({
+    header: key,
+    key,
+    width: Math.min(Math.max(key.length + 4, 14), 36)
+  }));
+  sheet.columns = columns;
+  sheet.addRows(records);
+  sheet.getRow(1).font = { bold: true };
+  sheet.views = [{ state: 'frozen', ySplit: 1 }];
+  sheet.autoFilter = {
+    from: { row: 1, column: 1 },
+    to: { row: 1, column: Math.max(columns.length, 1) }
+  };
 }
 
 function questionAppliesToLocation(questionId, location = '') {

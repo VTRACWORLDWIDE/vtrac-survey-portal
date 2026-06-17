@@ -15,6 +15,7 @@ const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
 const clientUsername = process.env.CLIENT_USERNAME || 'client';
 const clientPassword = process.env.CLIENT_PASSWORD || 'client123';
 const tokenSecret = process.env.ADMIN_TOKEN_SECRET || 'change-this-local-secret';
+const defaultProjectSlug = 'bengaluru-second-airport-feasibility';
 
 const defaultLocations = ['Kadiri', 'Anantapur', 'Hindupur', 'Dharmavaram', 'Gorantla', 'Other'];
 const defaultQuestions = [
@@ -546,7 +547,7 @@ async function loadProjects() {
 }
 
 async function loadProjectForPublic(identifier) {
-  const value = identifier || 'pilot-survey';
+  const value = identifier || defaultProjectSlug;
   const projectResult = await query(
     `SELECT *
     FROM survey_projects

@@ -22,6 +22,7 @@ import {
 const apiBase = import.meta.env.VITE_API_BASE || '';
 const blankQuestion = { id: '', label: '', type: 'text', options: '', required: false };
 const airportPrefix = 'Kempegowda International Airport - ';
+const defaultProjectSlug = 'bengaluru-second-airport-feasibility';
 const hiddenQuestionIds = new Set([
   'google_coordinates',
   'origin_zone_number',
@@ -166,7 +167,8 @@ export default function App() {
     setRoute(path);
   }
 
-  const publicSlug = route.startsWith('/p/') ? route.replace('/p/', '') : 'pilot-survey';
+  const publicSlug = route.startsWith('/p/') ? route.replace('/p/', '') : defaultProjectSlug;
+  const surveyPath = `/p/${defaultProjectSlug}`;
 
   return (
     <main>
@@ -179,7 +181,7 @@ export default function App() {
           </div>
         </div>
         <nav>
-          <button className={!route.startsWith('/admin') && !route.startsWith('/client') ? 'active' : ''} onClick={() => navigate('/')}>Survey</button>
+          <button className={!route.startsWith('/admin') && !route.startsWith('/client') ? 'active' : ''} onClick={() => navigate(surveyPath)}>Survey</button>
           <button className={route.startsWith('/client') ? 'active' : ''} onClick={() => navigate('/client')}>Client</button>
           <button className={route.startsWith('/admin') ? 'active' : ''} onClick={() => navigate('/admin')}>Admin</button>
         </nav>

@@ -93,4 +93,4 @@ Change `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_TOKEN_SECRET` in `backend/
 Change `CLIENT_USERNAME` and `CLIENT_PASSWORD` before sharing the client dashboard.
 Additional client IDs and project access can be managed from the admin dashboard.
 
-Project survey links use `/p/{project-slug}`. Example: `http://localhost:5173/p/pilot-survey`.
+Project survey links use `/p/{project-slug}`. Example: `http://localhost:5173/p/bengaluru-second-airport-feasibility`.

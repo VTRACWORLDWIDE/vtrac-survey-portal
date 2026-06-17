@@ -551,6 +551,7 @@ function SurveyForm({ projectSlug }) {
               locations={config.locations || []}
               value={form.location}
               onChange={(value) => update('location', value)}
+              airportMode={projectSlug === defaultProjectSlug}
             />
           </div>
 
@@ -866,13 +867,13 @@ function questionAppliesToLocation(questionId, location = '') {
   return true;
 }
 
-function SurveyLocationInput({ locations, value, onChange }) {
+function SurveyLocationInput({ locations, value, onChange, airportMode = false }) {
   const [draftTerminal, setDraftTerminal] = useState('');
   const [draftMovement, setDraftMovement] = useState('');
   const [draftPoint, setDraftPoint] = useState('');
   const [otherPoint, setOtherPoint] = useState('');
   const selected = parseAirportLocation(value);
-  const usesAirportFlow = locations.some((location) => location.startsWith(airportPrefix)) || value.startsWith(airportPrefix);
+  const usesAirportFlow = airportMode || locations.some((location) => location.startsWith(airportPrefix)) || value.startsWith(airportPrefix);
 
   useEffect(() => {
     if (selected) {

@@ -8,6 +8,7 @@ import { query } from './db.js';
 
 const app = express();
 const port = Number(process.env.PORT || 8081);
+const localDateExpression = `(submitted_at AT TIME ZONE 'Asia/Kolkata')::date`;
 
 const surveyLocations = [
   'Kadiri',
@@ -104,16 +105,16 @@ app.get('/api/dashboard', async (req, res, next) => {
       query(
         `SELECT
           COUNT(*)::int AS total_samples,
-          COUNT(*) FILTER (WHERE submitted_at::date = CURRENT_DATE)::int AS samples_today
+          COUNT(*) FILTER (WHERE ${localDateExpression} = (NOW() AT TIME ZONE 'Asia/Kolkata')::date)::int AS samples_today
         FROM survey_responses
         ${filters.where}`,
         filters.params
       ),
       query(
-        `SELECT submitted_at::date AS date, COUNT(*)::int AS samples
+        `SELECT TO_CHAR(${localDateExpression}, 'YYYY-MM-DD') AS date, COUNT(*)::int AS samples
         FROM survey_responses
         ${filters.where}
-        GROUP BY submitted_at::date
+        GROUP BY ${localDateExpression}
         ORDER BY date DESC
         LIMIT 30`,
         filters.params
@@ -216,12 +217,12 @@ function buildFilters(queryParams) {
 
   if (queryParams.dateFrom) {
     params.push(queryParams.dateFrom);
-    conditions.push(`submitted_at::date >= $${params.length}::date`);
+    conditions.push(`${localDateExpression} >= $${params.length}::date`);
   }
 
   if (queryParams.dateTo) {
     params.push(queryParams.dateTo);
-    conditions.push(`submitted_at::date <= $${params.length}::date`);
+    conditions.push(`${localDateExpression} <= $${params.length}::date`);
   }
 
   if (queryParams.search) {
@@ -255,7 +256,7 @@ async function loadExportRows(queryParams) {
 function flattenResponse(row) {
   const base = {
     id: row.id || '',
-    submitted_at: row.submitted_at || '',
+    submitted_at: formatTimestamp(row.submitted_at),
     enumerator_name: row.enumerator_name || '',
     location: row.location || '',
     respondent_name: row.respondent_name || '',
@@ -277,3 +278,8 @@ function defaultExportRow() {
   return flattenResponse({ answers: {} });
 }
 
+function formatTimestamp(value) {
+  if (!value) return '';
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
+}

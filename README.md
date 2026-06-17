@@ -44,7 +44,13 @@ vtrac-survey-portal/
 
 ## Local Setup
 
-Create the database:
+Create the database with Docker:
+
+```bash
+docker compose up -d postgres
+```
+
+Or create it with a local PostgreSQL install:
 
 ```bash
 createdb vtrac_survey
@@ -73,4 +79,3 @@ Local URLs:
 - Survey form: `http://localhost:5173/`
 - Admin dashboard: `http://localhost:5173/admin`
 - API health: `http://localhost:8081/api/health`
-

@@ -221,6 +221,7 @@ nav button.active {
 .login-panel,
 .quiet-panel,
 .enumerator-panel,
+.offline-panel,
 .accent-panel,
 .breakdown,
 .table-panel {
@@ -513,6 +514,16 @@ textarea {
 .enumerator-panel {
   display: grid;
   gap: 14px;
+}
+
+.offline-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.offline-panel p {
+  color: #617579;
+  margin-bottom: 0;
 }
 
 .enumerator-panel .eyebrow {
@@ -952,6 +963,7 @@ tbody tr:hover {
   .form-panel,
   .quiet-panel,
   .enumerator-panel,
+  .offline-panel,
   .accent-panel,
   .breakdown,
   .table-panel,

@@ -145,7 +145,8 @@ app.post('/api/responses', async (req, res, next) => {
       householdId,
       answers = {},
       gps,
-      audio
+      audio,
+      clientSubmissionId
     } = req.body;
 
     const project = await loadProjectForPublic(projectSlug || projectId);
@@ -179,9 +180,12 @@ app.post('/api/responses', async (req, res, next) => {
         gps_accuracy,
         audio_data,
         audio_mime_type,
-        audio_size
+        audio_size,
+        client_submission_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      ON CONFLICT (client_submission_id)
+      DO UPDATE SET client_submission_id = EXCLUDED.client_submission_id
       RETURNING id, submitted_at`,
       [
         project.id,
@@ -196,7 +200,8 @@ app.post('/api/responses', async (req, res, next) => {
         gps?.accuracy ?? null,
         audioPayload?.data || null,
         audioPayload?.mimeType || null,
-        audioPayload?.size || null
+        audioPayload?.size || null,
+        clientSubmissionId || null
       ]
     );
 
@@ -584,6 +589,7 @@ async function ensureDatabase() {
       audio_data TEXT,
       audio_mime_type TEXT,
       audio_size INT,
+      client_submission_id TEXT UNIQUE,
       submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -609,6 +615,7 @@ async function ensureDatabase() {
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS audio_data TEXT;
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS audio_mime_type TEXT;
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS audio_size INT;
+    ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS client_submission_id TEXT UNIQUE;
 
     CREATE INDEX IF NOT EXISTS idx_survey_responses_project ON survey_responses (project_id);
     CREATE INDEX IF NOT EXISTS idx_survey_responses_submitted_at ON survey_responses (submitted_at DESC);

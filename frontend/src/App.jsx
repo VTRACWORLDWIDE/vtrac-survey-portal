@@ -215,6 +215,9 @@ function SurveyForm({ projectSlug }) {
   const [audio, setAudio] = useState(null);
   const [audioStatus, setAudioStatus] = useState('No recording');
   const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [syncStatus, setSyncStatus] = useState('');
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
     fetch(`${apiBase}/api/survey-config?project=${encodeURIComponent(projectSlug)}`)
@@ -227,6 +230,25 @@ function SurveyForm({ projectSlug }) {
         }
       })
       .catch(() => setStatus('Unable to load survey questions.'));
+  }, [projectSlug]);
+
+  useEffect(() => {
+    refreshPendingCount();
+    const onOnline = () => {
+      setIsOnline(true);
+      syncPendingSubmissions();
+    };
+    const onOffline = () => {
+      setIsOnline(false);
+      setSyncStatus('Offline. Submissions will be saved in this browser.');
+    };
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    if (navigator.onLine) syncPendingSubmissions();
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
   }, [projectSlug]);
 
   useEffect(() => {
@@ -366,33 +388,115 @@ function SurveyForm({ projectSlug }) {
     setAudioStatus('No recording');
   }
 
+  function resetAfterSubmit() {
+    setForm({
+      enumeratorName: form.enumeratorName,
+      location: form.location,
+      respondentName: '',
+      respondentPhone: '',
+      householdId: '',
+      answers: {}
+    });
+    setGps(null);
+    setGpsStatus('Not captured');
+    clearAudio();
+  }
+
+  async function sendSubmission(payload) {
+    const response = await fetch(`${apiBase}/api/responses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(result.error || 'Unable to submit survey.');
+      error.fromServer = true;
+      throw error;
+    }
+    return result;
+  }
+
+  async function refreshPendingCount() {
+    try {
+      const queued = await getQueuedSubmissions(projectSlug);
+      setPendingCount(queued.length);
+    } catch {
+      setPendingCount(0);
+      setSyncStatus('Offline queue is not supported on this browser.');
+    }
+  }
+
+  async function syncPendingSubmissions() {
+    let queued = [];
+    try {
+      queued = await getQueuedSubmissions(projectSlug);
+    } catch {
+      setSyncStatus('Offline queue is not supported on this browser.');
+      return;
+    }
+    if (queued.length === 0) {
+      setPendingCount(0);
+      return;
+    }
+    setSyncStatus(`Syncing ${queued.length} pending...`);
+    let synced = 0;
+    for (const item of queued) {
+      try {
+        await sendSubmission(item.payload);
+        await deleteQueuedSubmission(item.id);
+        synced += 1;
+      } catch (error) {
+        if (error.fromServer) {
+          setSyncStatus(`Pending item needs review: ${error.message}`);
+        } else {
+          setSyncStatus('Offline. Pending submissions will sync automatically.');
+        }
+        break;
+      }
+    }
+    await refreshPendingCount();
+    if (synced > 0) {
+      setSyncStatus(`Synced ${synced} pending submission${synced === 1 ? '' : 's'}.`);
+      loadEnumeratorStats(form.enumeratorName.trim());
+    }
+  }
+
   async function submit(event) {
     event.preventDefault();
     setSaving(true);
     setStatus('');
+    const submissionPayload = {
+      ...form,
+      projectSlug,
+      gps,
+      audio,
+      clientSubmissionId: createLocalSubmissionId()
+    };
     try {
-      const response = await fetch(`${apiBase}/api/responses`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, projectSlug, gps, audio })
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || 'Unable to submit survey.');
+      const payload = await sendSubmission(submissionPayload);
       setStatus(`Submitted successfully. Response ID: ${payload.response.id}`);
       loadEnumeratorStats(form.enumeratorName.trim());
-      setForm({
-        enumeratorName: form.enumeratorName,
-        location: form.location,
-        respondentName: '',
-        respondentPhone: '',
-        householdId: '',
-        answers: {}
-      });
-      setGps(null);
-      setGpsStatus('Not captured');
-      clearAudio();
+      resetAfterSubmit();
     } catch (error) {
-      setStatus(error.message);
+      if (error.fromServer) {
+        setStatus(error.message);
+      } else {
+        try {
+          await queueSubmission({
+            id: submissionPayload.clientSubmissionId,
+            projectSlug,
+            createdAt: new Date().toISOString(),
+            payload: submissionPayload
+          });
+          await refreshPendingCount();
+          setStatus('Saved offline. It will auto-sync when internet is back.');
+          setSyncStatus('Pending sync saved in this browser.');
+          resetAfterSubmit();
+        } catch {
+          setStatus('Unable to submit or save offline on this browser.');
+        }
+      }
     } finally {
       setSaving(false);
     }
@@ -539,6 +643,21 @@ function SurveyForm({ projectSlug }) {
             <strong>Ready for pilot collection</strong>
             <p>Responses are saved immediately and available in the admin dashboard.</p>
           </div>
+          <div className="panel offline-panel">
+            <h2>Offline Sync</h2>
+            <div className="enumerator-counts">
+              <div>
+                <strong>{pendingCount}</strong>
+                <span>Pending</span>
+              </div>
+              <div>
+                <strong>{isOnline ? 'On' : 'Off'}</strong>
+                <span>Internet</span>
+              </div>
+            </div>
+            <p>{syncStatus || 'Pending responses sync automatically when online.'}</p>
+            <button className="secondary" onClick={syncPendingSubmissions} type="button"><RefreshCw size={18} /> Sync now</button>
+          </div>
         </aside>
       </div>
     </section>
@@ -605,6 +724,82 @@ function formatBytes(bytes) {
   if (!bytes) return '0 KB';
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function createLocalSubmissionId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function openOfflineDb() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) {
+      reject(new Error('Offline storage is not supported on this browser.'));
+      return;
+    }
+    const request = window.indexedDB.open('vtrac-survey-offline', 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains('submissions')) {
+        const store = db.createObjectStore('submissions', { keyPath: 'id' });
+        store.createIndex('projectSlug', 'projectSlug');
+        store.createIndex('createdAt', 'createdAt');
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function queueSubmission(item) {
+  const db = await openOfflineDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('submissions', 'readwrite');
+    transaction.objectStore('submissions').put(item);
+    transaction.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    transaction.onerror = () => {
+      db.close();
+      reject(transaction.error);
+    };
+  });
+}
+
+async function getQueuedSubmissions(projectSlug) {
+  const db = await openOfflineDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('submissions', 'readonly');
+    const request = transaction.objectStore('submissions').getAll();
+    request.onsuccess = () => {
+      const rows = (request.result || [])
+        .filter((item) => item.projectSlug === projectSlug)
+        .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+      db.close();
+      resolve(rows);
+    };
+    request.onerror = () => {
+      db.close();
+      reject(request.error);
+    };
+  });
+}
+
+async function deleteQueuedSubmission(id) {
+  const db = await openOfflineDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('submissions', 'readwrite');
+    transaction.objectStore('submissions').delete(id);
+    transaction.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    transaction.onerror = () => {
+      db.close();
+      reject(transaction.error);
+    };
+  });
 }
 
 function questionAppliesToLocation(questionId, location = '') {

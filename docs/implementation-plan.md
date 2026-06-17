@@ -6,9 +6,10 @@
 2. Configure backend `.env` with `DATABASE_URL`, `PORT`, and `CORS_ORIGIN`.
 3. Install backend dependencies and start the Express API.
 4. Install frontend dependencies and start Vite.
-5. Update fixed pilot locations and survey questions in `backend/src/server.js`.
-6. Test survey submission from desktop and mobile browser.
-7. Confirm optional GPS capture on a mobile browser.
+5. Login to `/admin` with the temporary admin credentials.
+6. Create or edit the pilot project form.
+7. Test survey submission from desktop and mobile browser.
+8. Confirm optional GPS capture on a mobile browser.
 
 ## Day 2
 
@@ -23,6 +24,10 @@
 ## Backend API
 
 - `GET /api/health`
+- `POST /api/admin/login`
+- `GET /api/projects`
+- `POST /api/projects`
+- `PUT /api/projects/:id`
 - `GET /api/survey-config`
 - `POST /api/responses`
 - `GET /api/dashboard`
@@ -41,4 +46,3 @@
 - Recent submissions table
 - Search and filters
 - CSV and Excel export buttons
-

@@ -5,12 +5,14 @@ Lightweight survey collection MVP for pilot data collection.
 ## Phase 1 Scope
 
 - Public survey link with no login
+- One admin login for project setup and downloads
+- Admin can create projects and design survey forms
 - Enumerator name and survey location
 - Automatic server-side submitted date/time
 - Optional GPS capture from the mobile browser
 - Fixed pilot survey questions
 - Admin dashboard with totals, charts, recent submissions, search, and filters
-- CSV and Excel exports
+- Project-specific CSV and Excel exports
 - PostgreSQL persistence
 - React frontend and Node.js/Express backend
 - Mobile responsive UI
@@ -79,3 +81,12 @@ Local URLs:
 - Survey form: `http://localhost:5173/`
 - Admin dashboard: `http://localhost:5173/admin`
 - API health: `http://localhost:8081/api/health`
+
+Default local admin login:
+
+- Username: `admin`
+- Password: `admin123`
+
+Change `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_TOKEN_SECRET` in `backend/.env` before deploying.
+
+Project survey links use `/p/{project-slug}`. Example: `http://localhost:5173/p/pilot-survey`.

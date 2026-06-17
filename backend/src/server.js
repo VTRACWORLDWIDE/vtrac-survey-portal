@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import crypto from 'node:crypto';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
@@ -9,41 +10,85 @@ import { query } from './db.js';
 const app = express();
 const port = Number(process.env.PORT || 8081);
 const localDateExpression = `(submitted_at AT TIME ZONE 'Asia/Kolkata')::date`;
+const adminUsername = process.env.ADMIN_USERNAME || 'admin';
+const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+const tokenSecret = process.env.ADMIN_TOKEN_SECRET || 'change-this-local-secret';
 
-const surveyLocations = [
-  'Kadiri',
-  'Anantapur',
-  'Hindupur',
-  'Dharmavaram',
-  'Gorantla',
-  'Other'
-];
-
-const surveyQuestions = [
+const defaultLocations = ['Kadiri', 'Anantapur', 'Hindupur', 'Dharmavaram', 'Gorantla', 'Other'];
+const defaultQuestions = [
   { id: 'age_group', label: 'Age group', type: 'select', options: ['18-25', '26-35', '36-45', '46-60', '60+'], required: true },
   { id: 'gender', label: 'Gender', type: 'select', options: ['Female', 'Male', 'Other', 'Prefer not to say'], required: true },
-  { id: 'occupation', label: 'Primary occupation', type: 'text', required: false },
+  { id: 'occupation', label: 'Primary occupation', type: 'text', options: [], required: false },
   { id: 'service_awareness', label: 'Are you aware of VTRAC services?', type: 'select', options: ['Yes', 'No'], required: true },
   { id: 'satisfaction', label: 'Overall satisfaction', type: 'select', options: ['Very satisfied', 'Satisfied', 'Neutral', 'Dissatisfied'], required: true },
   { id: 'priority_need', label: 'Top priority need', type: 'select', options: ['Employment', 'Training', 'Health', 'Education', 'Finance', 'Other'], required: true },
-  { id: 'comments', label: 'Additional comments', type: 'textarea', required: false }
+  { id: 'comments', label: 'Additional comments', type: 'textarea', options: [], required: false }
 ];
 
 app.use(helmet());
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(',') || true }));
 app.use(express.json({ limit: '1mb' }));
 
+await ensureDatabase();
+
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: 'vtrac-survey-portal' });
 });
 
-app.get('/api/survey-config', (_req, res) => {
-  res.json({ locations: surveyLocations, questions: surveyQuestions });
+app.post('/api/admin/login', (req, res) => {
+  const { username, password } = req.body;
+  if (username !== adminUsername || password !== adminPassword) {
+    return res.status(401).json({ error: 'Invalid admin login.' });
+  }
+  res.json({ token: createToken(username), username });
+});
+
+app.get('/api/admin/me', requireAdmin, (req, res) => {
+  res.json({ username: req.admin.username });
+});
+
+app.get('/api/projects', requireAdmin, async (_req, res, next) => {
+  try {
+    const projects = await loadProjects();
+    res.json({ projects });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/projects', requireAdmin, async (req, res, next) => {
+  try {
+    const project = await saveProject(req.body);
+    res.status(201).json({ project });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/api/projects/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const project = await saveProject({ ...req.body, id: req.params.id });
+    res.json({ project });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/survey-config', async (req, res, next) => {
+  try {
+    const project = await loadProjectForPublic(req.query.project);
+    if (!project) return res.status(404).json({ error: 'Survey project not found.' });
+    res.json(project);
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post('/api/responses', async (req, res, next) => {
   try {
     const {
+      projectSlug,
+      projectId,
       enumeratorName,
       location,
       respondentName,
@@ -53,11 +98,14 @@ app.post('/api/responses', async (req, res, next) => {
       gps
     } = req.body;
 
+    const project = await loadProjectForPublic(projectSlug || projectId);
+    if (!project) return res.status(404).json({ error: 'Survey project not found.' });
+
     if (!enumeratorName?.trim() || !location?.trim()) {
       return res.status(400).json({ error: 'Enumerator name and location are required.' });
     }
 
-    const missingQuestion = surveyQuestions
+    const missingQuestion = project.questions
       .filter((question) => question.required)
       .find((question) => String(answers[question.id] || '').trim() === '');
 
@@ -67,6 +115,7 @@ app.post('/api/responses', async (req, res, next) => {
 
     const result = await query(
       `INSERT INTO survey_responses (
+        project_id,
         enumerator_name,
         location,
         respondent_name,
@@ -77,9 +126,10 @@ app.post('/api/responses', async (req, res, next) => {
         longitude,
         gps_accuracy
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING id, submitted_at`,
       [
+        project.id,
         enumeratorName.trim(),
         location.trim(),
         respondentName?.trim() || null,
@@ -98,7 +148,7 @@ app.post('/api/responses', async (req, res, next) => {
   }
 });
 
-app.get('/api/dashboard', async (req, res, next) => {
+app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
   try {
     const filters = buildFilters(req.query);
     const [totals, byDate, byEnumerator, byLocation, recent] = await Promise.all([
@@ -158,10 +208,10 @@ app.get('/api/dashboard', async (req, res, next) => {
   }
 });
 
-app.get('/api/responses/export.csv', async (req, res, next) => {
+app.get('/api/responses/export.csv', requireAdmin, async (req, res, next) => {
   try {
-    const rows = await loadExportRows(req.query);
-    const csv = stringify(rows.map(flattenResponse), { header: true });
+    const { rows, questions } = await loadExportRows(req.query);
+    const csv = stringify(rows.map((row) => flattenResponse(row, questions)), { header: true });
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="vtrac-survey-responses.csv"');
     res.send(csv);
@@ -170,12 +220,13 @@ app.get('/api/responses/export.csv', async (req, res, next) => {
   }
 });
 
-app.get('/api/responses/export.xlsx', async (req, res, next) => {
+app.get('/api/responses/export.xlsx', requireAdmin, async (req, res, next) => {
   try {
-    const records = (await loadExportRows(req.query)).map(flattenResponse);
+    const { rows, questions } = await loadExportRows(req.query);
+    const records = rows.map((row) => flattenResponse(row, questions));
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Survey Responses');
-    sheet.columns = Object.keys(records[0] || defaultExportRow()).map((key) => ({
+    sheet.columns = Object.keys(records[0] || defaultExportRow(questions)).map((key) => ({
       header: key,
       key,
       width: Math.min(Math.max(key.length + 4, 14), 30)
@@ -194,16 +245,206 @@ app.get('/api/responses/export.xlsx', async (req, res, next) => {
 
 app.use((error, _req, res, _next) => {
   console.error(error);
-  res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  const message = error.code === '23505' ? 'Project slug already exists.' : 'Something went wrong. Please try again.';
+  res.status(error.status || 500).json({ error: message });
 });
 
 app.listen(port, () => {
   console.log(`VTRAC Survey API listening on ${port}`);
 });
 
+async function ensureDatabase() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS survey_projects (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL UNIQUE,
+      description TEXT,
+      locations TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS survey_questions (
+      id BIGSERIAL PRIMARY KEY,
+      project_id BIGINT NOT NULL REFERENCES survey_projects(id) ON DELETE CASCADE,
+      question_key TEXT NOT NULL,
+      label TEXT NOT NULL,
+      type TEXT NOT NULL CHECK (type IN ('text', 'textarea', 'select', 'number', 'date')),
+      options JSONB NOT NULL DEFAULT '[]'::jsonb,
+      required BOOLEAN NOT NULL DEFAULT FALSE,
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (project_id, question_key)
+    );
+
+    CREATE TABLE IF NOT EXISTS survey_responses (
+      id BIGSERIAL PRIMARY KEY,
+      project_id BIGINT REFERENCES survey_projects(id),
+      enumerator_name TEXT NOT NULL,
+      location TEXT NOT NULL,
+      respondent_name TEXT,
+      respondent_phone TEXT,
+      household_id TEXT,
+      answers JSONB NOT NULL DEFAULT '{}'::jsonb,
+      latitude NUMERIC(10, 7),
+      longitude NUMERIC(10, 7),
+      gps_accuracy NUMERIC(10, 2),
+      submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS project_id BIGINT REFERENCES survey_projects(id);
+
+    CREATE INDEX IF NOT EXISTS idx_survey_responses_project ON survey_responses (project_id);
+    CREATE INDEX IF NOT EXISTS idx_survey_responses_submitted_at ON survey_responses (submitted_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_survey_responses_enumerator ON survey_responses (LOWER(enumerator_name));
+    CREATE INDEX IF NOT EXISTS idx_survey_responses_location ON survey_responses (location);
+    CREATE INDEX IF NOT EXISTS idx_survey_responses_answers ON survey_responses USING GIN (answers);
+  `);
+
+  const existing = await query(`SELECT id FROM survey_projects WHERE slug = 'pilot-survey' LIMIT 1`);
+  let projectId = existing.rows[0]?.id;
+
+  if (!projectId) {
+    const created = await query(
+      `INSERT INTO survey_projects (name, slug, description, locations)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id`,
+      ['Pilot Survey', 'pilot-survey', 'Default VTRAC pilot survey', defaultLocations]
+    );
+    projectId = created.rows[0].id;
+  }
+
+  const questionCount = await query(`SELECT COUNT(*)::int AS count FROM survey_questions WHERE project_id = $1`, [projectId]);
+  if (questionCount.rows[0].count === 0) {
+    for (const [index, question] of defaultQuestions.entries()) {
+      await query(
+        `INSERT INTO survey_questions (project_id, question_key, label, type, options, required, sort_order)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [projectId, question.id, question.label, question.type, JSON.stringify(question.options), question.required, index + 1]
+      );
+    }
+  }
+
+  await query(`UPDATE survey_responses SET project_id = $1 WHERE project_id IS NULL`, [projectId]);
+}
+
+async function loadProjects() {
+  const projects = await query(`
+    SELECT p.*,
+      COUNT(r.id)::int AS response_count
+    FROM survey_projects p
+    LEFT JOIN survey_responses r ON r.project_id = p.id
+    GROUP BY p.id
+    ORDER BY p.created_at DESC
+  `);
+  const questions = await query(`
+    SELECT *
+    FROM survey_questions
+    ORDER BY project_id ASC, sort_order ASC, id ASC
+  `);
+
+  return projects.rows.map((project) => ({
+    ...normalizeProject(project),
+    questions: questions.rows
+      .filter((question) => String(question.project_id) === String(project.id))
+      .map(normalizeQuestion)
+  }));
+}
+
+async function loadProjectForPublic(identifier) {
+  const value = identifier || 'pilot-survey';
+  const projectResult = await query(
+    `SELECT *
+    FROM survey_projects
+    WHERE is_active = TRUE
+      AND (slug = $1 OR id::text = $1)
+    LIMIT 1`,
+    [String(value)]
+  );
+  const project = projectResult.rows[0];
+  if (!project) return null;
+
+  const questions = await query(
+    `SELECT *
+    FROM survey_questions
+    WHERE project_id = $1
+    ORDER BY sort_order ASC, id ASC`,
+    [project.id]
+  );
+
+  return {
+    ...normalizeProject(project),
+    questions: questions.rows.map(normalizeQuestion)
+  };
+}
+
+async function saveProject(payload) {
+  const name = payload.name?.trim();
+  const slug = slugify(payload.slug || payload.name);
+  const locations = normalizeLines(payload.locations);
+  const questions = normalizeQuestions(payload.questions);
+
+  if (!name || !slug) {
+    const error = new Error('Project name is required.');
+    error.status = 400;
+    throw error;
+  }
+  if (locations.length === 0) {
+    const error = new Error('At least one location is required.');
+    error.status = 400;
+    throw error;
+  }
+  if (questions.length === 0) {
+    const error = new Error('At least one question is required.');
+    error.status = 400;
+    throw error;
+  }
+
+  const result = payload.id
+    ? await query(
+      `UPDATE survey_projects
+      SET name = $1, slug = $2, description = $3, locations = $4, is_active = $5, updated_at = NOW()
+      WHERE id = $6
+      RETURNING *`,
+      [name, slug, payload.description?.trim() || null, locations, payload.isActive !== false, payload.id]
+    )
+    : await query(
+      `INSERT INTO survey_projects (name, slug, description, locations, is_active)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *`,
+      [name, slug, payload.description?.trim() || null, locations, payload.isActive !== false]
+    );
+
+  const project = result.rows[0];
+  if (!project) {
+    const error = new Error('Project not found.');
+    error.status = 404;
+    throw error;
+  }
+
+  await query(`DELETE FROM survey_questions WHERE project_id = $1`, [project.id]);
+  for (const [index, question] of questions.entries()) {
+    await query(
+      `INSERT INTO survey_questions (project_id, question_key, label, type, options, required, sort_order)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [project.id, question.id, question.label, question.type, JSON.stringify(question.options), question.required, index + 1]
+    );
+  }
+
+  return loadProjectForPublic(project.id);
+}
+
 function buildFilters(queryParams) {
   const conditions = [];
   const params = [];
+
+  if (queryParams.projectId) {
+    params.push(queryParams.projectId);
+    conditions.push(`project_id = $${params.length}`);
+  }
 
   if (queryParams.location) {
     params.push(queryParams.location);
@@ -243,6 +484,8 @@ function buildFilters(queryParams) {
 
 async function loadExportRows(queryParams) {
   const filters = buildFilters(queryParams);
+  const project = queryParams.projectId ? await loadProjectForPublic(queryParams.projectId) : null;
+  const questions = project?.questions || defaultQuestions;
   const result = await query(
     `SELECT *
     FROM survey_responses
@@ -250,10 +493,10 @@ async function loadExportRows(queryParams) {
     ORDER BY submitted_at DESC`,
     filters.params
   );
-  return result.rows;
+  return { rows: result.rows, questions };
 }
 
-function flattenResponse(row) {
+function flattenResponse(row, questions) {
   const base = {
     id: row.id || '',
     submitted_at: formatTimestamp(row.submitted_at),
@@ -267,15 +510,100 @@ function flattenResponse(row) {
     gps_accuracy: row.gps_accuracy || ''
   };
 
-  for (const question of surveyQuestions) {
+  for (const question of questions) {
     base[question.label] = row.answers?.[question.id] ?? '';
   }
 
   return base;
 }
 
-function defaultExportRow() {
-  return flattenResponse({ answers: {} });
+function defaultExportRow(questions) {
+  return flattenResponse({ answers: {} }, questions);
+}
+
+function createToken(username) {
+  const payload = {
+    username,
+    exp: Date.now() + 1000 * 60 * 60 * 12
+  };
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = crypto.createHmac('sha256', tokenSecret).update(body).digest('base64url');
+  return `${body}.${signature}`;
+}
+
+function verifyToken(token) {
+  if (!token || !token.includes('.')) return null;
+  const [body, signature] = token.split('.');
+  const expected = crypto.createHmac('sha256', tokenSecret).update(body).digest('base64url');
+  if (Buffer.byteLength(signature) !== Buffer.byteLength(expected)) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+  if (!payload.exp || payload.exp < Date.now()) return null;
+  return payload;
+}
+
+function requireAdmin(req, res, next) {
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
+  const admin = verifyToken(token);
+  if (!admin) return res.status(401).json({ error: 'Admin login required.' });
+  req.admin = admin;
+  next();
+}
+
+function normalizeProject(project) {
+  return {
+    id: String(project.id),
+    name: project.name,
+    slug: project.slug,
+    description: project.description || '',
+    locations: project.locations || [],
+    isActive: project.is_active,
+    responseCount: project.response_count || 0,
+    publicUrl: `/p/${project.slug}`
+  };
+}
+
+function normalizeQuestion(question) {
+  return {
+    id: question.question_key,
+    label: question.label,
+    type: question.type,
+    options: Array.isArray(question.options) ? question.options : [],
+    required: question.required
+  };
+}
+
+function normalizeQuestions(questions = []) {
+  return questions
+    .map((question, index) => {
+      const label = question.label?.trim();
+      const type = ['text', 'textarea', 'select', 'number', 'date'].includes(question.type) ? question.type : 'text';
+      return {
+        id: slugify(question.id || label || `question-${index + 1}`).replaceAll('-', '_'),
+        label,
+        type,
+        options: type === 'select' ? normalizeLines(question.options) : [],
+        required: Boolean(question.required)
+      };
+    })
+    .filter((question) => question.label);
+}
+
+function normalizeLines(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+  return String(value || '')
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function slugify(value) {
+  return String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
 }
 
 function formatTimestamp(value) {

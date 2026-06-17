@@ -34,6 +34,9 @@ Set `.env`:
 PORT=8081
 DATABASE_URL=postgres://vtrac_user:change-this-password@localhost:5432/vtrac_survey
 CORS_ORIGIN=https://your-domain.example
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=replace-with-a-strong-password
+ADMIN_TOKEN_SECRET=replace-with-a-long-random-secret
 ```
 
 Create a service:
@@ -101,8 +104,9 @@ sudo systemctl reload nginx
 ## 5. Pilot Checks
 
 - Open `/` on mobile and submit one response.
+- Open `/admin`, login as admin, and create or edit a project form.
+- Open `/p/{project-slug}` on mobile and submit one response.
 - Capture GPS once from a mobile browser.
 - Open `/admin` and confirm totals update.
 - Download CSV and Excel.
 - Restart the VM and confirm the API restarts with `systemctl status vtrac-survey-api`.
-

@@ -144,7 +144,6 @@ app.post('/api/responses', async (req, res, next) => {
       respondentPhone,
       householdId,
       answers = {},
-      gps,
       audio,
       clientSubmissionId
     } = req.body;
@@ -158,6 +157,7 @@ app.post('/api/responses', async (req, res, next) => {
 
     const missingQuestion = project.questions
       .filter((question) => questionAppliesToLocation(question.id, location))
+      .filter((question) => question.id !== 'google_coordinates')
       .filter((question) => question.required)
       .find((question) => String(answers[question.id] || '').trim() === '');
 
@@ -199,9 +199,9 @@ app.post('/api/responses', async (req, res, next) => {
         respondentPhone?.trim() || null,
         householdId?.trim() || null,
         answers,
-        gps?.latitude ?? null,
-        gps?.longitude ?? null,
-        gps?.accuracy ?? null,
+        null,
+        null,
+        null,
         audioPayload?.data || null,
         audioPayload?.mimeType || null,
         audioPayload?.size || null,
@@ -292,7 +292,7 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
         filters.params
       ),
       query(
-        `SELECT id, enumerator_name, location, respondent_name, audio_mime_type, latitude, longitude, submitted_at
+        `SELECT id, enumerator_name, location, respondent_name, audio_mime_type, submitted_at
         FROM survey_responses
         ${filters.where}
         ORDER BY submitted_at DESC
@@ -1017,13 +1017,11 @@ function flattenResponse(row, questions) {
     location: row.location || '',
     respondent_name: row.respondent_name || '',
     respondent_phone: row.respondent_phone || '',
-    latitude: row.latitude || '',
-    longitude: row.longitude || '',
-    gps_accuracy: row.gps_accuracy || '',
     audio_recording: row.audio_data ? 'Yes' : 'No'
   };
 
   for (const question of questions) {
+    if (question.id === 'google_coordinates') continue;
     base[question.label] = row.answers?.[question.id] ?? '';
   }
 

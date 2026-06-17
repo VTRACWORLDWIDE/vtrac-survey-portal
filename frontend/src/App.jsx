@@ -7,7 +7,6 @@ import {
   Download,
   FileText,
   Link2,
-  LocateFixed,
   MapPin,
   Mic,
   Plus,
@@ -207,8 +206,6 @@ function SurveyForm({ projectSlug }) {
     householdId: '',
     answers: {}
   });
-  const [gps, setGps] = useState(null);
-  const [gpsStatus, setGpsStatus] = useState('Not captured');
   const [status, setStatus] = useState('');
   const [saving, setSaving] = useState(false);
   const [enumeratorStats, setEnumeratorStats] = useState(null);
@@ -230,9 +227,6 @@ function SurveyForm({ projectSlug }) {
       .then((payload) => {
         setConfig(payload);
         if (payload.error) setStatus(payload.error);
-        if (payload.questions?.some((question) => question.id === 'google_coordinates')) {
-          captureGps(payload.questions);
-        }
       })
       .catch(() => setStatus('Unable to load survey questions.'));
   }, [projectSlug]);
@@ -310,46 +304,6 @@ function SurveyForm({ projectSlug }) {
         } : {})
       })
     }));
-  }
-
-  function captureGps(questions = config.questions || []) {
-    if (!navigator.geolocation) {
-      setGpsStatus('GPS is not supported on this device.');
-      return;
-    }
-    setGpsStatus('Capturing GPS...');
-    const applyPosition = (position, label = 'Captured') => {
-      const nextGps = {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy
-      };
-      setGps(nextGps);
-      if (questions.some((question) => question.id === 'google_coordinates')) {
-        updateAnswer('google_coordinates', `${nextGps.latitude.toFixed(6)}, ${nextGps.longitude.toFixed(6)}`);
-      }
-      setGpsStatus(`${label}. Accuracy ~${Math.round(position.coords.accuracy)} meters`);
-    };
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        applyPosition(position, 'Captured');
-        navigator.geolocation.getCurrentPosition(
-          (freshPosition) => applyPosition(freshPosition, 'Updated'),
-          () => {},
-          { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
-        );
-      },
-      () => {
-        setGpsStatus('GPS slow. You can continue or tap GPS again.');
-        navigator.geolocation.getCurrentPosition(
-          (position) => applyPosition(position, 'Captured'),
-          () => setGpsStatus('GPS unavailable. Continue or tap GPS again.'),
-          { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 }
-        );
-      },
-      { enableHighAccuracy: false, timeout: 2500, maximumAge: 900000 }
-    );
   }
 
   async function startAudioRecording() {
@@ -438,8 +392,6 @@ function SurveyForm({ projectSlug }) {
       householdId: '',
       answers: {}
     });
-    setGps(null);
-    setGpsStatus('Not captured');
     clearAudio();
   }
 
@@ -522,7 +474,6 @@ function SurveyForm({ projectSlug }) {
     const submissionPayload = {
       ...form,
       projectSlug,
-      gps,
       audio: finalAudio,
       clientSubmissionId: createLocalSubmissionId()
     };
@@ -603,16 +554,6 @@ function SurveyForm({ projectSlug }) {
                 <input inputMode="tel" value={form.respondentPhone} onChange={(event) => update('respondentPhone', event.target.value)} />
               </label>
             </div>
-          </div>
-
-          <div className="gps-row">
-            <div>
-              <strong>GPS location</strong>
-              <span>{gpsStatus}</span>
-            </div>
-            <button type="button" className="icon-button" onClick={captureGps} aria-label="Capture GPS">
-              <LocateFixed size={18} />
-            </button>
           </div>
 
           <div className="gps-row audio-row">
@@ -1902,7 +1843,6 @@ function RecentTable({ rows, loading, onReview }) {
               <th>Location</th>
               <th>Respondent</th>
               <th>Audio</th>
-              <th>GPS</th>
               <th>Review</th>
             </tr>
           </thead>
@@ -1915,7 +1855,6 @@ function RecentTable({ rows, loading, onReview }) {
                 <td>{row.location}</td>
                 <td>{row.respondent_name || '-'}</td>
                 <td>{row.audio_mime_type ? 'Yes' : '-'}</td>
-                <td>{row.latitude && row.longitude ? `${row.latitude}, ${row.longitude}` : '-'}</td>
                 <td><button className="secondary compact-button" onClick={() => onReview(row.id)}>Review</button></td>
               </tr>
             ))}

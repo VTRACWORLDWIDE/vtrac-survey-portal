@@ -635,6 +635,22 @@ textarea {
   padding: 18px;
 }
 
+.response-editor {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.review-question-list {
+  display: grid;
+  gap: 12px;
+}
+
+.compact-button {
+  min-height: 36px;
+  padding: 0 10px;
+}
+
 .client-editor {
   background: #f8fbfa;
   border: 1px solid #dfe9e6;
@@ -720,7 +736,7 @@ textarea {
   align-items: end;
   display: grid;
   gap: 10px;
-  grid-template-columns: 2fr repeat(4, minmax(130px, 1fr)) auto auto auto;
+  grid-template-columns: 2fr repeat(6, minmax(130px, 1fr)) auto auto auto;
   padding: 12px;
 }
 
@@ -811,7 +827,7 @@ textarea {
 
 table {
   border-collapse: collapse;
-  min-width: 920px;
+  min-width: 1020px;
   width: 100%;
 }
 
@@ -903,6 +919,7 @@ tbody tr:hover {
   .table-panel,
   .editor-panel,
   .client-admin-panel,
+  .response-editor,
   .login-panel {
     padding: 14px;
   }

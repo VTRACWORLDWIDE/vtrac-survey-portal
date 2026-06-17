@@ -785,7 +785,9 @@ function ClientDashboard({ token, onLogout }) {
     const params = new URLSearchParams();
     if (selectedProject?.id) params.set('projectId', selectedProject.id);
     Object.entries(filters).forEach(([key, value]) => {
-      if (value) params.set(key, value);
+      if (!value) return;
+      if (key === 'submittedFrom' || key === 'submittedTo') params.set(key, new Date(value).toISOString());
+      else params.set(key, value);
     });
     return params.toString();
   }, [filters, selectedProject?.id]);
@@ -931,7 +933,8 @@ function AdminDashboard({ token, onLogout }) {
   const [selectedId, setSelectedId] = useState('');
   const [editing, setEditing] = useState(null);
   const [editingClient, setEditingClient] = useState(null);
-  const [filters, setFilters] = useState({ search: '', enumerator: '', location: '', dateFrom: '', dateTo: '' });
+  const [editingResponse, setEditingResponse] = useState(null);
+  const [filters, setFilters] = useState({ search: '', enumerator: '', location: '', dateFrom: '', dateTo: '', submittedFrom: '', submittedTo: '' });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
@@ -1059,6 +1062,35 @@ function AdminDashboard({ token, onLogout }) {
     await loadClients();
   }
 
+  async function reviewResponse(responseId) {
+    setStatus('');
+    const response = await fetch(`${apiBase}/api/responses/${responseId}`, { headers: authHeaders });
+    if (response.status === 401) return onLogout();
+    const payload = await response.json();
+    if (!response.ok) {
+      setStatus(payload.error || 'Unable to load response.');
+      return;
+    }
+    setEditingResponse(payload.response);
+  }
+
+  async function saveResponse(responseDraft) {
+    setStatus('');
+    const response = await fetch(`${apiBase}/api/responses/${responseDraft.id}`, {
+      method: 'PUT',
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify(responseDraft)
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      setStatus(payload.error || 'Unable to save response.');
+      return;
+    }
+    setStatus(`Response ${payload.response.id} saved.`);
+    setEditingResponse(null);
+    await loadDashboard();
+  }
+
   async function download(type) {
     const response = await fetch(`${apiBase}/api/responses/export.${type}?${queryString}`, { headers: authHeaders });
     const blob = await response.blob();
@@ -1122,6 +1154,8 @@ function AdminDashboard({ token, onLogout }) {
         <input placeholder="Location" value={filters.location} onChange={(event) => setFilters({ ...filters, location: event.target.value })} />
         <input type="date" value={filters.dateFrom} onChange={(event) => setFilters({ ...filters, dateFrom: event.target.value })} />
         <input type="date" value={filters.dateTo} onChange={(event) => setFilters({ ...filters, dateTo: event.target.value })} />
+        <input aria-label="Submitted from time" title="Submitted from time" type="datetime-local" value={filters.submittedFrom} onChange={(event) => setFilters({ ...filters, submittedFrom: event.target.value })} />
+        <input aria-label="Submitted to time" title="Submitted to time" type="datetime-local" value={filters.submittedTo} onChange={(event) => setFilters({ ...filters, submittedTo: event.target.value })} />
         <button className="icon-button" onClick={loadDashboard} aria-label="Refresh dashboard"><RefreshCw size={18} /></button>
         <button className="download" onClick={() => download('csv')}><Download size={16} /> CSV</button>
         <button className="download" onClick={() => download('xlsx')}><Download size={16} /> Excel</button>
@@ -1140,7 +1174,16 @@ function AdminDashboard({ token, onLogout }) {
         <Breakdown title="Samples by location" rows={data?.byLocation || []} labelKey="location" valueKey="samples" />
       </div>
 
-      <RecentTable rows={data?.recent || []} loading={loading} />
+      <RecentTable rows={data?.recent || []} loading={loading} onReview={reviewResponse} />
+      {editingResponse && (
+        <ResponseEditor
+          response={editingResponse}
+          project={selectedProject}
+          onChange={setEditingResponse}
+          onCancel={() => setEditingResponse(null)}
+          onSave={saveResponse}
+        />
+      )}
       {status && <p className="status success">{status}</p>}
     </section>
   );
@@ -1316,7 +1359,138 @@ function ClientAccessManager({ clients, projects, editingClient, onStartNew, onE
   );
 }
 
-function RecentTable({ rows, loading }) {
+function ResponseEditor({ response, project, onChange, onCancel, onSave }) {
+  function update(field, value) {
+    onChange({ ...response, [field]: value });
+  }
+
+  function updateAnswer(questionId, value) {
+    onChange({
+      ...response,
+      answers: deriveAnswers({ ...response.answers, [questionId]: value })
+    });
+  }
+
+  function autoClean() {
+    onChange({
+      ...response,
+      answers: autoCleanAnswers(response.answers, project?.questions || [])
+    });
+  }
+
+  return (
+    <div className="panel response-editor">
+      <div className="section-title">
+        <div>
+          <p className="eyebrow">Review Submission</p>
+          <h2>Response #{response.id}</h2>
+          <p>Submitted {new Date(response.submittedAt).toLocaleString()}</p>
+        </div>
+        <div className="actions">
+          <button className="secondary" onClick={autoClean}><RefreshCw size={18} /> Auto-clean</button>
+          <button className="secondary" onClick={onCancel}>Cancel</button>
+          <button className="primary" onClick={() => onSave(response)}><Save size={18} /> Save Response</button>
+        </div>
+      </div>
+
+      <div className="inline-grid">
+        <label>
+          Enumerator
+          <input value={response.enumeratorName} onChange={(event) => update('enumeratorName', event.target.value)} />
+        </label>
+        <label>
+          Location
+          <select value={response.location} onChange={(event) => update('location', event.target.value)}>
+            {(project?.locations || []).map((location) => <option key={location}>{location}</option>)}
+          </select>
+        </label>
+      </div>
+
+      <div className="inline-grid">
+        <label>
+          Respondent name
+          <input value={response.respondentName || ''} onChange={(event) => update('respondentName', event.target.value)} />
+        </label>
+        <label>
+          Respondent phone
+          <input value={response.respondentPhone || ''} onChange={(event) => update('respondentPhone', event.target.value)} />
+        </label>
+      </div>
+
+      <div className="review-question-list">
+        {(project?.questions || [])
+          .filter((question) => !hiddenQuestionIds.has(question.id))
+          .filter((question) => questionAppliesToLocation(question.id, response.location))
+          .map((question) => (
+            <QuestionInput
+              key={question.id}
+              question={question}
+              index={(project?.questions || []).findIndex((item) => item.id === question.id)}
+              value={response.answers?.[question.id] || ''}
+              onChange={(value) => updateAnswer(question.id, value)}
+            />
+          ))}
+      </div>
+    </div>
+  );
+}
+
+function autoCleanAnswers(answers, questions) {
+  const next = { ...answers };
+  for (const question of questions) {
+    const value = next[question.id];
+    if (!value) continue;
+
+    if (question.id.includes('locality')) {
+      const cleaned = closestOption(value, Object.keys(originLocalityMap));
+      if (cleaned && cleaned !== value) {
+        next[question.id] = cleaned;
+        const mapping = originLocalityMap[cleaned];
+        const prefix = question.id.startsWith('destination_') ? 'destination' : 'origin';
+        next[`${prefix}_zone_number`] = String(mapping.zoneNumber);
+        next[`${prefix}_mapped_area`] = mapping.area;
+        next[`${prefix}_division`] = mapping.division;
+      }
+    }
+
+    if ((question.id.includes('city') || question.label.toLowerCase().includes('city')) && question.options?.length > 0) {
+      const cleaned = closestOption(value, question.options);
+      if (cleaned) next[question.id] = cleaned;
+    }
+  }
+  return deriveAnswers(next);
+}
+
+function closestOption(value, options) {
+  const normalizedValue = normalizeForMatch(value);
+  const exact = options.find((option) => normalizeForMatch(option) === normalizedValue);
+  if (exact) return exact;
+  const scored = options
+    .map((option) => ({ option, score: editDistance(normalizeForMatch(option), normalizedValue) }))
+    .sort((a, b) => a.score - b.score)[0];
+  return scored && scored.score <= Math.max(2, Math.floor(normalizedValue.length * 0.25)) ? scored.option : value;
+}
+
+function normalizeForMatch(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function editDistance(a, b) {
+  const dp = Array.from({ length: a.length + 1 }, (_, index) => [index]);
+  for (let j = 1; j <= b.length; j += 1) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i += 1) {
+    for (let j = 1; j <= b.length; j += 1) {
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+      );
+    }
+  }
+  return dp[a.length][b.length];
+}
+
+function RecentTable({ rows, loading, onReview }) {
   return (
     <div className="panel table-panel">
       <div className="section-title">
@@ -1334,6 +1508,7 @@ function RecentTable({ rows, loading }) {
               <th>Respondent</th>
               <th>Household</th>
               <th>GPS</th>
+              <th>Review</th>
             </tr>
           </thead>
           <tbody>
@@ -1346,6 +1521,7 @@ function RecentTable({ rows, loading }) {
                 <td>{row.respondent_name || '-'}</td>
                 <td>{row.household_id || '-'}</td>
                 <td>{row.latitude && row.longitude ? `${row.latitude}, ${row.longitude}` : '-'}</td>
+                <td><button className="secondary compact-button" onClick={() => onReview(row.id)}>Review</button></td>
               </tr>
             ))}
           </tbody>

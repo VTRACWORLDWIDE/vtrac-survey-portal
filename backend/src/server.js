@@ -296,6 +296,67 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
   }
 });
 
+app.get('/api/responses/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT *
+      FROM survey_responses
+      WHERE id = $1
+      LIMIT 1`,
+      [req.params.id]
+    );
+    const response = result.rows[0];
+    if (!response) return res.status(404).json({ error: 'Response not found.' });
+    res.json({ response: normalizeResponse(response) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/api/responses/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const {
+      enumeratorName,
+      location,
+      respondentName,
+      respondentPhone,
+      householdId,
+      answers = {}
+    } = req.body;
+
+    if (!enumeratorName?.trim() || !location?.trim()) {
+      return res.status(400).json({ error: 'Enumerator name and location are required.' });
+    }
+
+    const result = await query(
+      `UPDATE survey_responses
+      SET enumerator_name = $1,
+        location = $2,
+        respondent_name = $3,
+        respondent_phone = $4,
+        household_id = $5,
+        answers = $6
+      WHERE id = $7
+      RETURNING *`,
+      [
+        enumeratorName.trim(),
+        location.trim(),
+        respondentName?.trim() || null,
+        respondentPhone?.trim() || null,
+        householdId?.trim() || null,
+        answers,
+        req.params.id
+      ]
+    );
+
+    const response = result.rows[0];
+    if (!response) return res.status(404).json({ error: 'Response not found.' });
+    res.json({ response: normalizeResponse(response) });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/client/dashboard', requireClient, async (req, res, next) => {
   try {
     const projects = await loadProjectsForClient(req.client.clientId);
@@ -804,6 +865,16 @@ function buildFilters(queryParams) {
     conditions.push(`${localDateExpression} <= $${params.length}::date`);
   }
 
+  if (queryParams.submittedFrom) {
+    params.push(queryParams.submittedFrom);
+    conditions.push(`submitted_at >= $${params.length}::timestamptz`);
+  }
+
+  if (queryParams.submittedTo) {
+    params.push(queryParams.submittedTo);
+    conditions.push(`submitted_at <= $${params.length}::timestamptz`);
+  }
+
   if (queryParams.search) {
     params.push(`%${String(queryParams.search).toLowerCase()}%`);
     conditions.push(`(
@@ -878,6 +949,23 @@ function flattenResponse(row, questions) {
   }
 
   return base;
+}
+
+function normalizeResponse(row) {
+  return {
+    id: String(row.id),
+    projectId: String(row.project_id || ''),
+    enumeratorName: row.enumerator_name || '',
+    location: row.location || '',
+    respondentName: row.respondent_name || '',
+    respondentPhone: row.respondent_phone || '',
+    householdId: row.household_id || '',
+    answers: row.answers || {},
+    latitude: row.latitude,
+    longitude: row.longitude,
+    gpsAccuracy: row.gps_accuracy,
+    submittedAt: formatTimestamp(row.submitted_at)
+  };
 }
 
 function defaultExportRow(questions) {

@@ -42,9 +42,9 @@ export default function App() {
     <main>
       <header className="topbar">
         <div className="brand-block">
-          <div className="brand-mark">V</div>
+          <img className="brand-logo" src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
           <div>
-            <p className="eyebrow">VTRAC</p>
+            <p className="brand-name">VTRAC</p>
             <h1>Survey Portal</h1>
           </div>
         </div>

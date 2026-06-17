@@ -52,7 +52,6 @@ main {
   gap: 12px;
 }
 
-.brand-mark,
 .login-mark {
   align-items: center;
   background: #183e3a;
@@ -63,9 +62,23 @@ main {
   justify-content: center;
 }
 
-.brand-mark {
-  height: 42px;
-  width: 42px;
+.brand-logo {
+  background: #ffffff;
+  border: 1px solid #d9e3e1;
+  border-radius: 8px;
+  height: 56px;
+  object-fit: contain;
+  padding: 4px;
+  width: 72px;
+}
+
+.brand-name {
+  color: #133e98;
+  font-size: 1.18rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
+  margin: 0 0 3px;
 }
 
 .login-mark {
@@ -89,7 +102,9 @@ p {
 }
 
 h1 {
-  font-size: clamp(1.28rem, 2vw, 1.8rem);
+  color: #26383e;
+  font-size: clamp(1rem, 1.6vw, 1.22rem);
+  font-weight: 750;
   margin-bottom: 0;
 }
 
@@ -685,6 +700,15 @@ tbody tr:hover {
     align-items: stretch;
     display: grid;
     gap: 14px;
+  }
+
+  .brand-logo {
+    height: 50px;
+    width: 64px;
+  }
+
+  .brand-name {
+    font-size: 1.05rem;
   }
 
   nav {

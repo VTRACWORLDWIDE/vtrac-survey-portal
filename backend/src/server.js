@@ -30,7 +30,7 @@ const defaultQuestions = [
 
 app.use(helmet());
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(',') || true }));
-app.use(express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '60mb' }));
 
 await ensureDatabase();
 
@@ -549,7 +549,11 @@ app.get('/api/responses/export.xlsx', requireAdmin, async (req, res, next) => {
 
 app.use((error, _req, res, _next) => {
   console.error(error);
-  const message = error.code === '23505' ? 'Project slug already exists.' : 'Something went wrong. Please try again.';
+  const message = error.type === 'entity.too.large'
+    ? 'Recording upload is too large. Please refresh and submit again.'
+    : error.code === '23505'
+    ? 'Project slug already exists.'
+    : 'Something went wrong. Please try again.';
   res.status(error.status || 500).json({ error: message });
 });
 

@@ -317,7 +317,12 @@ function SurveyForm({ projectSlug }) {
     audioStartPromiseRef.current = (async () => {
       try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      let recorder;
+      try {
+        recorder = new MediaRecorder(stream, getAudioRecorderOptions());
+      } catch {
+        recorder = new MediaRecorder(stream);
+      }
       const chunks = [];
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunks.push(event.data);
@@ -401,9 +406,18 @@ function SurveyForm({ projectSlug }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const result = await response.json().catch(() => ({}));
+    const rawResult = await response.text();
+    let result = {};
+    try {
+      result = rawResult ? JSON.parse(rawResult) : {};
+    } catch {
+      result = {};
+    }
     if (!response.ok) {
-      const error = new Error(result.error || 'Unable to submit survey.');
+      const fallbackMessage = response.status === 413
+        ? 'Recording is too large for upload. Please refresh and submit again.'
+        : `Unable to submit survey. Server returned ${response.status}.`;
+      const error = new Error(result.error || fallbackMessage);
       error.fromServer = true;
       throw error;
     }
@@ -687,6 +701,18 @@ function deriveAnswers(answers) {
       final_destination_time_validation: destinationValidation
     } : {})
   };
+}
+
+function getAudioRecorderOptions() {
+  const options = { audioBitsPerSecond: 24000 };
+  const supportedTypes = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4',
+    'audio/aac'
+  ];
+  const mimeType = supportedTypes.find((type) => window.MediaRecorder?.isTypeSupported?.(type));
+  return mimeType ? { ...options, mimeType } : options;
 }
 
 function blobToDataUrl(blob) {

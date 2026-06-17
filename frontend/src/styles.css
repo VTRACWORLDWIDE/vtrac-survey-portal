@@ -587,6 +587,18 @@ textarea {
   padding: 14px;
 }
 
+.client-filter-bar {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(260px, 2fr) minmax(140px, 1fr) minmax(140px, 1fr) auto;
+  padding: 14px;
+}
+
+.client-chart-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .project-bar label {
   min-width: 260px;
 }
@@ -782,6 +794,11 @@ tbody tr:hover {
 
   .filters {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .client-filter-bar,
+  .client-chart-grid {
+    grid-template-columns: 1fr;
   }
 
   .metric-grid {

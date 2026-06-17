@@ -179,11 +179,16 @@ export default function App() {
           </div>
         </div>
         <nav>
-          <button className={!route.startsWith('/admin') ? 'active' : ''} onClick={() => navigate('/')}>Survey</button>
+          <button className={!route.startsWith('/admin') && !route.startsWith('/client') ? 'active' : ''} onClick={() => navigate('/')}>Survey</button>
+          <button className={route.startsWith('/client') ? 'active' : ''} onClick={() => navigate('/client')}>Client</button>
           <button className={route.startsWith('/admin') ? 'active' : ''} onClick={() => navigate('/admin')}>Admin</button>
         </nav>
       </header>
-      {route.startsWith('/admin') ? <AdminApp /> : <SurveyForm projectSlug={publicSlug} />}
+      {route.startsWith('/admin')
+        ? <AdminApp />
+        : route.startsWith('/client')
+          ? <ClientApp />
+          : <SurveyForm projectSlug={publicSlug} />}
     </main>
   );
 }
@@ -705,6 +710,159 @@ function SearchableSelect({ options, value, onChange, required }) {
         </div>
       )}
     </div>
+  );
+}
+
+function ClientApp() {
+  const [token, setToken] = useState(localStorage.getItem('vtracClientToken') || '');
+
+  function handleLogin(nextToken) {
+    localStorage.setItem('vtracClientToken', nextToken);
+    setToken(nextToken);
+  }
+
+  function logout() {
+    localStorage.removeItem('vtracClientToken');
+    setToken('');
+  }
+
+  if (!token) return <ClientLogin onLogin={handleLogin} />;
+  return <ClientDashboard token={token} onLogout={logout} />;
+}
+
+function ClientLogin({ onLogin }) {
+  const [username, setUsername] = useState('client');
+  const [password, setPassword] = useState('');
+  const [status, setStatus] = useState('');
+
+  async function submit(event) {
+    event.preventDefault();
+    setStatus('');
+    const response = await fetch(`${apiBase}/api/client/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const payload = await response.json();
+    if (!response.ok) return setStatus(payload.error || 'Unable to login.');
+    onLogin(payload.token);
+  }
+
+  return (
+    <section className="login-wrap">
+      <form className="panel login-panel" onSubmit={submit}>
+        <div className="login-mark"><BarChart3 size={24} /></div>
+        <div>
+          <p className="eyebrow">VTRAC Client</p>
+          <h2>Sign in to view collection progress</h2>
+        </div>
+        <label>
+          Username
+          <input value={username} onChange={(event) => setUsername(event.target.value)} required />
+        </label>
+        <label>
+          Password
+          <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+        </label>
+        <button className="primary">Login</button>
+        {status && <p className="status">{status}</p>}
+      </form>
+    </section>
+  );
+}
+
+function ClientDashboard({ token, onLogout }) {
+  const [projects, setProjects] = useState([]);
+  const [selectedId, setSelectedId] = useState('');
+  const [filters, setFilters] = useState({ dateFrom: '', dateTo: '' });
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const authHeaders = { Authorization: `Bearer ${token}` };
+  const selectedProject = projects.find((project) => project.id === selectedId) || projects[0];
+
+  const queryString = useMemo(() => {
+    const params = new URLSearchParams();
+    if (selectedProject?.id) params.set('projectId', selectedProject.id);
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+    return params.toString();
+  }, [filters, selectedProject?.id]);
+
+  async function loadProjects() {
+    const response = await fetch(`${apiBase}/api/client/projects`, { headers: authHeaders });
+    if (response.status === 401) return onLogout();
+    const payload = await response.json();
+    setProjects(payload.projects || []);
+    setSelectedId((current) => current || payload.projects?.[0]?.id || '');
+  }
+
+  async function loadDashboard() {
+    if (!selectedProject) return;
+    setLoading(true);
+    try {
+      const response = await fetch(`${apiBase}/api/client/dashboard?${queryString}`, { headers: authHeaders });
+      if (response.status === 401) return onLogout();
+      setData(await response.json());
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [queryString]);
+
+  return (
+    <section className="dashboard client-dashboard">
+      <div className="admin-heading">
+        <div>
+          <p className="eyebrow">Client View</p>
+          <h2>Collection Dashboard</h2>
+          <p>{selectedProject ? selectedProject.name : 'Survey progress'}</p>
+        </div>
+        <button className="secondary" onClick={onLogout}>Logout</button>
+      </div>
+
+      <div className="panel client-filter-bar">
+        <label>
+          Project
+          <select value={selectedProject?.id || ''} onChange={(event) => setSelectedId(event.target.value)}>
+            {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+          </select>
+        </label>
+        <label>
+          From
+          <input type="date" value={filters.dateFrom} onChange={(event) => setFilters({ ...filters, dateFrom: event.target.value })} />
+        </label>
+        <label>
+          To
+          <input type="date" value={filters.dateTo} onChange={(event) => setFilters({ ...filters, dateTo: event.target.value })} />
+        </label>
+        <button className="icon-button" onClick={loadDashboard} aria-label="Refresh client dashboard"><RefreshCw size={18} /></button>
+      </div>
+
+      <div className="metric-grid">
+        <Metric icon={<ClipboardList size={19} />} label="Total samples" value={data?.totals?.total_samples ?? 0} />
+        <Metric icon={<CalendarClock size={19} />} label="Samples today" value={data?.totals?.samples_today ?? 0} />
+        <Metric icon={<MapPin size={19} />} label="Terminals" value={data?.byTerminal?.length ?? 0} />
+        <Metric icon={<BarChart3 size={19} />} label="Survey points" value={data?.bySurveyPoint?.length ?? 0} />
+      </div>
+
+      <div className="chart-grid client-chart-grid">
+        <Breakdown title="Samples by date" rows={data?.byDate || []} labelKey="date" valueKey="samples" />
+        <Breakdown title="Samples by terminal" rows={data?.byTerminal || []} labelKey="terminal" valueKey="samples" />
+        <Breakdown title="Samples by departures / arrivals" rows={data?.byMovement || []} labelKey="movement" valueKey="samples" />
+        <Breakdown title="Samples by survey point" rows={data?.bySurveyPoint || []} labelKey="survey_point" valueKey="samples" />
+        <Breakdown title="Samples by location" rows={data?.byLocation || []} labelKey="location" valueKey="samples" />
+      </div>
+
+      {loading && <p className="status">Refreshing dashboard...</p>}
+    </section>
   );
 }
 

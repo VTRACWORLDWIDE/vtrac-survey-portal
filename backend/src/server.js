@@ -12,6 +12,8 @@ const port = Number(process.env.PORT || 8081);
 const localDateExpression = `(submitted_at AT TIME ZONE 'Asia/Kolkata')::date`;
 const adminUsername = process.env.ADMIN_USERNAME || 'admin';
 const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+const clientUsername = process.env.CLIENT_USERNAME || 'client';
+const clientPassword = process.env.CLIENT_PASSWORD || 'client123';
 const tokenSecret = process.env.ADMIN_TOKEN_SECRET || 'change-this-local-secret';
 
 const defaultLocations = ['Kadiri', 'Anantapur', 'Hindupur', 'Dharmavaram', 'Gorantla', 'Other'];
@@ -40,11 +42,35 @@ app.post('/api/admin/login', (req, res) => {
   if (username !== adminUsername || password !== adminPassword) {
     return res.status(401).json({ error: 'Invalid admin login.' });
   }
-  res.json({ token: createToken(username), username });
+  res.json({ token: createToken(username, 'admin'), username, role: 'admin' });
 });
 
 app.get('/api/admin/me', requireAdmin, (req, res) => {
   res.json({ username: req.admin.username });
+});
+
+app.post('/api/client/login', (req, res) => {
+  const { username, password } = req.body;
+  if (username !== clientUsername || password !== clientPassword) {
+    return res.status(401).json({ error: 'Invalid client login.' });
+  }
+  res.json({ token: createToken(username, 'client'), username, role: 'client' });
+});
+
+app.get('/api/client/projects', requireClient, async (_req, res, next) => {
+  try {
+    const projects = await loadProjects();
+    res.json({
+      projects: projects.map((project) => ({
+        id: project.id,
+        name: project.name,
+        slug: project.slug,
+        responseCount: project.responseCount
+      }))
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get('/api/projects', requireAdmin, async (_req, res, next) => {
@@ -241,6 +267,74 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
       byEnumerator: byEnumerator.rows,
       byLocation: byLocation.rows,
       recent: recent.rows
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/client/dashboard', requireClient, async (req, res, next) => {
+  try {
+    const filters = buildClientFilters(req.query);
+    const [totals, byDate, byTerminal, byMovement, bySurveyPoint, byLocation] = await Promise.all([
+      query(
+        `SELECT
+          COUNT(*)::int AS total_samples,
+          COUNT(*) FILTER (WHERE ${localDateExpression} = (NOW() AT TIME ZONE 'Asia/Kolkata')::date)::int AS samples_today
+        FROM survey_responses
+        ${filters.where}`,
+        filters.params
+      ),
+      query(
+        `SELECT TO_CHAR(${localDateExpression}, 'YYYY-MM-DD') AS date, COUNT(*)::int AS samples
+        FROM survey_responses
+        ${filters.where}
+        GROUP BY ${localDateExpression}
+        ORDER BY date DESC
+        LIMIT 30`,
+        filters.params
+      ),
+      query(
+        `SELECT COALESCE(NULLIF(split_part(location, ' - ', 2), ''), 'Other') AS terminal, COUNT(*)::int AS samples
+        FROM survey_responses
+        ${filters.where}
+        GROUP BY terminal
+        ORDER BY samples DESC, terminal ASC`,
+        filters.params
+      ),
+      query(
+        `SELECT COALESCE(NULLIF(split_part(location, ' - ', 3), ''), 'Other') AS movement, COUNT(*)::int AS samples
+        FROM survey_responses
+        ${filters.where}
+        GROUP BY movement
+        ORDER BY samples DESC, movement ASC`,
+        filters.params
+      ),
+      query(
+        `SELECT COALESCE(NULLIF(split_part(location, ' - ', 4), ''), location) AS survey_point, COUNT(*)::int AS samples
+        FROM survey_responses
+        ${filters.where}
+        GROUP BY survey_point
+        ORDER BY samples DESC, survey_point ASC`,
+        filters.params
+      ),
+      query(
+        `SELECT location, COUNT(*)::int AS samples
+        FROM survey_responses
+        ${filters.where}
+        GROUP BY location
+        ORDER BY samples DESC, location ASC`,
+        filters.params
+      )
+    ]);
+
+    res.json({
+      totals: totals.rows[0],
+      byDate: byDate.rows,
+      byTerminal: byTerminal.rows,
+      byMovement: byMovement.rows,
+      bySurveyPoint: bySurveyPoint.rows,
+      byLocation: byLocation.rows
     });
   } catch (error) {
     next(error);
@@ -521,6 +615,31 @@ function buildFilters(queryParams) {
   };
 }
 
+function buildClientFilters(queryParams) {
+  const conditions = [];
+  const params = [];
+
+  if (queryParams.projectId) {
+    params.push(queryParams.projectId);
+    conditions.push(`project_id = $${params.length}`);
+  }
+
+  if (queryParams.dateFrom) {
+    params.push(queryParams.dateFrom);
+    conditions.push(`${localDateExpression} >= $${params.length}::date`);
+  }
+
+  if (queryParams.dateTo) {
+    params.push(queryParams.dateTo);
+    conditions.push(`${localDateExpression} <= $${params.length}::date`);
+  }
+
+  return {
+    where: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '',
+    params
+  };
+}
+
 async function loadExportRows(queryParams) {
   const filters = buildFilters(queryParams);
   const project = queryParams.projectId ? await loadProjectForPublic(queryParams.projectId) : null;
@@ -597,9 +716,10 @@ function questionAppliesToLocation(questionId, location = '') {
   return true;
 }
 
-function createToken(username) {
+function createToken(username, role) {
   const payload = {
     username,
+    role,
     exp: Date.now() + 1000 * 60 * 60 * 12
   };
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
@@ -621,8 +741,16 @@ function verifyToken(token) {
 function requireAdmin(req, res, next) {
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
   const admin = verifyToken(token);
-  if (!admin) return res.status(401).json({ error: 'Admin login required.' });
+  if (!admin || admin.role !== 'admin') return res.status(401).json({ error: 'Admin login required.' });
   req.admin = admin;
+  next();
+}
+
+function requireClient(req, res, next) {
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
+  const client = verifyToken(token);
+  if (!client || client.role !== 'client') return res.status(401).json({ error: 'Client login required.' });
+  req.client = client;
   next();
 }
 

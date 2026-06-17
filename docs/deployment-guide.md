@@ -36,6 +36,8 @@ DATABASE_URL=postgres://vtrac_user:change-this-password@localhost:5432/vtrac_sur
 CORS_ORIGIN=https://your-domain.example
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=replace-with-a-strong-password
+CLIENT_USERNAME=client
+CLIENT_PASSWORD=replace-with-a-strong-client-password
 ADMIN_TOKEN_SECRET=replace-with-a-long-random-secret
 ```
 
@@ -105,8 +107,42 @@ sudo systemctl reload nginx
 
 - Open `/` on mobile and submit one response.
 - Open `/admin`, login as admin, and create or edit a project form.
+- Open `/client`, login as client, and confirm only collection metrics are visible.
 - Open `/p/{project-slug}` on mobile and submit one response.
 - Capture GPS once from a mobile browser.
 - Open `/admin` and confirm totals update.
 - Download CSV and Excel.
 - Restart the VM and confirm the API restarts with `systemctl status vtrac-survey-api`.
+
+## 6. Subdomain and HTTPS
+
+Create an `A` record in your domain DNS:
+
+```text
+survey.your-domain.example  A  <vm-public-ip>
+```
+
+Update Nginx `server_name`:
+
+```nginx
+server_name survey.your-domain.example;
+```
+
+Install Certbot and issue an HTTPS certificate:
+
+```bash
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d survey.your-domain.example
+```
+
+After HTTPS is live, update `CORS_ORIGIN` in `backend/.env`:
+
+```text
+CORS_ORIGIN=https://survey.your-domain.example
+```
+
+Then restart the API:
+
+```bash
+sudo systemctl restart vtrac-survey-api
+```

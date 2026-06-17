@@ -21,6 +21,57 @@ import {
 
 const apiBase = import.meta.env.VITE_API_BASE || '';
 const blankQuestion = { id: '', label: '', type: 'text', options: '', required: false };
+const airportPrefix = 'Kempegowda International Airport - ';
+const zoneByLocality = {
+  'CBD (MG Road / Brigade Road/surrounding areas)': 'Central Bangalore',
+  'Shivajinagar, Frazer town, Cox town': 'Central Bangalore',
+  'Vasanth Nagar': 'Central Bangalore',
+  'Richmond Town/Residency Road/ Santhinagar /Wilson Garden': 'Central Bangalore',
+  'Majestic, Gandhinagar, Chickpet': 'Central Bangalore',
+  'Hebbal, RT Nagar, Sanjaynagar': 'North Bangalore',
+  'Yelahanka, Sahakar Nagar,Vidyaranyapura': 'North Bangalore',
+  'Jakkur': 'North Bangalore',
+  'Thanisandra, Hennur, Nagawara, HBR Layout': 'North Bangalore',
+  'Banaswadi, Horamavu': 'North Bangalore',
+  'Bagaluru,Satnur, Budigere': 'North Bangalore',
+  'Devanahalli': 'North Bangalore',
+  'Doddaballapur': 'North Bangalore',
+  'Indiranagar': 'East Bangalore',
+  'CV Raman Nagar': 'East Bangalore',
+  'KR Puram': 'East Bangalore',
+  'Whitefield': 'East Bangalore',
+  'Marathahalli': 'East Bangalore',
+  'Mahadevapura': 'East Bangalore',
+  'Hoodi': 'East Bangalore',
+  'Varthur': 'East Bangalore',
+  'Sarjapura': 'East Bangalore',
+  'Hosakote': 'East Bangalore',
+  'Jayanagar, Basavanagudi, Mavalli, Lalbagh': 'South Bangalore',
+  'JP Nagar': 'South Bangalore',
+  'Banashankari': 'South Bangalore',
+  'Adugodi, Koramangala, BTM Layout, HSR Layout,Bommanahalli': 'South Bangalore',
+  'Electronic City, Bommasandra, Madivala': 'South Bangalore',
+  'Bannerghatta': 'South Bangalore',
+  'Anekal': 'South Bangalore',
+  'Uttarahalli': 'South Bangalore',
+  'Begur, Kothnur, Arekere': 'South Bangalore',
+  'Rajajinagar, Nagarbhaavi, Vijayanagar, Ullal': 'West Bangalore',
+  'Malleshwaram': 'West Bangalore',
+  'Yeshwanthpur': 'West Bangalore',
+  'Peenya': 'West Bangalore',
+  'Nelamangala': 'West Bangalore',
+  'Kengeri': 'West Bangalore',
+  'Ramanagara, Mandya, Mysore, Kodagu,Chamarajanagar, Hasan': 'Other districts of Karnataka',
+  'Tumkur': 'Other districts of Karnataka',
+  'Chikkballapura': 'Other districts of Karnataka',
+  'Kolar': 'Other districts of Karnataka',
+  'Chitradurga,Davanagere, Chikmagluru, Shivamogga': 'Other districts of Karnataka',
+  'Uduppi, Dekshin kannada, Shimoga, Uttara Kannada': 'Other districts of Karnataka',
+  'Vijayanagara, Belagavi, Haveri, Hubli, Dharwad, Gadag, Vijayapura, Bagalkot, Ballari, Koppal, Kalaburgi, Yadgir,Raichur, Bidar': 'Other districts of Karnataka',
+  'Hosur, Tamil Nadu': 'Other States',
+  'Andhra Pradesh': 'Other States',
+  'Telangana': 'Other States'
+};
 
 export default function App() {
   const [route, setRoute] = useState(window.location.pathname);
@@ -93,7 +144,11 @@ function SurveyForm({ projectSlug }) {
   function updateAnswer(questionId, value) {
     setForm((current) => ({
       ...current,
-      answers: { ...current.answers, [questionId]: value }
+      answers: {
+        ...current.answers,
+        [questionId]: value,
+        ...(questionId === 'origin_locality_area' && zoneByLocality[value] ? { origin_zone: zoneByLocality[value] } : {})
+      }
     }));
   }
 
@@ -180,13 +235,11 @@ function SurveyForm({ projectSlug }) {
               Enumerator name
               <input value={form.enumeratorName} onChange={(event) => update('enumeratorName', event.target.value)} required />
             </label>
-            <label>
-              Survey location
-              <select value={form.location} onChange={(event) => update('location', event.target.value)} required>
-                <option value="">Select location</option>
-                {(config.locations || []).map((location) => <option key={location}>{location}</option>)}
-              </select>
-            </label>
+            <SurveyLocationInput
+              locations={config.locations || []}
+              value={form.location}
+              onChange={(value) => update('location', value)}
+            />
           </div>
 
           <div className="form-section">
@@ -201,10 +254,6 @@ function SurveyForm({ projectSlug }) {
                 <input inputMode="tel" value={form.respondentPhone} onChange={(event) => update('respondentPhone', event.target.value)} />
               </label>
             </div>
-            <label>
-              Household ID
-              <input value={form.householdId} onChange={(event) => update('householdId', event.target.value)} />
-            </label>
           </div>
 
           <div className="gps-row">
@@ -219,7 +268,7 @@ function SurveyForm({ projectSlug }) {
 
           <div className="form-section">
             <div className="section-kicker"><ClipboardList size={16} /> Questions</div>
-            {(config.questions || []).map((question, index) => (
+            {(config.questions || []).filter((question) => question.id !== 'google_coordinates').map((question, index) => (
               <QuestionInput
                 key={question.id}
                 question={question}
@@ -254,6 +303,67 @@ function SurveyForm({ projectSlug }) {
         </aside>
       </div>
     </section>
+  );
+}
+
+function SurveyLocationInput({ locations, value, onChange }) {
+  const airportLocations = locations
+    .filter((location) => location.startsWith(airportPrefix))
+    .map((location) => {
+      const [, terminal, point] = location.match(/Terminal ([12]) - (.+)$/) || [];
+      return { location, terminal: terminal ? `Terminal ${terminal}` : '', point: point || '' };
+    })
+    .filter((item) => item.terminal && item.point);
+
+  if (airportLocations.length === 0) {
+    return (
+      <label>
+        Survey location
+        <select value={value} onChange={(event) => onChange(event.target.value)} required>
+          <option value="">Select location</option>
+          {locations.map((location) => <option key={location}>{location}</option>)}
+        </select>
+      </label>
+    );
+  }
+
+  const selected = airportLocations.find((item) => item.location === value);
+  const terminals = [...new Set(airportLocations.map((item) => item.terminal))];
+  const terminal = selected?.terminal || '';
+  const points = airportLocations.filter((item) => item.terminal === terminal);
+
+  return (
+    <div className="inline-grid">
+      <label>
+        Airport terminal
+        <select
+          value={terminal}
+          onChange={(event) => {
+            const next = airportLocations.find((item) => item.terminal === event.target.value);
+            onChange(next?.location || '');
+          }}
+          required
+        >
+          <option value="">Select terminal</option>
+          {terminals.map((item) => <option key={item}>{item}</option>)}
+        </select>
+      </label>
+      <label>
+        Survey point
+        <select
+          value={selected?.point || ''}
+          onChange={(event) => {
+            const next = airportLocations.find((item) => item.terminal === terminal && item.point === event.target.value);
+            onChange(next?.location || '');
+          }}
+          required
+          disabled={!terminal}
+        >
+          <option value="">Select point</option>
+          {points.map((item) => <option key={item.location}>{item.point}</option>)}
+        </select>
+      </label>
+    </div>
   );
 }
 

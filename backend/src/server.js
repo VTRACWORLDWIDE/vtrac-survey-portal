@@ -592,7 +592,7 @@ function normalizeQuestions(questions = []) {
 function normalizeLines(value) {
   if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
   return String(value || '')
-    .split(/\r?\n|,/)
+    .split(/\r?\n/)
     .map((item) => item.trim())
     .filter(Boolean);
 }

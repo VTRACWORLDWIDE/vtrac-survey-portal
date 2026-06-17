@@ -335,6 +335,10 @@ textarea {
   grid-template-columns: 1fr 1fr 1.2fr;
 }
 
+.location-other-field {
+  grid-column: 1 / -1;
+}
+
 .question-field {
   background: #f7faf9;
   border: 1px solid #e1e9e7;

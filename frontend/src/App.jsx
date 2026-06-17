@@ -22,6 +22,12 @@ const apiBase = import.meta.env.VITE_API_BASE || '';
 const blankQuestion = { id: '', label: '', type: 'text', options: '', required: false };
 const airportPrefix = 'Kempegowda International Airport - ';
 const defaultProjectSlug = 'bengaluru-second-airport-feasibility';
+const airportTerminals = ['Terminal 1', 'Terminal 2'];
+const airportMovements = ['Departures', 'Arrivals'];
+const airportSurveyPoints = {
+  Departures: ['Departure gates', 'Cab/Taxi point', 'Bus point', 'Other'],
+  Arrivals: ['Arrival gates', 'Cab/Taxi point', 'Bus point', 'Other']
+};
 const hiddenQuestionIds = new Set([
   'google_coordinates',
   'origin_zone_number',
@@ -863,25 +869,21 @@ function questionAppliesToLocation(questionId, location = '') {
 function SurveyLocationInput({ locations, value, onChange }) {
   const [draftTerminal, setDraftTerminal] = useState('');
   const [draftMovement, setDraftMovement] = useState('');
-  const airportLocations = locations
-    .filter((location) => location.startsWith(airportPrefix))
-    .map((location) => {
-      const [, terminal, movement, point] = location.match(/Terminal ([12]) - (Departures|Arrivals) - (.+)$/) || [];
-      if (terminal && movement && point) return { location, terminal: `Terminal ${terminal}`, movement, point };
-      const [, oldTerminal, oldPoint] = location.match(/Terminal ([12]) - (.+)$/) || [];
-      return { location, terminal: oldTerminal ? `Terminal ${oldTerminal}` : '', movement: oldPoint || '', point: oldPoint || '' };
-    })
-    .filter((item) => item.terminal && item.movement && item.point);
-  const selected = airportLocations.find((item) => item.location === value);
+  const [draftPoint, setDraftPoint] = useState('');
+  const [otherPoint, setOtherPoint] = useState('');
+  const selected = parseAirportLocation(value);
+  const usesAirportFlow = locations.some((location) => location.startsWith(airportPrefix)) || value.startsWith(airportPrefix);
 
   useEffect(() => {
     if (selected) {
       setDraftTerminal(selected.terminal);
       setDraftMovement(selected.movement);
+      setDraftPoint(selected.point);
+      setOtherPoint(selected.otherText);
     }
   }, [selected?.location]);
 
-  if (airportLocations.length === 0) {
+  if (!usesAirportFlow) {
     return (
       <label>
         Survey location
@@ -893,11 +895,23 @@ function SurveyLocationInput({ locations, value, onChange }) {
     );
   }
 
-  const terminals = [...new Set(airportLocations.map((item) => item.terminal))];
   const terminal = selected?.terminal || draftTerminal;
   const movement = selected?.movement || draftMovement;
-  const movements = [...new Set(airportLocations.filter((item) => item.terminal === terminal).map((item) => item.movement))];
-  const points = airportLocations.filter((item) => item.terminal === terminal && item.movement === movement);
+  const point = selected?.point || draftPoint;
+  const points = airportSurveyPoints[movement] || [];
+
+  function updateLocation(nextTerminal = terminal, nextMovement = movement, nextPoint = point, nextOther = otherPoint) {
+    if (!nextTerminal || !nextMovement || !nextPoint) {
+      onChange('');
+      return;
+    }
+    if (nextPoint === 'Other' && !nextOther.trim()) {
+      onChange('');
+      return;
+    }
+    const pointLabel = nextPoint === 'Other' ? `Other - ${nextOther.trim()}` : nextPoint;
+    onChange(`${airportPrefix}${nextTerminal} - ${nextMovement} - ${pointLabel}`);
+  }
 
   return (
     <div className="location-grid">
@@ -908,46 +922,84 @@ function SurveyLocationInput({ locations, value, onChange }) {
           onChange={(event) => {
             setDraftTerminal(event.target.value);
             setDraftMovement('');
+            setDraftPoint('');
+            setOtherPoint('');
             onChange('');
           }}
           required
         >
           <option value="">Select terminal</option>
-          {terminals.map((item) => <option key={item}>{item}</option>)}
+          {airportTerminals.map((item) => <option key={item}>{item}</option>)}
         </select>
       </label>
       <label>
-        Movement
+        Departures / Arrivals
         <select
           value={movement}
           onChange={(event) => {
-            setDraftMovement(event.target.value);
-            onChange('');
+            const nextMovement = event.target.value;
+            setDraftMovement(nextMovement);
+            setDraftPoint('');
+            setOtherPoint('');
+            updateLocation(terminal, nextMovement, '', '');
           }}
           required
           disabled={!terminal}
         >
-          <option value="">Select movement</option>
-          {movements.map((item) => <option key={item}>{item}</option>)}
+          <option value="">Select option</option>
+          {airportMovements.map((item) => <option key={item}>{item}</option>)}
         </select>
       </label>
       <label>
         Survey point
         <select
-          value={selected?.point || ''}
+          value={point}
           onChange={(event) => {
-            const next = airportLocations.find((item) => item.terminal === terminal && item.movement === movement && item.point === event.target.value);
-            onChange(next?.location || '');
+            const nextPoint = event.target.value;
+            setDraftPoint(nextPoint);
+            setOtherPoint('');
+            updateLocation(terminal, movement, nextPoint, '');
           }}
           required
           disabled={!terminal || !movement}
         >
           <option value="">Select point</option>
-          {points.map((item) => <option key={item.location}>{item.point}</option>)}
+          {points.map((item) => <option key={item}>{item}</option>)}
         </select>
       </label>
+      {point === 'Other' && (
+        <label className="location-other-field">
+          Other survey point
+          <input
+            value={otherPoint}
+            onChange={(event) => {
+              const nextOther = event.target.value;
+              setOtherPoint(nextOther);
+              updateLocation(terminal, movement, 'Other', nextOther);
+            }}
+            placeholder="Enter exact point"
+            required
+          />
+        </label>
+      )}
     </div>
   );
+}
+
+function parseAirportLocation(location = '') {
+  if (!location.startsWith(airportPrefix)) return null;
+  const body = location.slice(airportPrefix.length);
+  const [terminal, movement, ...pointParts] = body.split(' - ');
+  const rawPoint = pointParts.join(' - ');
+  if (!terminal || !movement || !rawPoint) return null;
+  const knownPoint = airportSurveyPoints[movement]?.find((item) => item === rawPoint);
+  if (knownPoint) {
+    return { location, terminal, movement, point: knownPoint, otherText: '' };
+  }
+  if (rawPoint.startsWith('Other - ')) {
+    return { location, terminal, movement, point: 'Other', otherText: rawPoint.replace('Other - ', '') };
+  }
+  return { location, terminal, movement, point: 'Other', otherText: rawPoint };
 }
 
 function QuestionInput({ question, index, value, onChange }) {

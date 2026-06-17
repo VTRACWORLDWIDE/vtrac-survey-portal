@@ -16,7 +16,6 @@ import {
   Search,
   Send,
   ShieldCheck,
-  Square,
   Trash2,
   UserRound
 } from 'lucide-react';
@@ -216,6 +215,8 @@ function SurveyForm({ projectSlug }) {
   const [audioStatus, setAudioStatus] = useState('No recording');
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const audioRef = useRef(null);
+  const audioStartAttemptedRef = useRef(false);
+  const audioStartPromiseRef = useRef(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [syncStatus, setSyncStatus] = useState('');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -324,7 +325,7 @@ function SurveyForm({ projectSlug }) {
       if (questions.some((question) => question.id === 'google_coordinates')) {
         updateAnswer('google_coordinates', `${nextGps.latitude.toFixed(6)}, ${nextGps.longitude.toFixed(6)}`);
       }
-      setGpsStatus(`${label} within ${Math.round(position.coords.accuracy)}m`);
+      setGpsStatus(`${label}. Accuracy ~${Math.round(position.coords.accuracy)} meters`);
     };
 
     navigator.geolocation.getCurrentPosition(
@@ -349,11 +350,15 @@ function SurveyForm({ projectSlug }) {
   }
 
   async function startAudioRecording() {
+    if (mediaRecorder || audioRef.current) return true;
+    if (audioStartPromiseRef.current) return audioStartPromiseRef.current;
+    audioStartAttemptedRef.current = true;
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       setAudioStatus('Audio recording is not supported on this browser.');
-      return;
+      return false;
     }
-    try {
+    audioStartPromiseRef.current = (async () => {
+      try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
       const chunks = [];
@@ -378,13 +383,21 @@ function SurveyForm({ projectSlug }) {
       audioRef.current = null;
       setAudio(null);
       setAudioStatus('Recording...');
-    } catch {
-      setAudioStatus('Microphone permission denied or unavailable.');
-    }
+      return true;
+      } catch {
+        setAudioStatus('Microphone permission required.');
+        return false;
+      } finally {
+        audioStartPromiseRef.current = null;
+      }
+    })();
+    return audioStartPromiseRef.current;
   }
 
-  function stopAudioRecording() {
-    if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
+  function beginRequiredAudio() {
+    if (!audioStartAttemptedRef.current && !audioRef.current && !mediaRecorder) {
+      startAudioRecording();
+    }
   }
 
   function finalizeAudioRecording() {
@@ -485,7 +498,15 @@ function SurveyForm({ projectSlug }) {
     event.preventDefault();
     setSaving(true);
     setStatus('');
+    if (!mediaRecorder && !audioRef.current) {
+      await startAudioRecording();
+    }
     const finalAudio = await finalizeAudioRecording();
+    if (!finalAudio) {
+      setStatus('Audio recording is mandatory. Please allow microphone access and submit again.');
+      setSaving(false);
+      return;
+    }
     const submissionPayload = {
       ...form,
       projectSlug,
@@ -537,7 +558,7 @@ function SurveyForm({ projectSlug }) {
       </div>
 
       <div className="page-grid">
-        <form className="panel form-panel" onSubmit={submit}>
+        <form className="panel form-panel" onSubmit={submit} onClickCapture={beginRequiredAudio} onFocusCapture={beginRequiredAudio}>
           <div className="section-title">
             <div>
               <h2>Response Details</h2>
@@ -584,26 +605,10 @@ function SurveyForm({ projectSlug }) {
 
           <div className="gps-row audio-row">
             <div>
-              <strong>Audio recording</strong>
+              <strong>Audio recording required</strong>
               <span>{audioStatus}</span>
             </div>
-            <div className="audio-actions">
-              {!mediaRecorder && (
-                <button type="button" className="icon-button" onClick={startAudioRecording} aria-label="Start audio recording">
-                  <Mic size={18} />
-                </button>
-              )}
-              {mediaRecorder && (
-                <button type="button" className="icon-button danger-button" onClick={stopAudioRecording} aria-label="Stop audio recording">
-                  <Square size={18} />
-                </button>
-              )}
-              {audio && (
-                <button type="button" className="icon-button" onClick={clearAudio} aria-label="Clear audio recording">
-                  <Trash2 size={18} />
-                </button>
-              )}
-            </div>
+            <Mic size={18} />
           </div>
 
           <div className="form-section">
@@ -624,7 +629,7 @@ function SurveyForm({ projectSlug }) {
 
           <button className="primary submit-button" disabled={saving}>
             <Send size={18} />
-            {saving ? 'Submitting...' : mediaRecorder ? 'Stop recording and submit' : 'Submit Survey'}
+            {saving ? 'Submitting...' : mediaRecorder ? 'Submit with recording' : 'Submit Survey'}
           </button>
           {status && <p className={status.includes('successfully') ? 'status success' : 'status'}>{status}</p>}
         </form>

@@ -338,7 +338,7 @@ app.get('/api/dashboard/options', requireAdmin, async (req, res, next) => {
   }
 });
 
-app.get('/api/responses/:id', requireAdmin, async (req, res, next) => {
+app.get('/api/responses/:id(\\d+)', requireAdmin, async (req, res, next) => {
   try {
     const result = await query(
       `SELECT *
@@ -355,7 +355,7 @@ app.get('/api/responses/:id', requireAdmin, async (req, res, next) => {
   }
 });
 
-app.get('/api/responses/:id/audio', requireAdmin, async (req, res, next) => {
+app.get('/api/responses/:id(\\d+)/audio', requireAdmin, async (req, res, next) => {
   try {
     const result = await query(
       `SELECT audio_data, audio_mime_type
@@ -375,7 +375,7 @@ app.get('/api/responses/:id/audio', requireAdmin, async (req, res, next) => {
   }
 });
 
-app.put('/api/responses/:id', requireAdmin, async (req, res, next) => {
+app.put('/api/responses/:id(\\d+)', requireAdmin, async (req, res, next) => {
   try {
     const {
       enumeratorName,

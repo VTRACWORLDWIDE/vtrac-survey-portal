@@ -22,7 +22,15 @@ import {
 const apiBase = import.meta.env.VITE_API_BASE || '';
 const blankQuestion = { id: '', label: '', type: 'text', options: '', required: false };
 const airportPrefix = 'Kempegowda International Airport - ';
-const hiddenQuestionIds = new Set(['google_coordinates', 'origin_zone_number', 'origin_mapped_area', 'origin_division']);
+const hiddenQuestionIds = new Set([
+  'google_coordinates',
+  'origin_zone_number',
+  'origin_mapped_area',
+  'origin_division',
+  'travel_time_total_minutes',
+  'travel_time_expected_range',
+  'travel_time_validation'
+]);
 const originRows = [
   [1, 'CBD (MG Road / Brigade Road/surrounding areas)', 'Central Bangalore'],
   [2, 'Shivajinagar, Frazer town, Cox town', 'Central Bangalore'],
@@ -96,6 +104,47 @@ const originLocalityMap = Object.fromEntries([
     return [alias, { zoneNumber: row[0], area: row[1], division: row[2] }];
   })
 ]);
+const defaultTimeRange = { min: 20, max: 150 };
+const travelTimeRanges = {
+  'CBD (MG Road / Brigade Road/surrounding areas)': { min: 45, max: 90 },
+  'Shivajinagar, Frazer town, Cox town': { min: 40, max: 80 },
+  'Vasanth Nagar': { min: 35, max: 75 },
+  'Richmond Town/Residency Road/ Santhinagar /Wilson Garden': { min: 50, max: 95 },
+  'Majestic, Gandhinagar, Chickpet': { min: 45, max: 90 },
+  'Hebbal, RT Nagar, Sanjaynagar': { min: 25, max: 55 },
+  'Yelahanka, Sahakar Nagar,Vidyaranyapura': { min: 25, max: 55 },
+  'Jakkur': { min: 25, max: 50 },
+  'Thanisandra, Hennur, Nagawara, HBR Layout': { min: 30, max: 65 },
+  'Banaswadi, Horamavu': { min: 35, max: 75 },
+  'Bagaluru,Satnur, Budigere': { min: 15, max: 45 },
+  'Devanahalli': { min: 10, max: 35 },
+  'Doddaballapur': { min: 30, max: 65 },
+  'Indiranagar': { min: 45, max: 90 },
+  'CV Raman Nagar': { min: 45, max: 90 },
+  'KR Puram': { min: 50, max: 100 },
+  'Whitefield': { min: 60, max: 120 },
+  'Marathahalli': { min: 55, max: 110 },
+  'Mahadevapura': { min: 55, max: 110 },
+  'Hoodi': { min: 60, max: 120 },
+  'Varthur': { min: 70, max: 135 },
+  'Sarjapura': { min: 75, max: 150 },
+  'Hosakote': { min: 45, max: 90 },
+  'Jayanagar, Basavanagudi, Mavalli, Lalbagh': { min: 60, max: 115 },
+  'JP Nagar': { min: 65, max: 125 },
+  'Banashankari': { min: 70, max: 135 },
+  'Adugodi, Koramangala, BTM Layout, HSR Layout,Bommanahalli': { min: 60, max: 125 },
+  'Electronic City, Bommasandra, Madivala': { min: 75, max: 150 },
+  'Bannerghatta': { min: 80, max: 155 },
+  'Anekal': { min: 90, max: 180 },
+  'Uttarahalli': { min: 75, max: 145 },
+  'Begur, Kothnur, Arekere': { min: 75, max: 145 },
+  'Rajajinagar, Nagarbhaavi, Vijayanagar, Ullal': { min: 55, max: 110 },
+  'Malleshwaram': { min: 45, max: 90 },
+  'Yeshwanthpur': { min: 40, max: 85 },
+  'Peenya': { min: 45, max: 95 },
+  'Nelamangala': { min: 45, max: 90 },
+  'Kengeri': { min: 75, max: 145 }
+};
 
 export default function App() {
   const [route, setRoute] = useState(window.location.pathname);
@@ -169,7 +218,7 @@ function SurveyForm({ projectSlug }) {
     const originMapping = questionId === 'origin_locality' ? originLocalityMap[value] : null;
     setForm((current) => ({
       ...current,
-      answers: {
+      answers: deriveAnswers({
         ...current.answers,
         [questionId]: value,
         ...(originMapping ? {
@@ -177,7 +226,7 @@ function SurveyForm({ projectSlug }) {
           origin_mapped_area: originMapping.area,
           origin_division: originMapping.division
         } : {})
-      }
+      })
     }));
   }
 
@@ -335,6 +384,33 @@ function SurveyForm({ projectSlug }) {
   );
 }
 
+function deriveAnswers(answers) {
+  const hoursValue = answers.time_taken_to_reach_airport_hours ?? answers.travel_time_hours;
+  const minutesValue = answers.time_taken_to_reach_airport_minutes ?? answers.travel_time_minutes;
+  const hours = Number(hoursValue || 0);
+  const minutes = Number(minutesValue || 0);
+  const hasDuration = hoursValue !== undefined || minutesValue !== undefined;
+  const total = Math.max(0, (Number.isFinite(hours) ? hours : 0) * 60 + (Number.isFinite(minutes) ? minutes : 0));
+  const area = answers.origin_mapped_area;
+  const range = travelTimeRanges[area] || defaultTimeRange;
+  const validation = !hasDuration || total === 0
+    ? ''
+    : total < range.min
+      ? 'Too low - verify with respondent'
+      : total > range.max
+        ? 'Too high - verify with respondent'
+        : 'OK';
+
+  return {
+    ...answers,
+    ...(hasDuration ? {
+      travel_time_total_minutes: String(total),
+      travel_time_expected_range: `${range.min}-${range.max} minutes`,
+      travel_time_validation: validation
+    } : {})
+  };
+}
+
 function SurveyLocationInput({ locations, value, onChange }) {
   const airportLocations = locations
     .filter((location) => location.startsWith(airportPrefix))
@@ -397,6 +473,12 @@ function SurveyLocationInput({ locations, value, onChange }) {
 }
 
 function QuestionInput({ question, index, value, onChange }) {
+  const numberProps = question.id.includes('minutes')
+    ? { min: 0, max: 59, inputMode: 'numeric' }
+    : question.id.includes('hours')
+      ? { min: 0, max: 12, inputMode: 'numeric' }
+      : {};
+
   return (
     <div className="question-field">
       <label>
@@ -419,7 +501,7 @@ function QuestionInput({ question, index, value, onChange }) {
           </select>
         )}
         {question.type === 'number' && (
-          <input type="number" value={value} onChange={(event) => onChange(event.target.value)} required={question.required} />
+          <input type="number" value={value} onChange={(event) => onChange(event.target.value)} required={question.required} {...numberProps} />
         )}
         {question.type === 'date' && (
           <input type="date" value={value} onChange={(event) => onChange(event.target.value)} required={question.required} />

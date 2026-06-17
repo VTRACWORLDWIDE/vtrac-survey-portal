@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BarChart3,
   CalendarClock,
@@ -215,6 +215,7 @@ function SurveyForm({ projectSlug }) {
   const [audio, setAudio] = useState(null);
   const [audioStatus, setAudioStatus] = useState('No recording');
   const [mediaRecorder, setMediaRecorder] = useState(null);
+  const audioRef = useRef(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [syncStatus, setSyncStatus] = useState('');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -312,7 +313,7 @@ function SurveyForm({ projectSlug }) {
       setGpsStatus('GPS is not supported on this device.');
       return;
     }
-    setGpsStatus('Capturing quick GPS...');
+    setGpsStatus('Capturing GPS...');
     const applyPosition = (position, label = 'Captured') => {
       const nextGps = {
         latitude: position.coords.latitude,
@@ -332,18 +333,18 @@ function SurveyForm({ projectSlug }) {
         navigator.geolocation.getCurrentPosition(
           (freshPosition) => applyPosition(freshPosition, 'Updated'),
           () => {},
-          { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
         );
       },
       () => {
-        setGpsStatus('Trying high accuracy...');
+        setGpsStatus('GPS slow. You can continue or tap GPS again.');
         navigator.geolocation.getCurrentPosition(
           (position) => applyPosition(position, 'Captured'),
           () => setGpsStatus('GPS unavailable. Continue or tap GPS again.'),
-          { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+          { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 }
         );
       },
-      { enableHighAccuracy: false, timeout: 4000, maximumAge: 600000 }
+      { enableHighAccuracy: false, timeout: 2500, maximumAge: 900000 }
     );
   }
 
@@ -362,16 +363,19 @@ function SurveyForm({ projectSlug }) {
       recorder.onstop = async () => {
         stream.getTracks().forEach((track) => track.stop());
         const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
-        setAudio({
+        const nextAudio = {
           dataUrl: await blobToDataUrl(blob),
           mimeType: blob.type,
           size: blob.size
-        });
+        };
+        audioRef.current = nextAudio;
+        setAudio(nextAudio);
         setAudioStatus(`Recorded ${formatBytes(blob.size)}`);
         setMediaRecorder(null);
       };
       recorder.start();
       setMediaRecorder(recorder);
+      audioRef.current = null;
       setAudio(null);
       setAudioStatus('Recording...');
     } catch {
@@ -383,7 +387,22 @@ function SurveyForm({ projectSlug }) {
     if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
   }
 
+  function finalizeAudioRecording() {
+    if (!mediaRecorder || mediaRecorder.state !== 'recording') return Promise.resolve(audio);
+    setAudioStatus('Stopping recording...');
+    return new Promise((resolve) => {
+      const recorder = mediaRecorder;
+      const previousStop = recorder.onstop;
+      recorder.onstop = async (event) => {
+        if (previousStop) await previousStop(event);
+        resolve(audioRef.current);
+      };
+      recorder.stop();
+    });
+  }
+
   function clearAudio() {
+    audioRef.current = null;
     setAudio(null);
     setAudioStatus('No recording');
   }
@@ -466,11 +485,12 @@ function SurveyForm({ projectSlug }) {
     event.preventDefault();
     setSaving(true);
     setStatus('');
+    const finalAudio = await finalizeAudioRecording();
     const submissionPayload = {
       ...form,
       projectSlug,
       gps,
-      audio,
+      audio: finalAudio,
       clientSubmissionId: createLocalSubmissionId()
     };
     try {
@@ -602,9 +622,9 @@ function SurveyForm({ projectSlug }) {
             ))}
           </div>
 
-          <button className="primary submit-button" disabled={saving || Boolean(mediaRecorder)}>
+          <button className="primary submit-button" disabled={saving}>
             <Send size={18} />
-            {saving ? 'Submitting...' : mediaRecorder ? 'Stop recording to submit' : 'Submit Survey'}
+            {saving ? 'Submitting...' : mediaRecorder ? 'Stop recording and submit' : 'Submit Survey'}
           </button>
           {status && <p className={status.includes('successfully') ? 'status success' : 'status'}>{status}</p>}
         </form>

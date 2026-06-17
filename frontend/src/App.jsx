@@ -22,56 +22,80 @@ import {
 const apiBase = import.meta.env.VITE_API_BASE || '';
 const blankQuestion = { id: '', label: '', type: 'text', options: '', required: false };
 const airportPrefix = 'Kempegowda International Airport - ';
-const zoneByLocality = {
-  'CBD (MG Road / Brigade Road/surrounding areas)': 'Central Bangalore',
-  'Shivajinagar, Frazer town, Cox town': 'Central Bangalore',
-  'Vasanth Nagar': 'Central Bangalore',
-  'Richmond Town/Residency Road/ Santhinagar /Wilson Garden': 'Central Bangalore',
-  'Majestic, Gandhinagar, Chickpet': 'Central Bangalore',
-  'Hebbal, RT Nagar, Sanjaynagar': 'North Bangalore',
-  'Yelahanka, Sahakar Nagar,Vidyaranyapura': 'North Bangalore',
-  'Jakkur': 'North Bangalore',
-  'Thanisandra, Hennur, Nagawara, HBR Layout': 'North Bangalore',
-  'Banaswadi, Horamavu': 'North Bangalore',
-  'Bagaluru,Satnur, Budigere': 'North Bangalore',
-  'Devanahalli': 'North Bangalore',
-  'Doddaballapur': 'North Bangalore',
-  'Indiranagar': 'East Bangalore',
-  'CV Raman Nagar': 'East Bangalore',
-  'KR Puram': 'East Bangalore',
-  'Whitefield': 'East Bangalore',
-  'Marathahalli': 'East Bangalore',
-  'Mahadevapura': 'East Bangalore',
-  'Hoodi': 'East Bangalore',
-  'Varthur': 'East Bangalore',
-  'Sarjapura': 'East Bangalore',
-  'Hosakote': 'East Bangalore',
-  'Jayanagar, Basavanagudi, Mavalli, Lalbagh': 'South Bangalore',
-  'JP Nagar': 'South Bangalore',
-  'Banashankari': 'South Bangalore',
-  'Adugodi, Koramangala, BTM Layout, HSR Layout,Bommanahalli': 'South Bangalore',
-  'Electronic City, Bommasandra, Madivala': 'South Bangalore',
-  'Bannerghatta': 'South Bangalore',
-  'Anekal': 'South Bangalore',
-  'Uttarahalli': 'South Bangalore',
-  'Begur, Kothnur, Arekere': 'South Bangalore',
-  'Rajajinagar, Nagarbhaavi, Vijayanagar, Ullal': 'West Bangalore',
-  'Malleshwaram': 'West Bangalore',
-  'Yeshwanthpur': 'West Bangalore',
-  'Peenya': 'West Bangalore',
-  'Nelamangala': 'West Bangalore',
-  'Kengeri': 'West Bangalore',
-  'Ramanagara, Mandya, Mysore, Kodagu,Chamarajanagar, Hasan': 'Other districts of Karnataka',
-  'Tumkur': 'Other districts of Karnataka',
-  'Chikkballapura': 'Other districts of Karnataka',
-  'Kolar': 'Other districts of Karnataka',
-  'Chitradurga,Davanagere, Chikmagluru, Shivamogga': 'Other districts of Karnataka',
-  'Uduppi, Dekshin kannada, Shimoga, Uttara Kannada': 'Other districts of Karnataka',
-  'Vijayanagara, Belagavi, Haveri, Hubli, Dharwad, Gadag, Vijayapura, Bagalkot, Ballari, Koppal, Kalaburgi, Yadgir,Raichur, Bidar': 'Other districts of Karnataka',
-  'Hosur, Tamil Nadu': 'Other States',
-  'Andhra Pradesh': 'Other States',
-  'Telangana': 'Other States'
+const hiddenQuestionIds = new Set(['google_coordinates', 'origin_zone_number', 'origin_mapped_area', 'origin_division']);
+const originRows = [
+  [1, 'CBD (MG Road / Brigade Road/surrounding areas)', 'Central Bangalore'],
+  [2, 'Shivajinagar, Frazer town, Cox town', 'Central Bangalore'],
+  [3, 'Vasanth Nagar', 'Central Bangalore'],
+  [4, 'Richmond Town/Residency Road/ Santhinagar /Wilson Garden', 'Central Bangalore'],
+  [5, 'Majestic, Gandhinagar, Chickpet', 'Central Bangalore'],
+  [6, 'Hebbal, RT Nagar, Sanjaynagar', 'North Bangalore'],
+  [7, 'Yelahanka, Sahakar Nagar,Vidyaranyapura', 'North Bangalore'],
+  [8, 'Jakkur', 'North Bangalore'],
+  [9, 'Thanisandra, Hennur, Nagawara, HBR Layout', 'North Bangalore'],
+  [10, 'Banaswadi, Horamavu', 'North Bangalore'],
+  [11, 'Bagaluru,Satnur, Budigere', 'North Bangalore'],
+  [12, 'Devanahalli', 'North Bangalore'],
+  [13, 'Doddaballapur', 'North Bangalore'],
+  [14, 'Indiranagar', 'East Bangalore'],
+  [15, 'CV Raman Nagar', 'East Bangalore'],
+  [16, 'KR Puram', 'East Bangalore'],
+  [17, 'Whitefield', 'East Bangalore'],
+  [18, 'Marathahalli', 'East Bangalore'],
+  [19, 'Mahadevapura', 'East Bangalore'],
+  [20, 'Hoodi', 'East Bangalore'],
+  [21, 'Varthur', 'East Bangalore'],
+  [22, 'Sarjapura', 'East Bangalore'],
+  [23, 'Hosakote', 'East Bangalore'],
+  [24, 'Jayanagar, Basavanagudi, Mavalli, Lalbagh', 'South Bangalore'],
+  [25, 'JP Nagar', 'South Bangalore'],
+  [26, 'Banashankari', 'South Bangalore'],
+  [27, 'Adugodi, Koramangala, BTM Layout, HSR Layout,Bommanahalli', 'South Bangalore'],
+  [28, 'Electronic City, Bommasandra, Madivala', 'South Bangalore'],
+  [29, 'Bannerghatta', 'South Bangalore'],
+  [30, 'Anekal', 'South Bangalore'],
+  [31, 'Uttarahalli', 'South Bangalore'],
+  [32, 'Begur, Kothnur, Arekere', 'South Bangalore'],
+  [33, 'Rajajinagar, Nagarbhaavi, Vijayanagar, Ullal', 'West Bangalore'],
+  [34, 'Malleshwaram', 'West Bangalore'],
+  [35, 'Yeshwanthpur', 'West Bangalore'],
+  [36, 'Peenya', 'West Bangalore'],
+  [37, 'Nelamangala', 'West Bangalore'],
+  [38, 'Kengeri', 'West Bangalore'],
+  [39, 'Ramanagara, Mandya, Mysore, Kodagu,Chamarajanagar, Hasan', 'Other districts of Karnataka'],
+  [40, 'Tumkur', 'Other districts of Karnataka'],
+  [41, 'Chikkballapura', 'Other districts of Karnataka'],
+  [42, 'Kolar', 'Other districts of Karnataka'],
+  [43, 'Chitradurga,Davanagere, Chikmagluru, Shivamogga', 'Other districts of Karnataka'],
+  [44, 'Uduppi, Dekshin kannada, Shimoga, Uttara Kannada', 'Other districts of Karnataka'],
+  [45, 'Vijayanagara, Belagavi, Haveri, Hubli, Dharwad, Gadag, Vijayapura, Bagalkot, Ballari, Koppal, Kalaburgi, Yadgir,Raichur, Bidar', 'Other districts of Karnataka'],
+  [46, 'Hosur, Tamil Nadu', 'Other States'],
+  [47, 'Andhra Pradesh', 'Other States'],
+  [48, 'Telangana', 'Other States']
+];
+const extraOriginAliases = {
+  'MG Road': 'CBD (MG Road / Brigade Road/surrounding areas)',
+  'Brigade Road': 'CBD (MG Road / Brigade Road/surrounding areas)',
+  'CBD': 'CBD (MG Road / Brigade Road/surrounding areas)',
+  'Richmond Town': 'Richmond Town/Residency Road/ Santhinagar /Wilson Garden',
+  'Residency Road': 'Richmond Town/Residency Road/ Santhinagar /Wilson Garden',
+  'Santhinagar': 'Richmond Town/Residency Road/ Santhinagar /Wilson Garden',
+  'Wilson Garden': 'Richmond Town/Residency Road/ Santhinagar /Wilson Garden',
+  'BTM Layout': 'Adugodi, Koramangala, BTM Layout, HSR Layout,Bommanahalli',
+  'HSR Layout': 'Adugodi, Koramangala, BTM Layout, HSR Layout,Bommanahalli',
+  'Chikkamagaluru': 'Chitradurga,Davanagere, Chikmagluru, Shivamogga',
+  'Dakshina Kannada': 'Uduppi, Dekshin kannada, Shimoga, Uttara Kannada'
 };
+const originLocalityMap = Object.fromEntries([
+  ...originRows.flatMap(([zoneNumber, area, division]) => {
+    const aliases = area.split(',').map((item) => item.trim()).filter(Boolean);
+    return [area, ...aliases].map((alias) => [alias, { zoneNumber, area, division }]);
+  }),
+  ...Object.entries(extraOriginAliases).map(([alias, area]) => {
+    const row = originRows.find(([, rowArea]) => rowArea === area);
+    return [alias, { zoneNumber: row[0], area: row[1], division: row[2] }];
+  })
+]);
 
 export default function App() {
   const [route, setRoute] = useState(window.location.pathname);
@@ -142,12 +166,17 @@ function SurveyForm({ projectSlug }) {
   }
 
   function updateAnswer(questionId, value) {
+    const originMapping = questionId === 'origin_locality' ? originLocalityMap[value] : null;
     setForm((current) => ({
       ...current,
       answers: {
         ...current.answers,
         [questionId]: value,
-        ...(questionId === 'origin_locality_area' && zoneByLocality[value] ? { origin_zone: zoneByLocality[value] } : {})
+        ...(originMapping ? {
+          origin_zone_number: String(originMapping.zoneNumber),
+          origin_mapped_area: originMapping.area,
+          origin_division: originMapping.division
+        } : {})
       }
     }));
   }
@@ -268,7 +297,7 @@ function SurveyForm({ projectSlug }) {
 
           <div className="form-section">
             <div className="section-kicker"><ClipboardList size={16} /> Questions</div>
-            {(config.questions || []).filter((question) => question.id !== 'google_coordinates').map((question, index) => (
+            {(config.questions || []).filter((question) => !hiddenQuestionIds.has(question.id)).map((question, index) => (
               <QuestionInput
                 key={question.id}
                 question={question}

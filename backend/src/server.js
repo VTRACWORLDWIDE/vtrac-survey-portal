@@ -49,25 +49,47 @@ app.get('/api/admin/me', requireAdmin, (req, res) => {
   res.json({ username: req.admin.username });
 });
 
-app.post('/api/client/login', (req, res) => {
-  const { username, password } = req.body;
-  if (username !== clientUsername || password !== clientPassword) {
-    return res.status(401).json({ error: 'Invalid client login.' });
+app.post('/api/client/login', async (req, res, next) => {
+  try {
+    const { username, password } = req.body;
+    const client = await authenticateClient(username, password);
+    if (!client) return res.status(401).json({ error: 'Invalid client login.' });
+    res.json({ token: createToken(client.username, 'client', client.id), username: client.username, role: 'client' });
+  } catch (error) {
+    next(error);
   }
-  res.json({ token: createToken(username, 'client'), username, role: 'client' });
 });
 
-app.get('/api/client/projects', requireClient, async (_req, res, next) => {
+app.get('/api/client/projects', requireClient, async (req, res, next) => {
   try {
-    const projects = await loadProjects();
-    res.json({
-      projects: projects.map((project) => ({
-        id: project.id,
-        name: project.name,
-        slug: project.slug,
-        responseCount: project.responseCount
-      }))
-    });
+    const projects = await loadProjectsForClient(req.client.clientId);
+    res.json({ projects });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/admin/clients', requireAdmin, async (_req, res, next) => {
+  try {
+    res.json({ clients: await loadClients() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/admin/clients', requireAdmin, async (req, res, next) => {
+  try {
+    const client = await saveClient(req.body);
+    res.status(201).json({ client });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/api/admin/clients/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const client = await saveClient({ ...req.body, id: req.params.id });
+    res.json({ client });
   } catch (error) {
     next(error);
   }
@@ -275,7 +297,23 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
 
 app.get('/api/client/dashboard', requireClient, async (req, res, next) => {
   try {
-    const filters = buildClientFilters(req.query);
+    const projects = await loadProjectsForClient(req.client.clientId);
+    const allowedIds = projects.map((project) => project.id);
+    if (allowedIds.length === 0) {
+      return res.json({
+        totals: { total_samples: 0, samples_today: 0 },
+        byDate: [],
+        byTerminal: [],
+        byMovement: [],
+        bySurveyPoint: [],
+        byLocation: []
+      });
+    }
+
+    const requestedProjectId = String(req.query.projectId || allowedIds[0]);
+    if (!allowedIds.includes(requestedProjectId)) return res.status(403).json({ error: 'Project not enabled for this client.' });
+
+    const filters = buildClientFilters({ ...req.query, projectId: requestedProjectId });
     const [totals, byDate, byTerminal, byMovement, bySurveyPoint, byLocation] = await Promise.all([
       query(
         `SELECT
@@ -428,6 +466,23 @@ async function ensureDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS client_accounts (
+      id BIGSERIAL PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      display_name TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS client_project_access (
+      client_id BIGINT NOT NULL REFERENCES client_accounts(id) ON DELETE CASCADE,
+      project_id BIGINT NOT NULL REFERENCES survey_projects(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (client_id, project_id)
+    );
+
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS project_id BIGINT REFERENCES survey_projects(id);
 
     CREATE INDEX IF NOT EXISTS idx_survey_responses_project ON survey_responses (project_id);
@@ -435,6 +490,8 @@ async function ensureDatabase() {
     CREATE INDEX IF NOT EXISTS idx_survey_responses_enumerator ON survey_responses (LOWER(enumerator_name));
     CREATE INDEX IF NOT EXISTS idx_survey_responses_location ON survey_responses (location);
     CREATE INDEX IF NOT EXISTS idx_survey_responses_answers ON survey_responses USING GIN (answers);
+    CREATE INDEX IF NOT EXISTS idx_client_project_access_client ON client_project_access (client_id);
+    CREATE INDEX IF NOT EXISTS idx_client_project_access_project ON client_project_access (project_id);
   `);
 
   const existing = await query(`SELECT id FROM survey_projects WHERE slug = 'pilot-survey' LIMIT 1`);
@@ -462,6 +519,7 @@ async function ensureDatabase() {
   }
 
   await query(`UPDATE survey_responses SET project_id = $1 WHERE project_id IS NULL`, [projectId]);
+  await ensureDefaultClientAccount();
 }
 
 async function loadProjects() {
@@ -512,6 +570,152 @@ async function loadProjectForPublic(identifier) {
     ...normalizeProject(project),
     questions: questions.rows.map(normalizeQuestion)
   };
+}
+
+async function ensureDefaultClientAccount() {
+  const existing = await query(`SELECT id FROM client_accounts WHERE username = $1 LIMIT 1`, [clientUsername]);
+  let clientId = existing.rows[0]?.id;
+
+  if (!clientId) {
+    const created = await query(
+      `INSERT INTO client_accounts (username, display_name, password_hash)
+      VALUES ($1, $2, $3)
+      RETURNING id`,
+      [clientUsername, 'Client Viewer', hashPassword(clientPassword)]
+    );
+    clientId = created.rows[0].id;
+  }
+
+  await query(
+    `INSERT INTO client_project_access (client_id, project_id)
+    SELECT $1, id
+    FROM survey_projects
+    ON CONFLICT DO NOTHING`,
+    [clientId]
+  );
+}
+
+async function authenticateClient(username, password) {
+  const result = await query(
+    `SELECT *
+    FROM client_accounts
+    WHERE LOWER(username) = LOWER($1)
+      AND is_active = TRUE
+    LIMIT 1`,
+    [String(username || '').trim()]
+  );
+  const client = result.rows[0];
+  if (!client || !verifyPassword(password || '', client.password_hash)) return null;
+  return { id: String(client.id), username: client.username, displayName: client.display_name };
+}
+
+async function loadProjectsForClient(clientId) {
+  const result = await query(
+    `SELECT p.*,
+      COUNT(r.id)::int AS response_count
+    FROM client_project_access cpa
+    JOIN survey_projects p ON p.id = cpa.project_id
+    LEFT JOIN survey_responses r ON r.project_id = p.id
+    WHERE cpa.client_id = $1
+      AND p.is_active = TRUE
+    GROUP BY p.id
+    ORDER BY p.created_at DESC`,
+    [clientId]
+  );
+
+  return result.rows.map((project) => {
+    const normalized = normalizeProject(project);
+    return {
+      id: normalized.id,
+      name: normalized.name,
+      slug: normalized.slug,
+      responseCount: normalized.responseCount
+    };
+  });
+}
+
+async function loadClients() {
+  const clients = await query(`
+    SELECT *
+    FROM client_accounts
+    ORDER BY created_at DESC
+  `);
+  const access = await query(`
+    SELECT client_id, project_id
+    FROM client_project_access
+    ORDER BY client_id, project_id
+  `);
+
+  return clients.rows.map((client) => ({
+    id: String(client.id),
+    username: client.username,
+    displayName: client.display_name,
+    isActive: client.is_active,
+    projectIds: access.rows
+      .filter((row) => String(row.client_id) === String(client.id))
+      .map((row) => String(row.project_id))
+  }));
+}
+
+async function saveClient(payload) {
+  const username = String(payload.username || '').trim();
+  const displayName = String(payload.displayName || payload.username || '').trim();
+  const password = String(payload.password || '');
+  const projectIds = Array.isArray(payload.projectIds) ? payload.projectIds.map(String) : [];
+
+  if (!username || !displayName) {
+    const error = new Error('Client username and display name are required.');
+    error.status = 400;
+    throw error;
+  }
+
+  if (!payload.id && password.length < 8) {
+    const error = new Error('New client password must be at least 8 characters.');
+    error.status = 400;
+    throw error;
+  }
+
+  const result = payload.id
+    ? password
+      ? await query(
+        `UPDATE client_accounts
+        SET username = $1, display_name = $2, password_hash = $3, is_active = $4, updated_at = NOW()
+        WHERE id = $5
+        RETURNING *`,
+        [username, displayName, hashPassword(password), payload.isActive !== false, payload.id]
+      )
+      : await query(
+        `UPDATE client_accounts
+        SET username = $1, display_name = $2, is_active = $3, updated_at = NOW()
+        WHERE id = $4
+        RETURNING *`,
+        [username, displayName, payload.isActive !== false, payload.id]
+      )
+    : await query(
+      `INSERT INTO client_accounts (username, display_name, password_hash, is_active)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *`,
+      [username, displayName, hashPassword(password), payload.isActive !== false]
+    );
+
+  const client = result.rows[0];
+  if (!client) {
+    const error = new Error('Client not found.');
+    error.status = 404;
+    throw error;
+  }
+
+  await query(`DELETE FROM client_project_access WHERE client_id = $1`, [client.id]);
+  for (const projectId of projectIds) {
+    await query(
+      `INSERT INTO client_project_access (client_id, project_id)
+      VALUES ($1, $2)
+      ON CONFLICT DO NOTHING`,
+      [client.id, projectId]
+    );
+  }
+
+  return (await loadClients()).find((item) => item.id === String(client.id));
 }
 
 async function saveProject(payload) {
@@ -716,10 +920,11 @@ function questionAppliesToLocation(questionId, location = '') {
   return true;
 }
 
-function createToken(username, role) {
+function createToken(username, role, clientId = null) {
   const payload = {
     username,
     role,
+    ...(clientId ? { clientId } : {}),
     exp: Date.now() + 1000 * 60 * 60 * 12
   };
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
@@ -749,9 +954,23 @@ function requireAdmin(req, res, next) {
 function requireClient(req, res, next) {
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
   const client = verifyToken(token);
-  if (!client || client.role !== 'client') return res.status(401).json({ error: 'Client login required.' });
+  if (!client || client.role !== 'client' || !client.clientId) return res.status(401).json({ error: 'Client login required.' });
   req.client = client;
   next();
+}
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('base64url');
+  const hash = crypto.scryptSync(String(password), salt, 64).toString('base64url');
+  return `scrypt$${salt}$${hash}`;
+}
+
+function verifyPassword(password, storedHash) {
+  const [method, salt, hash] = String(storedHash || '').split('$');
+  if (method !== 'scrypt' || !salt || !hash) return false;
+  const actual = crypto.scryptSync(String(password), salt, 64).toString('base64url');
+  if (Buffer.byteLength(actual) !== Buffer.byteLength(hash)) return false;
+  return crypto.timingSafeEqual(Buffer.from(actual), Buffer.from(hash));
 }
 
 function normalizeProject(project) {

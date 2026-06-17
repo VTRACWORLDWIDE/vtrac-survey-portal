@@ -629,6 +629,57 @@ textarea {
   padding: 18px;
 }
 
+.client-admin-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.client-editor {
+  background: #f8fbfa;
+  border: 1px solid #dfe9e6;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.hint-text {
+  color: #6c7e83;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.project-check-list,
+.client-list {
+  display: grid;
+  gap: 8px;
+}
+
+.client-list-row {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dfe9e6;
+  border-radius: 8px;
+  color: #1f3036;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+  text-align: left;
+}
+
+.client-list-row span {
+  display: grid;
+  gap: 3px;
+}
+
+.client-list-row small,
+.client-list-row em {
+  color: #617579;
+  font-style: normal;
+}
+
 .question-list {
   display: grid;
   gap: 12px;
@@ -851,6 +902,7 @@ tbody tr:hover {
   .breakdown,
   .table-panel,
   .editor-panel,
+  .client-admin-panel,
   .login-panel {
     padding: 14px;
   }
@@ -858,6 +910,7 @@ tbody tr:hover {
   .survey-hero,
   .admin-heading,
   .project-bar,
+  .client-list-row,
   .actions {
     align-items: stretch;
     display: grid;

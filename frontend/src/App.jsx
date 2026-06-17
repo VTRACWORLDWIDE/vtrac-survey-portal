@@ -926,8 +926,10 @@ function AdminLogin({ onLogin }) {
 
 function AdminDashboard({ token, onLogout }) {
   const [projects, setProjects] = useState([]);
+  const [clients, setClients] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [editing, setEditing] = useState(null);
+  const [editingClient, setEditingClient] = useState(null);
   const [filters, setFilters] = useState({ search: '', enumerator: '', location: '', dateFrom: '', dateTo: '' });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -953,6 +955,13 @@ function AdminDashboard({ token, onLogout }) {
     setSelectedId((current) => current || payload.projects?.[0]?.id || '');
   }
 
+  async function loadClients() {
+    const response = await fetch(`${apiBase}/api/admin/clients`, { headers: authHeaders });
+    if (response.status === 401) return onLogout();
+    const payload = await response.json();
+    setClients(payload.clients || []);
+  }
+
   async function loadDashboard() {
     if (!selectedProject) return;
     setLoading(true);
@@ -967,6 +976,7 @@ function AdminDashboard({ token, onLogout }) {
 
   useEffect(() => {
     loadProjects();
+    loadClients();
   }, []);
 
   useEffect(() => {
@@ -1015,6 +1025,39 @@ function AdminDashboard({ token, onLogout }) {
     setSelectedId(payload.project.id);
   }
 
+  function startNewClient() {
+    setEditingClient({
+      username: '',
+      displayName: '',
+      password: '',
+      isActive: true,
+      projectIds: selectedProject?.id ? [selectedProject.id] : []
+    });
+  }
+
+  function editClient(client) {
+    setEditingClient({ ...client, password: '' });
+  }
+
+  async function saveClient(client) {
+    setStatus('');
+    const method = client.id ? 'PUT' : 'POST';
+    const url = client.id ? `${apiBase}/api/admin/clients/${client.id}` : `${apiBase}/api/admin/clients`;
+    const response = await fetch(url, {
+      method,
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify(client)
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      setStatus(payload.error || 'Unable to save client.');
+      return;
+    }
+    setStatus('Client access saved.');
+    setEditingClient(null);
+    await loadClients();
+  }
+
   async function download(type) {
     const response = await fetch(`${apiBase}/api/responses/export.${type}?${queryString}`, { headers: authHeaders });
     const blob = await response.blob();
@@ -1057,6 +1100,17 @@ function AdminDashboard({ token, onLogout }) {
           onSave={saveProject}
         />
       )}
+
+      <ClientAccessManager
+        clients={clients}
+        projects={projects}
+        editingClient={editingClient}
+        onStartNew={startNewClient}
+        onEdit={editClient}
+        onChange={setEditingClient}
+        onCancel={() => setEditingClient(null)}
+        onSave={saveClient}
+      />
 
       <div className="panel filters">
         <label>
@@ -1180,6 +1234,83 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
       </div>
 
       <button className="secondary add-question" onClick={addQuestion}><Plus size={18} /> Add Question</button>
+    </div>
+  );
+}
+
+function ClientAccessManager({ clients, projects, editingClient, onStartNew, onEdit, onChange, onCancel, onSave }) {
+  function update(field, value) {
+    onChange({ ...editingClient, [field]: value });
+  }
+
+  function toggleProject(projectId) {
+    const current = new Set(editingClient.projectIds || []);
+    if (current.has(projectId)) current.delete(projectId);
+    else current.add(projectId);
+    update('projectIds', [...current]);
+  }
+
+  return (
+    <div className="panel client-admin-panel">
+      <div className="section-title">
+        <div>
+          <p className="eyebrow">Client Access</p>
+          <h2>Client logins and project visibility</h2>
+        </div>
+        <button className="primary" onClick={onStartNew}><Plus size={18} /> New Client</button>
+      </div>
+
+      {editingClient && (
+        <div className="client-editor">
+          <div className="inline-grid">
+            <label>
+              Display name
+              <input value={editingClient.displayName} onChange={(event) => update('displayName', event.target.value)} />
+            </label>
+            <label>
+              Username
+              <input value={editingClient.username} onChange={(event) => update('username', event.target.value)} />
+            </label>
+          </div>
+          <label>
+            Password {editingClient.id && <span className="hint-text">leave blank to keep existing password</span>}
+            <input type="password" value={editingClient.password || ''} onChange={(event) => update('password', event.target.value)} />
+          </label>
+          <div className="project-check-list">
+            {projects.map((project) => (
+              <label className="check-row" key={project.id}>
+                <input
+                  type="checkbox"
+                  checked={(editingClient.projectIds || []).includes(project.id)}
+                  onChange={() => toggleProject(project.id)}
+                />
+                {project.name}
+              </label>
+            ))}
+          </div>
+          <label className="check-row">
+            <input type="checkbox" checked={editingClient.isActive !== false} onChange={(event) => update('isActive', event.target.checked)} />
+            Active
+          </label>
+          <div className="actions">
+            <button className="secondary" onClick={onCancel}>Cancel</button>
+            <button className="primary" onClick={() => onSave(editingClient)}><Save size={18} /> Save Client</button>
+          </div>
+        </div>
+      )}
+
+      <div className="client-list">
+        {clients.length === 0 && <p className="empty">No client logins yet.</p>}
+        {clients.map((client) => (
+          <button className="client-list-row" key={client.id} onClick={() => onEdit(client)}>
+            <span>
+              <strong>{client.displayName}</strong>
+              <small>{client.username} · {client.isActive ? 'Active' : 'Inactive'}</small>
+            </span>
+            <em>{client.projectIds.length} project{client.projectIds.length === 1 ? '' : 's'}</em>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

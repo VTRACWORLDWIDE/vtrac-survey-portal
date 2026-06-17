@@ -6,7 +6,7 @@ Lightweight survey collection MVP for pilot data collection.
 
 - Public survey link with no login
 - One admin login for project setup and downloads
-- One client login for read-only collection metrics
+- Client logins for read-only collection metrics, with project-level access assignment
 - Admin can create projects and design survey forms
 - Enumerator name and survey location
 - Automatic server-side submitted date/time
@@ -91,5 +91,6 @@ Default local admin login:
 
 Change `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_TOKEN_SECRET` in `backend/.env` before deploying.
 Change `CLIENT_USERNAME` and `CLIENT_PASSWORD` before sharing the client dashboard.
+Additional client IDs and project access can be managed from the admin dashboard.
 
 Project survey links use `/p/{project-slug}`. Example: `http://localhost:5173/p/pilot-survey`.

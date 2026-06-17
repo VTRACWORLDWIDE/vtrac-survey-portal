@@ -633,6 +633,200 @@ textarea {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.client-analytics {
+  background: #f4f7f6;
+  gap: 16px;
+  min-height: calc(100vh - 78px);
+}
+
+.client-hero {
+  align-items: stretch;
+  background:
+    linear-gradient(135deg, rgba(19, 57, 62, 0.98), rgba(26, 91, 86, 0.95)),
+    linear-gradient(90deg, rgba(217, 162, 61, 0.2), rgba(55, 116, 194, 0.18));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  box-shadow: 0 20px 44px rgba(22, 33, 38, 0.16);
+  color: #ffffff;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  overflow: hidden;
+  padding: clamp(18px, 3vw, 28px);
+  position: relative;
+}
+
+.client-hero::after {
+  background: rgba(217, 162, 61, 0.16);
+  content: "";
+  height: 100%;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: min(210px, 24%);
+}
+
+.client-hero-copy,
+.client-hero-actions {
+  position: relative;
+  z-index: 1;
+}
+
+.client-hero-copy {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.client-hero .eyebrow {
+  color: #f1c874;
+}
+
+.client-hero h2 {
+  font-size: clamp(1.7rem, 3vw, 2.45rem);
+  line-height: 1.08;
+  margin: 0;
+}
+
+.client-hero p {
+  color: #dce8e5;
+  margin: 0;
+}
+
+.client-hero-actions {
+  align-items: start;
+  display: flex;
+}
+
+.client-hero-actions .secondary {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+}
+
+.client-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.client-chip {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  color: #f5fbf9;
+  display: inline-flex;
+  font-size: 0.88rem;
+  gap: 7px;
+  min-height: 36px;
+  padding: 7px 10px;
+}
+
+.client-command-bar {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(260px, 2fr) minmax(150px, 1fr) minmax(150px, 1fr) auto;
+  padding: 14px;
+}
+
+.compact-refresh {
+  min-width: 116px;
+}
+
+.client-kpi-grid,
+.client-insight-grid,
+.client-analytics-grid {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.client-kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.client-kpi-card,
+.client-insight-card {
+  background: #ffffff;
+  border: 1px solid #d9e3e1;
+  border-radius: 8px;
+  box-shadow: 0 14px 30px rgba(22, 33, 38, 0.07);
+  display: grid;
+  min-width: 0;
+  padding: 16px;
+}
+
+.client-kpi-card {
+  gap: 12px;
+  min-height: 132px;
+}
+
+.client-kpi-card > div {
+  display: grid;
+  gap: 10px;
+}
+
+.client-kpi-card span,
+.client-insight-card span {
+  align-items: center;
+  color: #5f7277;
+  display: flex;
+  font-size: 0.85rem;
+  font-weight: 850;
+  gap: 8px;
+}
+
+.client-kpi-card strong {
+  color: #162126;
+  font-size: 2.35rem;
+  line-height: 1;
+}
+
+.client-kpi-card p,
+.client-insight-card p {
+  color: #64777c;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.client-insight-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.client-insight-card {
+  border-left: 4px solid #d9a23d;
+  gap: 8px;
+  min-height: 112px;
+}
+
+.client-insight-card strong {
+  color: #20343a;
+  font-size: 1.08rem;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.client-analytics-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.client-analytics-grid .breakdown {
+  box-shadow: 0 14px 30px rgba(22, 33, 38, 0.07);
+}
+
+.client-analytics-grid .span-2 {
+  grid-column: 1 / -1;
+}
+
+.client-loading {
+  justify-self: start;
+}
+
 .project-bar label {
   min-width: min(260px, 100%);
 }
@@ -944,12 +1138,20 @@ tbody tr:hover {
   }
 
   .client-filter-bar,
-  .client-chart-grid {
+  .client-command-bar,
+  .client-chart-grid,
+  .client-analytics-grid {
     grid-template-columns: 1fr;
   }
 
-  .metric-grid {
+  .metric-grid,
+  .client-kpi-grid,
+  .client-insight-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .client-analytics-grid .span-2 {
+    grid-column: auto;
   }
 }
 
@@ -1007,12 +1209,34 @@ tbody tr:hover {
 
   .survey-hero,
   .admin-heading,
+  .client-hero,
   .project-bar,
   .client-list-row,
   .actions,
   .audio-review-card {
     align-items: stretch;
     display: grid;
+  }
+
+  .client-hero {
+    gap: 16px;
+    padding: 18px;
+  }
+
+  .client-hero::after {
+    width: 90px;
+  }
+
+  .client-hero h2 {
+    font-size: 1.55rem;
+  }
+
+  .client-command-bar {
+    padding: 12px;
+  }
+
+  .client-chip {
+    width: 100%;
   }
 
   .survey-hero {
@@ -1038,8 +1262,21 @@ tbody tr:hover {
   .inline-grid,
   .location-grid,
   .filters,
-  .metric-grid {
+  .metric-grid,
+  .client-kpi-grid,
+  .client-insight-grid {
     grid-template-columns: 1fr;
+  }
+
+  .client-kpi-card,
+  .client-insight-card {
+    min-height: auto;
+    padding: 14px;
+  }
+
+  .compact-refresh,
+  .client-hero-actions .secondary {
+    width: 100%;
   }
 
   .filter-actions {

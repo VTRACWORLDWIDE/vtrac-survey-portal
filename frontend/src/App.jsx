@@ -1144,6 +1144,23 @@ function ClientLogin({ onLogin }) {
   );
 }
 
+function leadingRow(rows, labelKey) {
+  const sorted = [...(rows || [])].sort((left, right) => Number(right.samples || 0) - Number(left.samples || 0));
+  const row = sorted[0];
+  if (!row) return null;
+  return {
+    label: row[labelKey] || 'Not specified',
+    samples: Number(row.samples || 0)
+  };
+}
+
+function formatDateScope(dateFrom, dateTo) {
+  if (dateFrom && dateTo) return `${dateFrom} to ${dateTo}`;
+  if (dateFrom) return `From ${dateFrom}`;
+  if (dateTo) return `Until ${dateTo}`;
+  return 'All dates';
+}
+
 function ClientDashboard({ token, onLogout }) {
   const [projects, setProjects] = useState([]);
   const [selectedId, setSelectedId] = useState('');
@@ -1152,6 +1169,18 @@ function ClientDashboard({ token, onLogout }) {
   const [loading, setLoading] = useState(false);
   const authHeaders = { Authorization: `Bearer ${token}` };
   const selectedProject = projects.find((project) => project.id === selectedId) || projects[0];
+  const totalSamples = Number(data?.totals?.total_samples || 0);
+  const todaySamples = Number(data?.totals?.samples_today || 0);
+  const terminalRows = data?.byTerminal || [];
+  const movementRows = data?.byMovement || [];
+  const surveyPointRows = data?.bySurveyPoint || [];
+  const locationRows = data?.byLocation || [];
+  const dateRows = data?.byDate || [];
+  const leadingTerminal = leadingRow(terminalRows, 'terminal');
+  const leadingMovement = leadingRow(movementRows, 'movement');
+  const leadingPoint = leadingRow(surveyPointRows, 'survey_point');
+  const latestDate = dateRows[0];
+  const dateScope = formatDateScope(filters.dateFrom, filters.dateTo);
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -1184,13 +1213,6 @@ function ClientDashboard({ token, onLogout }) {
     }
   }
 
-  function changeSelectedProject(projectId) {
-    const emptyFilters = { enumerator: '', location: '', dateFrom: '', dateTo: '' };
-    setSelectedId(projectId);
-    setFilters(emptyFilters);
-    setAppliedFilters(emptyFilters);
-  }
-
   useEffect(() => {
     loadProjects();
   }, []);
@@ -1200,17 +1222,24 @@ function ClientDashboard({ token, onLogout }) {
   }, [queryString]);
 
   return (
-    <section className="dashboard client-dashboard">
-      <div className="admin-heading">
-        <div>
-          <p className="eyebrow">Client View</p>
-          <h2>Collection Dashboard</h2>
+    <section className="dashboard client-dashboard client-analytics">
+      <div className="client-hero">
+        <div className="client-hero-copy">
+          <p className="eyebrow">VTRAC Client View</p>
+          <h2>Collection Analytics Dashboard</h2>
           <p>{selectedProject ? selectedProject.name : 'Survey progress'}</p>
+          <div className="client-chip-row">
+            <span className="client-chip"><CalendarClock size={15} /> {dateScope}</span>
+            <span className="client-chip"><ClipboardList size={15} /> {totalSamples} samples</span>
+            <span className="client-chip"><MapPin size={15} /> {terminalRows.length || 0} terminals covered</span>
+          </div>
         </div>
-        <button className="secondary" onClick={onLogout}>Logout</button>
+        <div className="client-hero-actions">
+          <button className="secondary" onClick={onLogout}>Logout</button>
+        </div>
       </div>
 
-      <div className="panel client-filter-bar">
+      <div className="panel client-command-bar">
         <label>
           Project
           <select value={selectedProject?.id || ''} onChange={(event) => setSelectedId(event.target.value)}>
@@ -1225,25 +1254,32 @@ function ClientDashboard({ token, onLogout }) {
           To
           <input type="date" value={filters.dateTo} onChange={(event) => setFilters({ ...filters, dateTo: event.target.value })} />
         </label>
-        <button className="icon-button" onClick={loadDashboard} aria-label="Refresh client dashboard"><RefreshCw size={18} /></button>
+        <button className="primary compact-refresh" onClick={loadDashboard}><RefreshCw size={17} /> Refresh</button>
       </div>
 
-      <div className="metric-grid">
-        <Metric icon={<ClipboardList size={19} />} label="Total samples" value={data?.totals?.total_samples ?? 0} />
-        <Metric icon={<CalendarClock size={19} />} label="Samples today" value={data?.totals?.samples_today ?? 0} />
-        <Metric icon={<MapPin size={19} />} label="Terminals" value={data?.byTerminal?.length ?? 0} />
-        <Metric icon={<BarChart3 size={19} />} label="Survey points" value={data?.bySurveyPoint?.length ?? 0} />
+      <div className="client-kpi-grid">
+        <ClientMetric icon={<ClipboardList size={19} />} label="Total samples" value={totalSamples} detail="All project submissions" />
+        <ClientMetric icon={<CalendarClock size={19} />} label="Today" value={todaySamples} detail={todaySamples === 1 ? 'Sample collected today' : 'Samples collected today'} />
+        <ClientMetric icon={<MapPin size={19} />} label="Terminals covered" value={terminalRows.length} detail={leadingTerminal ? `Lead: ${leadingTerminal.label}` : 'Awaiting field data'} />
+        <ClientMetric icon={<BarChart3 size={19} />} label="Survey points" value={surveyPointRows.length} detail={leadingPoint ? `Top point: ${leadingPoint.label}` : 'Awaiting field data'} />
       </div>
 
-      <div className="chart-grid client-chart-grid">
-        <Breakdown title="Samples by date" rows={data?.byDate || []} labelKey="date" valueKey="samples" />
-        <Breakdown title="Samples by terminal" rows={data?.byTerminal || []} labelKey="terminal" valueKey="samples" />
-        <Breakdown title="Samples by departures / arrivals" rows={data?.byMovement || []} labelKey="movement" valueKey="samples" />
-        <Breakdown title="Samples by survey point" rows={data?.bySurveyPoint || []} labelKey="survey_point" valueKey="samples" />
-        <Breakdown title="Samples by location" rows={data?.byLocation || []} labelKey="location" valueKey="samples" />
+      <div className="client-insight-grid">
+        <ClientInsight title="Primary terminal" value={leadingTerminal?.label || 'No data yet'} meta={leadingTerminal ? `${leadingTerminal.samples} samples` : 'Field collection not started'} />
+        <ClientInsight title="Movement mix" value={leadingMovement?.label || 'No data yet'} meta={leadingMovement ? `${leadingMovement.samples} samples currently leading` : 'Departures and arrivals will appear here'} />
+        <ClientInsight title="Active survey point" value={leadingPoint?.label || 'No data yet'} meta={leadingPoint ? `${leadingPoint.samples} samples` : 'No survey point submissions yet'} />
+        <ClientInsight title="Latest collection day" value={latestDate?.date || 'No data yet'} meta={latestDate ? `${latestDate.samples} samples submitted` : 'Date trend will update automatically'} />
       </div>
 
-      {loading && <p className="status">Refreshing dashboard...</p>}
+      <div className="client-analytics-grid">
+        <Breakdown className="span-2" title="Daily sample trend" rows={dateRows} labelKey="date" valueKey="samples" />
+        <Breakdown title="Terminal coverage" rows={terminalRows} labelKey="terminal" valueKey="samples" />
+        <Breakdown title="Departures vs arrivals" rows={movementRows} labelKey="movement" valueKey="samples" />
+        <Breakdown title="Survey point performance" rows={surveyPointRows} labelKey="survey_point" valueKey="samples" />
+        <Breakdown title="Top locations" rows={locationRows} labelKey="location" valueKey="samples" />
+      </div>
+
+      {loading && <p className="status client-loading">Refreshing dashboard...</p>}
     </section>
   );
 }
@@ -2024,10 +2060,32 @@ function Metric({ icon, label, value }) {
   );
 }
 
-function Breakdown({ title, rows, labelKey, valueKey }) {
+function ClientMetric({ icon, label, value, detail }) {
+  return (
+    <div className="client-kpi-card">
+      <div>
+        <span>{icon}{label}</span>
+        <strong>{value}</strong>
+      </div>
+      <p>{detail}</p>
+    </div>
+  );
+}
+
+function ClientInsight({ title, value, meta }) {
+  return (
+    <div className="client-insight-card">
+      <span>{title}</span>
+      <strong title={value}>{value}</strong>
+      <p>{meta}</p>
+    </div>
+  );
+}
+
+function Breakdown({ title, rows, labelKey, valueKey, className = '' }) {
   const max = Math.max(...rows.map((row) => Number(row[valueKey])), 1);
   return (
-    <div className="panel breakdown">
+    <div className={`panel breakdown ${className}`.trim()}>
       <h2><BarChart3 size={17} /> {title}</h2>
       {rows.length === 0 && <p className="empty">No samples yet.</p>}
       {rows.map((row) => (

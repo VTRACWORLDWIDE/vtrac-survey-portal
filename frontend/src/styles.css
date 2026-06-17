@@ -735,9 +735,9 @@ textarea {
 .filters {
   align-items: end;
   display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(260px, 1.4fr) repeat(3, minmax(150px, 1fr));
-  padding: 14px;
+  gap: 10px;
+  grid-template-columns: minmax(300px, 1.6fr) repeat(4, minmax(145px, 1fr)) auto;
+  padding: 12px;
 }
 
 .filters label {
@@ -759,14 +759,11 @@ textarea {
   top: 37px;
 }
 
-.filters .filter-search input {
-  padding-left: 36px;
-}
-
 .filter-actions {
   align-items: end;
   display: flex;
-  gap: 10px;
+  gap: 8px;
+  justify-content: end;
 }
 
 .metric-grid,
@@ -977,6 +974,10 @@ tbody tr:hover {
   .filter-actions {
     display: grid;
     grid-template-columns: auto 1fr 1fr;
+  }
+
+  .filter-actions .primary {
+    grid-column: 1 / -1;
   }
 
   label,

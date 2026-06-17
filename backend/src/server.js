@@ -296,6 +296,35 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
   }
 });
 
+app.get('/api/dashboard/options', requireAdmin, async (req, res, next) => {
+  try {
+    const filters = buildFilters({ projectId: req.query.projectId });
+    const [enumerators, locations] = await Promise.all([
+      query(
+        `SELECT DISTINCT enumerator_name
+        FROM survey_responses
+        ${filters.where}
+        ORDER BY enumerator_name ASC`,
+        filters.params
+      ),
+      query(
+        `SELECT DISTINCT location
+        FROM survey_responses
+        ${filters.where}
+        ORDER BY location ASC`,
+        filters.params
+      )
+    ]);
+
+    res.json({
+      enumerators: enumerators.rows.map((row) => row.enumerator_name).filter(Boolean),
+      locations: locations.rows.map((row) => row.location).filter(Boolean)
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/responses/:id', requireAdmin, async (req, res, next) => {
   try {
     const result = await query(

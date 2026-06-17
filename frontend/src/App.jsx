@@ -812,6 +812,13 @@ function ClientDashboard({ token, onLogout }) {
     }
   }
 
+  function changeSelectedProject(projectId) {
+    const emptyFilters = { enumerator: '', location: '', dateFrom: '', dateTo: '' };
+    setSelectedId(projectId);
+    setFilters(emptyFilters);
+    setAppliedFilters(emptyFilters);
+  }
+
   useEffect(() => {
     loadProjects();
   }, []);
@@ -930,11 +937,13 @@ function AdminLogin({ onLogin }) {
 function AdminDashboard({ token, onLogout }) {
   const [projects, setProjects] = useState([]);
   const [clients, setClients] = useState([]);
+  const [filterOptions, setFilterOptions] = useState({ enumerators: [], locations: [] });
   const [selectedId, setSelectedId] = useState('');
   const [editing, setEditing] = useState(null);
   const [editingClient, setEditingClient] = useState(null);
   const [editingResponse, setEditingResponse] = useState(null);
-  const [filters, setFilters] = useState({ search: '', enumerator: '', location: '', dateFrom: '', dateTo: '', submittedFrom: '', submittedTo: '' });
+  const [filters, setFilters] = useState({ enumerator: '', location: '', dateFrom: '', dateTo: '' });
+  const [appliedFilters, setAppliedFilters] = useState(filters);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
@@ -945,11 +954,11 @@ function AdminDashboard({ token, onLogout }) {
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
     if (selectedProject?.id) params.set('projectId', selectedProject.id);
-    Object.entries(filters).forEach(([key, value]) => {
+    Object.entries(appliedFilters).forEach(([key, value]) => {
       if (value) params.set(key, value);
     });
     return params.toString();
-  }, [filters, selectedProject?.id]);
+  }, [appliedFilters, selectedProject?.id]);
 
   async function loadProjects() {
     const response = await fetch(`${apiBase}/api/projects`, { headers: authHeaders });
@@ -964,6 +973,18 @@ function AdminDashboard({ token, onLogout }) {
     if (response.status === 401) return onLogout();
     const payload = await response.json();
     setClients(payload.clients || []);
+  }
+
+  async function loadFilterOptions() {
+    if (!selectedProject) return;
+    const params = new URLSearchParams({ projectId: selectedProject.id });
+    const response = await fetch(`${apiBase}/api/dashboard/options?${params.toString()}`, { headers: authHeaders });
+    if (response.status === 401) return onLogout();
+    const payload = await response.json();
+    setFilterOptions({
+      enumerators: payload.enumerators || [],
+      locations: payload.locations || []
+    });
   }
 
   async function loadDashboard() {
@@ -986,6 +1007,10 @@ function AdminDashboard({ token, onLogout }) {
   useEffect(() => {
     loadDashboard();
   }, [queryString]);
+
+  useEffect(() => {
+    loadFilterOptions();
+  }, [selectedProject?.id]);
 
   function startNewProject() {
     setEditing({
@@ -1114,12 +1139,6 @@ function AdminDashboard({ token, onLogout }) {
       </div>
 
       <div className="panel project-bar">
-        <label>
-          Project
-          <select value={selectedProject?.id || ''} onChange={(event) => setSelectedId(event.target.value)}>
-            {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-          </select>
-        </label>
         <button className="secondary" onClick={() => selectedProject && editProject(selectedProject)}><FileText size={18} /> Edit Form</button>
         <button className="primary" onClick={startNewProject}><Plus size={18} /> New Project</button>
         {selectedProject && <span className="public-link"><Link2 size={16} /> {window.location.origin}{selectedProject.publicUrl}</span>}
@@ -1146,18 +1165,25 @@ function AdminDashboard({ token, onLogout }) {
       />
 
       <div className="panel filters">
-        <label className="filter-search">
-          <span>Search</span>
-          <Search size={16} />
-          <input placeholder="Name, location, household" value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} />
+        <label className="filter-project">
+          <span>Project</span>
+          <select value={selectedProject?.id || ''} onChange={(event) => changeSelectedProject(event.target.value)}>
+            {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+          </select>
         </label>
         <label>
           <span>Enumerator</span>
-          <input placeholder="Any enumerator" value={filters.enumerator} onChange={(event) => setFilters({ ...filters, enumerator: event.target.value })} />
+          <select value={filters.enumerator} onChange={(event) => setFilters({ ...filters, enumerator: event.target.value })}>
+            <option value="">All enumerators</option>
+            {filterOptions.enumerators.map((enumerator) => <option key={enumerator}>{enumerator}</option>)}
+          </select>
         </label>
         <label>
           <span>Location</span>
-          <input placeholder="Any location" value={filters.location} onChange={(event) => setFilters({ ...filters, location: event.target.value })} />
+          <select value={filters.location} onChange={(event) => setFilters({ ...filters, location: event.target.value })}>
+            <option value="">All locations</option>
+            {filterOptions.locations.map((location) => <option key={location}>{location}</option>)}
+          </select>
         </label>
         <label>
           <span>Date from</span>
@@ -1167,15 +1193,8 @@ function AdminDashboard({ token, onLogout }) {
           <span>Date to</span>
           <input type="date" value={filters.dateTo} onChange={(event) => setFilters({ ...filters, dateTo: event.target.value })} />
         </label>
-        <label>
-          <span>Time from</span>
-          <input aria-label="Submitted from time" title="Submitted from time" type="datetime-local" value={filters.submittedFrom} onChange={(event) => setFilters({ ...filters, submittedFrom: event.target.value })} />
-        </label>
-        <label>
-          <span>Time to</span>
-          <input aria-label="Submitted to time" title="Submitted to time" type="datetime-local" value={filters.submittedTo} onChange={(event) => setFilters({ ...filters, submittedTo: event.target.value })} />
-        </label>
         <div className="filter-actions">
+          <button className="primary" onClick={() => setAppliedFilters(filters)}><Search size={18} /> Search</button>
           <button className="icon-button" onClick={loadDashboard} aria-label="Refresh dashboard"><RefreshCw size={18} /></button>
           <button className="download" onClick={() => download('csv')}><Download size={16} /> CSV</button>
           <button className="download" onClick={() => download('xlsx')}><Download size={16} /> Excel</button>

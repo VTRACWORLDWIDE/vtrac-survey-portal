@@ -181,10 +181,12 @@ export default function App() {
             <h1>Survey Portal</h1>
           </div>
         </div>
-        <nav>
-          <button className={route.startsWith('/client') || route === '/' ? 'active' : ''} onClick={() => navigate('/client')}>Client</button>
-          <button className={route.startsWith('/admin') ? 'active' : ''} onClick={() => navigate('/admin')}>Admin</button>
-        </nav>
+        {!isPublicSurvey && (
+          <nav>
+            <button className={route.startsWith('/client') || route === '/' ? 'active' : ''} onClick={() => navigate('/client')}>Client</button>
+            <button className={route.startsWith('/admin') ? 'active' : ''} onClick={() => navigate('/admin')}>Admin</button>
+          </nav>
+        )}
       </header>
       {isPublicSurvey
         ? <SurveyForm projectSlug={publicSlug} />

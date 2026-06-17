@@ -324,6 +324,12 @@ textarea {
   grid-template-columns: 1fr 1fr;
 }
 
+.location-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr 1.2fr;
+}
+
 .question-field {
   background: #f7faf9;
   border: 1px solid #e1e9e7;
@@ -821,6 +827,7 @@ tbody tr:hover {
   }
 
   .inline-grid,
+  .location-grid,
   .filters,
   .metric-grid {
     grid-template-columns: 1fr;

@@ -106,6 +106,7 @@ app.post('/api/responses', async (req, res, next) => {
     }
 
     const missingQuestion = project.questions
+      .filter((question) => questionAppliesToLocation(question.id, location))
       .filter((question) => question.required)
       .find((question) => String(answers[question.id] || '').trim() === '');
 
@@ -519,6 +520,43 @@ function flattenResponse(row, questions) {
 
 function defaultExportRow(questions) {
   return flattenResponse({ answers: {} }, questions);
+}
+
+function questionAppliesToLocation(questionId, location = '') {
+  const isArrival = location.includes(' - Arrivals - ') || location.includes(' - Arrivals');
+  const isDeparture = location.includes(' - Departures - ') || location.includes(' - Departures');
+
+  const arrivalQuestionIds = new Set([
+    'destination_street_exact_final_place',
+    'destination_locality',
+    'destination_zone_number',
+    'destination_mapped_area',
+    'destination_division',
+    'coming_from_city_name',
+    'time_to_reach_final_destination_hours',
+    'time_to_reach_final_destination_minutes',
+    'final_destination_time_total_minutes',
+    'final_destination_time_expected_range',
+    'final_destination_time_validation'
+  ]);
+
+  const departureQuestionIds = new Set([
+    'origin_street_exact_pickup_place',
+    'origin_locality',
+    'origin_zone_number',
+    'origin_mapped_area',
+    'origin_division',
+    'travelling_to_city_name',
+    'time_taken_to_reach_airport_hours',
+    'time_taken_to_reach_airport_minutes',
+    'travel_time_total_minutes',
+    'travel_time_expected_range',
+    'travel_time_validation'
+  ]);
+
+  if (isArrival && departureQuestionIds.has(questionId)) return false;
+  if (isDeparture && arrivalQuestionIds.has(questionId)) return false;
+  return true;
 }
 
 function createToken(username) {

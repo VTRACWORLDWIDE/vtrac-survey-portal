@@ -27,9 +27,15 @@ const hiddenQuestionIds = new Set([
   'origin_zone_number',
   'origin_mapped_area',
   'origin_division',
+  'destination_zone_number',
+  'destination_mapped_area',
+  'destination_division',
   'travel_time_total_minutes',
   'travel_time_expected_range',
-  'travel_time_validation'
+  'travel_time_validation',
+  'final_destination_time_total_minutes',
+  'final_destination_time_expected_range',
+  'final_destination_time_validation'
 ]);
 const originRows = [
   [1, 'CBD (MG Road / Brigade Road/surrounding areas)', 'Central Bangalore'],
@@ -216,6 +222,7 @@ function SurveyForm({ projectSlug }) {
 
   function updateAnswer(questionId, value) {
     const originMapping = questionId === 'origin_locality' ? originLocalityMap[value] : null;
+    const destinationMapping = questionId === 'destination_locality' ? originLocalityMap[value] : null;
     setForm((current) => ({
       ...current,
       answers: deriveAnswers({
@@ -225,6 +232,11 @@ function SurveyForm({ projectSlug }) {
           origin_zone_number: String(originMapping.zoneNumber),
           origin_mapped_area: originMapping.area,
           origin_division: originMapping.division
+        } : {}),
+        ...(destinationMapping ? {
+          destination_zone_number: String(destinationMapping.zoneNumber),
+          destination_mapped_area: destinationMapping.area,
+          destination_division: destinationMapping.division
         } : {})
       })
     }));
@@ -346,7 +358,10 @@ function SurveyForm({ projectSlug }) {
 
           <div className="form-section">
             <div className="section-kicker"><ClipboardList size={16} /> Questions</div>
-            {(config.questions || []).filter((question) => !hiddenQuestionIds.has(question.id)).map((question, index) => (
+            {(config.questions || [])
+              .filter((question) => !hiddenQuestionIds.has(question.id))
+              .filter((question) => questionAppliesToLocation(question.id, form.location))
+              .map((question, index) => (
               <QuestionInput
                 key={question.id}
                 question={question}
@@ -401,24 +416,92 @@ function deriveAnswers(answers) {
         ? 'Too high - verify with respondent'
         : 'OK';
 
+  const destinationHoursValue = answers.time_to_reach_final_destination_hours;
+  const destinationMinutesValue = answers.time_to_reach_final_destination_minutes;
+  const destinationHours = Number(destinationHoursValue || 0);
+  const destinationMinutes = Number(destinationMinutesValue || 0);
+  const hasDestinationDuration = destinationHoursValue !== undefined || destinationMinutesValue !== undefined;
+  const destinationTotal = Math.max(0, (Number.isFinite(destinationHours) ? destinationHours : 0) * 60 + (Number.isFinite(destinationMinutes) ? destinationMinutes : 0));
+  const destinationRange = travelTimeRanges[answers.destination_mapped_area] || defaultTimeRange;
+  const destinationValidation = !hasDestinationDuration || destinationTotal === 0
+    ? ''
+    : destinationTotal < destinationRange.min
+      ? 'Too low - verify with respondent'
+      : destinationTotal > destinationRange.max
+        ? 'Too high - verify with respondent'
+        : 'OK';
+
   return {
     ...answers,
     ...(hasDuration ? {
       travel_time_total_minutes: String(total),
       travel_time_expected_range: `${range.min}-${range.max} minutes`,
       travel_time_validation: validation
+    } : {}),
+    ...(hasDestinationDuration ? {
+      final_destination_time_total_minutes: String(destinationTotal),
+      final_destination_time_expected_range: `${destinationRange.min}-${destinationRange.max} minutes`,
+      final_destination_time_validation: destinationValidation
     } : {})
   };
 }
 
+function questionAppliesToLocation(questionId, location = '') {
+  const isArrival = location.includes(' - Arrivals - ') || location.includes(' - Arrivals');
+  const isDeparture = location.includes(' - Departures - ') || location.includes(' - Departures');
+  const arrivalQuestionIds = new Set([
+    'destination_street_exact_final_place',
+    'destination_locality',
+    'destination_zone_number',
+    'destination_mapped_area',
+    'destination_division',
+    'coming_from_city_name',
+    'time_to_reach_final_destination_hours',
+    'time_to_reach_final_destination_minutes',
+    'final_destination_time_total_minutes',
+    'final_destination_time_expected_range',
+    'final_destination_time_validation'
+  ]);
+  const departureQuestionIds = new Set([
+    'origin_street_exact_pickup_place',
+    'origin_locality',
+    'origin_zone_number',
+    'origin_mapped_area',
+    'origin_division',
+    'travelling_to_city_name',
+    'time_taken_to_reach_airport_hours',
+    'time_taken_to_reach_airport_minutes',
+    'travel_time_total_minutes',
+    'travel_time_expected_range',
+    'travel_time_validation'
+  ]);
+
+  if (!isArrival && !isDeparture && (arrivalQuestionIds.has(questionId) || departureQuestionIds.has(questionId))) return false;
+  if (isArrival && departureQuestionIds.has(questionId)) return false;
+  if (isDeparture && arrivalQuestionIds.has(questionId)) return false;
+  return true;
+}
+
 function SurveyLocationInput({ locations, value, onChange }) {
+  const [draftTerminal, setDraftTerminal] = useState('');
+  const [draftMovement, setDraftMovement] = useState('');
   const airportLocations = locations
     .filter((location) => location.startsWith(airportPrefix))
     .map((location) => {
-      const [, terminal, point] = location.match(/Terminal ([12]) - (.+)$/) || [];
-      return { location, terminal: terminal ? `Terminal ${terminal}` : '', point: point || '' };
+      const [, terminal, movement, point] = location.match(/Terminal ([12]) - (Departures|Arrivals) - (.+)$/) || [];
+      if (terminal && movement && point) return { location, terminal: `Terminal ${terminal}`, movement, point };
+      const [, oldTerminal, oldPoint] = location.match(/Terminal ([12]) - (.+)$/) || [];
+      return { location, terminal: oldTerminal ? `Terminal ${oldTerminal}` : '', movement: oldPoint || '', point: oldPoint || '' };
     })
-    .filter((item) => item.terminal && item.point);
+    .filter((item) => item.terminal && item.movement && item.point);
+  const selected = airportLocations.find((item) => item.location === value);
+
+  useEffect(() => {
+    if (selected) {
+      setDraftTerminal(selected.terminal);
+      setDraftMovement(selected.movement);
+    }
+  }, [selected?.location]);
 
   if (airportLocations.length === 0) {
     return (
@@ -432,20 +515,22 @@ function SurveyLocationInput({ locations, value, onChange }) {
     );
   }
 
-  const selected = airportLocations.find((item) => item.location === value);
   const terminals = [...new Set(airportLocations.map((item) => item.terminal))];
-  const terminal = selected?.terminal || '';
-  const points = airportLocations.filter((item) => item.terminal === terminal);
+  const terminal = selected?.terminal || draftTerminal;
+  const movement = selected?.movement || draftMovement;
+  const movements = [...new Set(airportLocations.filter((item) => item.terminal === terminal).map((item) => item.movement))];
+  const points = airportLocations.filter((item) => item.terminal === terminal && item.movement === movement);
 
   return (
-    <div className="inline-grid">
+    <div className="location-grid">
       <label>
         Airport terminal
         <select
           value={terminal}
           onChange={(event) => {
-            const next = airportLocations.find((item) => item.terminal === event.target.value);
-            onChange(next?.location || '');
+            setDraftTerminal(event.target.value);
+            setDraftMovement('');
+            onChange('');
           }}
           required
         >
@@ -454,15 +539,30 @@ function SurveyLocationInput({ locations, value, onChange }) {
         </select>
       </label>
       <label>
+        Movement
+        <select
+          value={movement}
+          onChange={(event) => {
+            setDraftMovement(event.target.value);
+            onChange('');
+          }}
+          required
+          disabled={!terminal}
+        >
+          <option value="">Select movement</option>
+          {movements.map((item) => <option key={item}>{item}</option>)}
+        </select>
+      </label>
+      <label>
         Survey point
         <select
           value={selected?.point || ''}
           onChange={(event) => {
-            const next = airportLocations.find((item) => item.terminal === terminal && item.point === event.target.value);
+            const next = airportLocations.find((item) => item.terminal === terminal && item.movement === movement && item.point === event.target.value);
             onChange(next?.location || '');
           }}
           required
-          disabled={!terminal}
+          disabled={!terminal || !movement}
         >
           <option value="">Select point</option>
           {points.map((item) => <option key={item.location}>{item.point}</option>)}

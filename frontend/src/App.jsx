@@ -202,6 +202,8 @@ function SurveyForm({ projectSlug }) {
   const [gpsStatus, setGpsStatus] = useState('Not captured');
   const [status, setStatus] = useState('');
   const [saving, setSaving] = useState(false);
+  const [enumeratorStats, setEnumeratorStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(false);
 
   useEffect(() => {
     fetch(`${apiBase}/api/survey-config?project=${encodeURIComponent(projectSlug)}`)
@@ -215,6 +217,36 @@ function SurveyForm({ projectSlug }) {
       })
       .catch(() => setStatus('Unable to load survey questions.'));
   }, [projectSlug]);
+
+  useEffect(() => {
+    const enumeratorName = form.enumeratorName.trim();
+    if (enumeratorName.length < 2) {
+      setEnumeratorStats(null);
+      setStatsLoading(false);
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => {
+      loadEnumeratorStats(enumeratorName);
+    }, 350);
+    return () => window.clearTimeout(timeout);
+  }, [form.enumeratorName, projectSlug]);
+
+  async function loadEnumeratorStats(enumeratorName = form.enumeratorName.trim()) {
+    if (!enumeratorName) return;
+    setStatsLoading(true);
+    try {
+      const params = new URLSearchParams({ project: projectSlug, enumerator: enumeratorName });
+      const response = await fetch(`${apiBase}/api/public/enumerator-stats?${params.toString()}`);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Unable to load enumerator count.');
+      setEnumeratorStats(payload);
+    } catch {
+      setEnumeratorStats(null);
+    } finally {
+      setStatsLoading(false);
+    }
+  }
 
   function update(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -279,6 +311,7 @@ function SurveyForm({ projectSlug }) {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Unable to submit survey.');
       setStatus(`Submitted successfully. Response ID: ${payload.response.id}`);
+      loadEnumeratorStats(form.enumeratorName.trim());
       setForm({
         enumeratorName: form.enumeratorName,
         location: form.location,
@@ -387,6 +420,26 @@ function SurveyForm({ projectSlug }) {
               <span><MapPin size={17} /> {config.locations?.length || 0} locations</span>
               <span><ClipboardList size={17} /> {config.questions?.length || 0} questions</span>
             </div>
+          </div>
+          <div className="panel enumerator-panel">
+            <div>
+              <p className="eyebrow">Enumerator Sync</p>
+              <h2>{form.enumeratorName.trim() || 'Enter your name'}</h2>
+              <p>{statsLoading ? 'Checking cloud submissions...' : 'Saved responses in cloud database'}</p>
+            </div>
+            <div className="enumerator-counts">
+              <div>
+                <strong>{enumeratorStats?.totalSamples ?? 0}</strong>
+                <span>Total</span>
+              </div>
+              <div>
+                <strong>{enumeratorStats?.samplesToday ?? 0}</strong>
+                <span>Today</span>
+              </div>
+            </div>
+            {enumeratorStats?.lastSubmittedAt && (
+              <small>Last submitted {new Date(enumeratorStats.lastSubmittedAt).toLocaleString()}</small>
+            )}
           </div>
           <div className="panel accent-panel">
             <CheckCircle2 size={22} />

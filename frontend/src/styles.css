@@ -217,6 +217,7 @@ nav button.active {
 .form-panel,
 .login-panel,
 .quiet-panel,
+.enumerator-panel,
 .accent-panel,
 .breakdown,
 .table-panel {
@@ -470,6 +471,8 @@ textarea {
 }
 
 .quiet-panel p,
+.enumerator-panel p,
+.enumerator-panel small,
 .accent-panel p,
 .empty {
   color: #5d7175;
@@ -487,6 +490,42 @@ textarea {
   color: #334349;
   display: flex;
   gap: 9px;
+}
+
+.enumerator-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.enumerator-panel .eyebrow {
+  color: #20756a;
+}
+
+.enumerator-counts {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.enumerator-counts div {
+  background: #f2f8f6;
+  border: 1px solid #d9e9e5;
+  border-radius: 8px;
+  display: grid;
+  gap: 2px;
+  padding: 12px;
+}
+
+.enumerator-counts strong {
+  color: #173f3b;
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.enumerator-counts span {
+  color: #617579;
+  font-size: 0.85rem;
+  font-weight: 800;
 }
 
 .accent-panel {
@@ -790,6 +829,7 @@ tbody tr:hover {
 
   .form-panel,
   .quiet-panel,
+  .enumerator-panel,
   .accent-panel,
   .breakdown,
   .table-panel,

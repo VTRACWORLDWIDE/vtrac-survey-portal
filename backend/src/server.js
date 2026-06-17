@@ -149,6 +149,44 @@ app.post('/api/responses', async (req, res, next) => {
   }
 });
 
+app.get('/api/public/enumerator-stats', async (req, res, next) => {
+  try {
+    const project = await loadProjectForPublic(req.query.project);
+    if (!project) return res.status(404).json({ error: 'Survey project not found.' });
+
+    const enumeratorName = String(req.query.enumerator || '').trim();
+    if (!enumeratorName) {
+      return res.json({
+        enumeratorName: '',
+        totalSamples: 0,
+        samplesToday: 0,
+        lastSubmittedAt: null
+      });
+    }
+
+    const result = await query(
+      `SELECT
+        COUNT(*)::int AS total_samples,
+        COUNT(*) FILTER (WHERE ${localDateExpression} = (NOW() AT TIME ZONE 'Asia/Kolkata')::date)::int AS samples_today,
+        MAX(submitted_at) AS last_submitted_at
+      FROM survey_responses
+      WHERE project_id = $1
+        AND LOWER(TRIM(enumerator_name)) = LOWER(TRIM($2))`,
+      [project.id, enumeratorName]
+    );
+
+    const row = result.rows[0] || {};
+    res.json({
+      enumeratorName,
+      totalSamples: row.total_samples || 0,
+      samplesToday: row.samples_today || 0,
+      lastSubmittedAt: row.last_submitted_at
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
   try {
     const filters = buildFilters(req.query);

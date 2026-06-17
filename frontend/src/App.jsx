@@ -1146,19 +1146,40 @@ function AdminDashboard({ token, onLogout }) {
       />
 
       <div className="panel filters">
-        <label>
+        <label className="filter-search">
+          <span>Search</span>
           <Search size={16} />
-          <input placeholder="Search name, location, household" value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} />
+          <input placeholder="Name, location, household" value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} />
         </label>
-        <input placeholder="Enumerator" value={filters.enumerator} onChange={(event) => setFilters({ ...filters, enumerator: event.target.value })} />
-        <input placeholder="Location" value={filters.location} onChange={(event) => setFilters({ ...filters, location: event.target.value })} />
-        <input type="date" value={filters.dateFrom} onChange={(event) => setFilters({ ...filters, dateFrom: event.target.value })} />
-        <input type="date" value={filters.dateTo} onChange={(event) => setFilters({ ...filters, dateTo: event.target.value })} />
-        <input aria-label="Submitted from time" title="Submitted from time" type="datetime-local" value={filters.submittedFrom} onChange={(event) => setFilters({ ...filters, submittedFrom: event.target.value })} />
-        <input aria-label="Submitted to time" title="Submitted to time" type="datetime-local" value={filters.submittedTo} onChange={(event) => setFilters({ ...filters, submittedTo: event.target.value })} />
-        <button className="icon-button" onClick={loadDashboard} aria-label="Refresh dashboard"><RefreshCw size={18} /></button>
-        <button className="download" onClick={() => download('csv')}><Download size={16} /> CSV</button>
-        <button className="download" onClick={() => download('xlsx')}><Download size={16} /> Excel</button>
+        <label>
+          <span>Enumerator</span>
+          <input placeholder="Any enumerator" value={filters.enumerator} onChange={(event) => setFilters({ ...filters, enumerator: event.target.value })} />
+        </label>
+        <label>
+          <span>Location</span>
+          <input placeholder="Any location" value={filters.location} onChange={(event) => setFilters({ ...filters, location: event.target.value })} />
+        </label>
+        <label>
+          <span>Date from</span>
+          <input type="date" value={filters.dateFrom} onChange={(event) => setFilters({ ...filters, dateFrom: event.target.value })} />
+        </label>
+        <label>
+          <span>Date to</span>
+          <input type="date" value={filters.dateTo} onChange={(event) => setFilters({ ...filters, dateTo: event.target.value })} />
+        </label>
+        <label>
+          <span>Time from</span>
+          <input aria-label="Submitted from time" title="Submitted from time" type="datetime-local" value={filters.submittedFrom} onChange={(event) => setFilters({ ...filters, submittedFrom: event.target.value })} />
+        </label>
+        <label>
+          <span>Time to</span>
+          <input aria-label="Submitted to time" title="Submitted to time" type="datetime-local" value={filters.submittedTo} onChange={(event) => setFilters({ ...filters, submittedTo: event.target.value })} />
+        </label>
+        <div className="filter-actions">
+          <button className="icon-button" onClick={loadDashboard} aria-label="Refresh dashboard"><RefreshCw size={18} /></button>
+          <button className="download" onClick={() => download('csv')}><Download size={16} /> CSV</button>
+          <button className="download" onClick={() => download('xlsx')}><Download size={16} /> Excel</button>
+        </div>
       </div>
 
       <div className="metric-grid">

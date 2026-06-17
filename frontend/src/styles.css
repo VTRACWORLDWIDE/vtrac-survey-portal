@@ -735,24 +735,38 @@ textarea {
 .filters {
   align-items: end;
   display: grid;
-  gap: 10px;
-  grid-template-columns: 2fr repeat(6, minmax(130px, 1fr)) auto auto auto;
-  padding: 12px;
+  gap: 12px;
+  grid-template-columns: minmax(260px, 1.4fr) repeat(3, minmax(150px, 1fr));
+  padding: 14px;
 }
 
 .filters label {
+  display: grid;
+  gap: 6px;
   position: relative;
+}
+
+.filters label span {
+  color: #607277;
+  font-size: 0.78rem;
+  font-weight: 850;
 }
 
 .filters label svg {
   color: #6b7d82;
   left: 12px;
   position: absolute;
-  top: 39px;
+  top: 37px;
 }
 
-.filters label input {
+.filters .filter-search input {
   padding-left: 36px;
+}
+
+.filter-actions {
+  align-items: end;
+  display: flex;
+  gap: 10px;
 }
 
 .metric-grid,
@@ -958,6 +972,11 @@ tbody tr:hover {
   .filters,
   .metric-grid {
     grid-template-columns: 1fr;
+  }
+
+  .filter-actions {
+    display: grid;
+    grid-template-columns: auto 1fr 1fr;
   }
 
   label,

@@ -166,9 +166,6 @@ app.post('/api/responses', async (req, res, next) => {
     }
 
     const audioPayload = normalizeAudioData(audio);
-    if (!audioPayload) {
-      return res.status(400).json({ error: 'Audio recording is required. Please allow microphone access and submit again.' });
-    }
 
     const result = await query(
       `INSERT INTO survey_responses (
@@ -1023,7 +1020,6 @@ function flattenResponse(row, questions) {
     location: row.location || '',
     respondent_name: row.respondent_name || '',
     respondent_phone: row.respondent_phone || '',
-    audio_recording: row.audio_data ? 'Yes' : 'No'
   };
 
   for (const question of questions) {

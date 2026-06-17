@@ -8,7 +8,6 @@ import {
   FileText,
   Link2,
   MapPin,
-  Mic,
   Plus,
   RefreshCw,
   Save,
@@ -479,22 +478,9 @@ function SurveyForm({ projectSlug }) {
     event.preventDefault();
     setSaving(true);
     setStatus('');
-    if (!mediaRecorderRef.current && !mediaRecorder && !audioRef.current) {
-      const started = await startAudioRecording();
-      if (started && mediaRecorderRef.current) {
-        await new Promise((resolve) => setTimeout(resolve, 300));
-      }
-    }
-    const finalAudio = await finalizeAudioRecording();
-    if (!finalAudio) {
-      setStatus('Audio recording is mandatory. Please allow microphone access and submit again.');
-      setSaving(false);
-      return;
-    }
     const submissionPayload = {
       ...form,
       projectSlug,
-      audio: finalAudio,
       clientSubmissionId: createLocalSubmissionId()
     };
     try {
@@ -541,7 +527,7 @@ function SurveyForm({ projectSlug }) {
       </div>
 
       <div className="page-grid">
-        <form className="panel form-panel" onSubmit={submit} onClickCapture={beginRequiredAudio} onFocusCapture={beginRequiredAudio}>
+        <form className="panel form-panel" onSubmit={submit}>
           <div className="section-title">
             <div>
               <h2>Response Details</h2>
@@ -576,14 +562,6 @@ function SurveyForm({ projectSlug }) {
             </div>
           </div>
 
-          <div className="gps-row audio-row">
-            <div>
-              <strong>Audio recording required</strong>
-              <span>{audioStatus}</span>
-            </div>
-            <Mic size={18} />
-          </div>
-
           <div className="form-section">
             <div className="section-kicker"><ClipboardList size={16} /> Questions</div>
             {(config.questions || [])
@@ -602,7 +580,7 @@ function SurveyForm({ projectSlug }) {
 
           <button className="primary submit-button" disabled={saving}>
             <Send size={18} />
-            {saving ? 'Submitting...' : mediaRecorder ? 'Submit with recording' : 'Submit Survey'}
+            {saving ? 'Submitting...' : 'Submit Survey'}
           </button>
           {status && <p className={status.includes('successfully') ? 'status success' : 'status'}>{status}</p>}
         </form>
@@ -1963,7 +1941,6 @@ function RecentTable({ rows, loading, onReview }) {
               <th>Enumerator</th>
               <th>Location</th>
               <th>Respondent</th>
-              <th>Audio</th>
               <th>Review</th>
             </tr>
           </thead>
@@ -1975,7 +1952,6 @@ function RecentTable({ rows, loading, onReview }) {
                 <td>{row.enumerator_name}</td>
                 <td>{row.location}</td>
                 <td>{row.respondent_name || '-'}</td>
-                <td>{row.audio_mime_type ? 'Yes' : '-'}</td>
                 <td><button className="secondary compact-button" onClick={() => onReview(row.id)}>Review</button></td>
               </tr>
             ))}

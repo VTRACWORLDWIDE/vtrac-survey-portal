@@ -460,7 +460,13 @@ app.get('/api/client/dashboard', requireClient, async (req, res, next) => {
         filters.params
       ),
       query(
-        `SELECT COALESCE(NULLIF(split_part(location, ' - ', 2), ''), 'Other') AS terminal, COUNT(*)::int AS samples
+        `SELECT
+          CASE
+            WHEN location ILIKE '%Terminal 1%' THEN 'Terminal 1'
+            WHEN location ILIKE '%Terminal 2%' THEN 'Terminal 2'
+            ELSE 'Unassigned'
+          END AS terminal,
+          COUNT(*)::int AS samples
         FROM survey_responses
         ${filters.where}
         GROUP BY terminal
@@ -468,7 +474,13 @@ app.get('/api/client/dashboard', requireClient, async (req, res, next) => {
         filters.params
       ),
       query(
-        `SELECT COALESCE(NULLIF(split_part(location, ' - ', 3), ''), 'Other') AS movement, COUNT(*)::int AS samples
+        `SELECT
+          CASE
+            WHEN location ILIKE '%Departures%' THEN 'Departures'
+            WHEN location ILIKE '%Arrivals%' THEN 'Arrivals'
+            ELSE 'Unassigned'
+          END AS movement,
+          COUNT(*)::int AS samples
         FROM survey_responses
         ${filters.where}
         GROUP BY movement
@@ -476,7 +488,16 @@ app.get('/api/client/dashboard', requireClient, async (req, res, next) => {
         filters.params
       ),
       query(
-        `SELECT COALESCE(NULLIF(split_part(location, ' - ', 4), ''), location) AS survey_point, COUNT(*)::int AS samples
+        `SELECT
+          CASE
+            WHEN location ILIKE '%Arrival gate%' THEN 'Arrival gates'
+            WHEN location ILIKE '%Departure gate%' THEN 'Departure gates'
+            WHEN location ILIKE '%Cab/Taxi point%' THEN 'Cab/Taxi point'
+            WHEN location ILIKE '%Bus point%' OR location ILIKE '%Bus station%' THEN 'Bus point'
+            WHEN location ILIKE '%Other%' THEN 'Other'
+            ELSE 'Unassigned'
+          END AS survey_point,
+          COUNT(*)::int AS samples
         FROM survey_responses
         ${filters.where}
         GROUP BY survey_point

@@ -1172,11 +1172,12 @@ function ClientDashboard({ token, onLogout }) {
   const totalSamples = Number(data?.totals?.total_samples || 0);
   const todaySamples = Number(data?.totals?.samples_today || 0);
   const terminalRows = data?.byTerminal || [];
+  const coveredTerminalRows = terminalRows.filter((row) => ['Terminal 1', 'Terminal 2'].includes(row.terminal));
   const movementRows = data?.byMovement || [];
   const surveyPointRows = data?.bySurveyPoint || [];
   const locationRows = data?.byLocation || [];
   const dateRows = data?.byDate || [];
-  const leadingTerminal = leadingRow(terminalRows, 'terminal');
+  const leadingTerminal = leadingRow(coveredTerminalRows, 'terminal');
   const leadingMovement = leadingRow(movementRows, 'movement');
   const leadingPoint = leadingRow(surveyPointRows, 'survey_point');
   const latestDate = dateRows[0];
@@ -1231,7 +1232,7 @@ function ClientDashboard({ token, onLogout }) {
           <div className="client-chip-row">
             <span className="client-chip"><CalendarClock size={15} /> {dateScope}</span>
             <span className="client-chip"><ClipboardList size={15} /> {totalSamples} samples</span>
-            <span className="client-chip"><MapPin size={15} /> {terminalRows.length || 0} terminals covered</span>
+            <span className="client-chip"><MapPin size={15} /> {coveredTerminalRows.length || 0} terminals covered</span>
           </div>
         </div>
         <div className="client-hero-actions">
@@ -1260,7 +1261,7 @@ function ClientDashboard({ token, onLogout }) {
       <div className="client-kpi-grid">
         <ClientMetric icon={<ClipboardList size={19} />} label="Total samples" value={totalSamples} detail="All project submissions" />
         <ClientMetric icon={<CalendarClock size={19} />} label="Today" value={todaySamples} detail={todaySamples === 1 ? 'Sample collected today' : 'Samples collected today'} />
-        <ClientMetric icon={<MapPin size={19} />} label="Terminals covered" value={terminalRows.length} detail={leadingTerminal ? `Lead: ${leadingTerminal.label}` : 'Awaiting field data'} />
+        <ClientMetric icon={<MapPin size={19} />} label="Terminals covered" value={coveredTerminalRows.length} detail={leadingTerminal ? `Lead: ${leadingTerminal.label}` : 'Awaiting field data'} />
         <ClientMetric icon={<BarChart3 size={19} />} label="Survey points" value={surveyPointRows.length} detail={leadingPoint ? `Top point: ${leadingPoint.label}` : 'Awaiting field data'} />
       </div>
 

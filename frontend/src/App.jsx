@@ -266,18 +266,12 @@ function QuestionInput({ question, index, value, onChange }) {
           <textarea value={value} onChange={(event) => onChange(event.target.value)} required={question.required} />
         )}
         {question.type === 'select' && question.options.length > 8 && (
-          <>
-            <input
-              list={`${question.id}-options`}
-              value={value}
-              onChange={(event) => onChange(event.target.value)}
-              placeholder="Search and select"
-              required={question.required}
-            />
-            <datalist id={`${question.id}-options`}>
-              {question.options.map((option) => <option key={option} value={option} />)}
-            </datalist>
-          </>
+          <SearchableSelect
+            options={question.options}
+            value={value}
+            onChange={onChange}
+            required={question.required}
+          />
         )}
         {question.type === 'select' && question.options.length <= 8 && (
           <select value={value} onChange={(event) => onChange(event.target.value)} required={question.required}>
@@ -295,6 +289,47 @@ function QuestionInput({ question, index, value, onChange }) {
           <input value={value} onChange={(event) => onChange(event.target.value)} required={question.required} />
         )}
       </label>
+    </div>
+  );
+}
+
+function SearchableSelect({ options, value, onChange, required }) {
+  const [open, setOpen] = useState(false);
+  const query = value.toLowerCase();
+  const matches = options
+    .filter((option) => option.toLowerCase().includes(query))
+    .slice(0, 8);
+
+  return (
+    <div className="search-select">
+      <input
+        value={value}
+        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+        onChange={(event) => {
+          onChange(event.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        placeholder="Search and select"
+        required={required}
+      />
+      {open && matches.length > 0 && (
+        <div className="search-menu">
+          {matches.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onChange(option);
+                setOpen(false);
+              }}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

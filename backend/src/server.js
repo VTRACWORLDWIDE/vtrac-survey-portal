@@ -558,7 +558,8 @@ app.get('/api/client/dashboard', requireClient, async (req, res, next) => {
 app.get('/api/responses/export.csv', requireAdmin, async (req, res, next) => {
   try {
     const { rows, questions } = await loadExportRows(req.query);
-    const csv = stringify(rows.map((row) => flattenResponse(row, questions)), { header: true });
+    const records = rows.map((row) => flattenResponse(row, questions));
+    const csv = stringify(records, { header: true, columns: Object.keys(records[0] || defaultExportRow(questions)) });
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="vtrac-survey-responses.csv"');
     res.send(csv);

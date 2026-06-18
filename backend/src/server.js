@@ -16,6 +16,13 @@ const clientUsername = process.env.CLIENT_USERNAME || 'client';
 const clientPassword = process.env.CLIENT_PASSWORD || 'client123';
 const tokenSecret = process.env.ADMIN_TOKEN_SECRET || 'change-this-local-secret';
 const defaultProjectSlug = 'bengaluru-second-airport-feasibility';
+const defaultProjectSettings = {
+  airportLocationMode: false,
+  captureGps: false,
+  captureAudio: false,
+  showRespondentPhone: true,
+  showHouseholdId: false
+};
 
 const defaultLocations = ['Kadiri', 'Anantapur', 'Hindupur', 'Dharmavaram', 'Gorantla', 'Other'];
 const defaultQuestions = [
@@ -145,11 +152,18 @@ app.post('/api/responses', async (req, res, next) => {
       householdId,
       answers = {},
       audio,
+      latitude,
+      longitude,
+      gpsAccuracy,
+      surveyStartedAt,
+      surveyEndedAt,
+      surveyDurationSeconds,
       clientSubmissionId
     } = req.body;
 
     const project = await loadProjectForPublic(projectSlug || projectId);
     if (!project) return res.status(404).json({ error: 'Survey project not found.' });
+    const settings = project.settings || defaultProjectSettings;
 
     if (!enumeratorName?.trim() || !location?.trim()) {
       return res.status(400).json({ error: 'Enumerator name and location are required.' });
@@ -165,7 +179,15 @@ app.post('/api/responses', async (req, res, next) => {
       return res.status(400).json({ error: `Missing required question: ${missingQuestion.label}` });
     }
 
-    const audioPayload = normalizeAudioData(audio);
+    const audioPayload = settings.captureAudio ? normalizeAudioData(audio) : null;
+    const startedAt = parseOptionalDate(surveyStartedAt);
+    const endedAt = parseOptionalDate(surveyEndedAt) || new Date();
+    const calculatedDuration = startedAt && endedAt
+      ? Math.max(0, Math.round((endedAt.getTime() - startedAt.getTime()) / 1000))
+      : null;
+    const durationSeconds = Number.isFinite(Number(surveyDurationSeconds))
+      ? Math.max(0, Math.round(Number(surveyDurationSeconds)))
+      : calculatedDuration;
 
     const result = await query(
       `INSERT INTO survey_responses (
@@ -182,9 +204,12 @@ app.post('/api/responses', async (req, res, next) => {
         audio_data,
         audio_mime_type,
         audio_size,
+        survey_started_at,
+        survey_ended_at,
+        survey_duration_seconds,
         client_submission_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       ON CONFLICT (client_submission_id)
       DO UPDATE SET client_submission_id = EXCLUDED.client_submission_id
       RETURNING id, submitted_at`,
@@ -193,15 +218,18 @@ app.post('/api/responses', async (req, res, next) => {
         enumeratorName.trim(),
         location.trim(),
         respondentName?.trim() || null,
-        respondentPhone?.trim() || null,
-        householdId?.trim() || null,
+        settings.showRespondentPhone ? respondentPhone?.trim() || null : null,
+        settings.showHouseholdId ? householdId?.trim() || null : null,
         answers,
-        null,
-        null,
-        null,
+        settings.captureGps ? normalizeOptionalNumber(latitude) : null,
+        settings.captureGps ? normalizeOptionalNumber(longitude) : null,
+        settings.captureGps ? normalizeOptionalNumber(gpsAccuracy) : null,
         audioPayload?.data || null,
         audioPayload?.mimeType || null,
         audioPayload?.size || null,
+        startedAt,
+        endedAt,
+        durationSeconds,
         clientSubmissionId || null
       ]
     );
@@ -589,6 +617,7 @@ async function ensureDatabase() {
       slug TEXT NOT NULL UNIQUE,
       description TEXT,
       locations TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+      settings JSONB NOT NULL DEFAULT '{}'::jsonb,
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -622,6 +651,9 @@ async function ensureDatabase() {
       audio_data TEXT,
       audio_mime_type TEXT,
       audio_size INT,
+      survey_started_at TIMESTAMPTZ,
+      survey_ended_at TIMESTAMPTZ,
+      survey_duration_seconds INT,
       client_submission_id TEXT UNIQUE,
       submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -644,10 +676,14 @@ async function ensureDatabase() {
       PRIMARY KEY (client_id, project_id)
     );
 
+    ALTER TABLE survey_projects ADD COLUMN IF NOT EXISTS settings JSONB NOT NULL DEFAULT '{}'::jsonb;
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS project_id BIGINT REFERENCES survey_projects(id);
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS audio_data TEXT;
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS audio_mime_type TEXT;
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS audio_size INT;
+    ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS survey_started_at TIMESTAMPTZ;
+    ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS survey_ended_at TIMESTAMPTZ;
+    ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS survey_duration_seconds INT;
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS client_submission_id TEXT UNIQUE;
 
     CREATE INDEX IF NOT EXISTS idx_survey_responses_project ON survey_responses (project_id);
@@ -888,6 +924,7 @@ async function saveProject(payload) {
   const slug = slugify(payload.slug || payload.name);
   const locations = normalizeLines(payload.locations);
   const questions = normalizeQuestions(payload.questions);
+  const settings = normalizeProjectSettings(payload.settings, slug);
 
   if (!name || !slug) {
     const error = new Error('Project name is required.');
@@ -908,16 +945,16 @@ async function saveProject(payload) {
   const result = payload.id
     ? await query(
       `UPDATE survey_projects
-      SET name = $1, slug = $2, description = $3, locations = $4, is_active = $5, updated_at = NOW()
-      WHERE id = $6
+      SET name = $1, slug = $2, description = $3, locations = $4, settings = $5, is_active = $6, updated_at = NOW()
+      WHERE id = $7
       RETURNING *`,
-      [name, slug, payload.description?.trim() || null, locations, payload.isActive !== false, payload.id]
+      [name, slug, payload.description?.trim() || null, locations, JSON.stringify(settings), payload.isActive !== false, payload.id]
     )
     : await query(
-      `INSERT INTO survey_projects (name, slug, description, locations, is_active)
-      VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO survey_projects (name, slug, description, locations, settings, is_active)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *`,
-      [name, slug, payload.description?.trim() || null, locations, payload.isActive !== false]
+      [name, slug, payload.description?.trim() || null, locations, JSON.stringify(settings), payload.isActive !== false]
     );
 
   const project = result.rows[0];
@@ -1036,11 +1073,22 @@ async function loadExportRows(queryParams) {
 function flattenResponse(row, questions) {
   const base = {
     id: row.id || '',
-    submitted_at: formatTimestamp(row.submitted_at),
+    submitted_at: formatExportTimestamp(row.submitted_at),
+    submitted_at_iso: formatTimestamp(row.submitted_at),
+    survey_started_at: formatExportTimestamp(row.survey_started_at),
+    survey_ended_at: formatExportTimestamp(row.survey_ended_at),
+    survey_duration_seconds: row.survey_duration_seconds ?? '',
+    survey_duration: formatDuration(row.survey_duration_seconds),
     enumerator_name: row.enumerator_name || '',
     location: row.location || '',
     respondent_name: row.respondent_name || '',
     respondent_phone: row.respondent_phone || '',
+    household_id: row.household_id || '',
+    latitude: row.latitude ?? '',
+    longitude: row.longitude ?? '',
+    gps_accuracy: row.gps_accuracy ?? '',
+    audio_size_bytes: row.audio_size ?? '',
+    audio_mime_type: row.audio_mime_type || '',
   };
 
   for (const question of questions) {
@@ -1064,6 +1112,9 @@ function normalizeResponse(row) {
     latitude: row.latitude,
     longitude: row.longitude,
     gpsAccuracy: row.gps_accuracy,
+    surveyStartedAt: formatTimestamp(row.survey_started_at),
+    surveyEndedAt: formatTimestamp(row.survey_ended_at),
+    surveyDurationSeconds: row.survey_duration_seconds ?? null,
     hasAudio: Boolean(row.audio_data),
     audioMimeType: row.audio_mime_type || '',
     submittedAt: formatTimestamp(row.submitted_at)
@@ -1230,10 +1281,31 @@ function normalizeProject(project) {
     slug: project.slug,
     description: project.description || '',
     locations: project.locations || [],
+    settings: normalizeProjectSettings(project.settings, project.slug),
     isActive: project.is_active,
     responseCount: project.response_count || 0,
     publicUrl: `/p/${project.slug}`
   };
+}
+
+function normalizeProjectSettings(settings = {}, slug = '') {
+  const parsed = typeof settings === 'string' ? safeJsonParse(settings, {}) : settings || {};
+  return {
+    ...defaultProjectSettings,
+    airportLocationMode: parsed.airportLocationMode === undefined ? slug === defaultProjectSlug : Boolean(parsed.airportLocationMode),
+    captureGps: Boolean(parsed.captureGps),
+    captureAudio: Boolean(parsed.captureAudio),
+    showRespondentPhone: parsed.showRespondentPhone !== false,
+    showHouseholdId: Boolean(parsed.showHouseholdId)
+  };
+}
+
+function safeJsonParse(value, fallback) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
 }
 
 function normalizeQuestion(question) {
@@ -1270,6 +1342,17 @@ function normalizeLines(value) {
     .filter(Boolean);
 }
 
+function parseOptionalDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function normalizeOptionalNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
 function slugify(value) {
   return String(value || '')
     .toLowerCase()
@@ -1283,4 +1366,35 @@ function formatTimestamp(value) {
   if (!value) return '';
   if (value instanceof Date) return value.toISOString();
   return String(value);
+}
+
+function formatExportTimestamp(value) {
+  if (!value) return '';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).formatToParts(date);
+  const get = (type) => parts.find((part) => part.type === type)?.value || '';
+  return `${get('day')}/${get('month')}/${get('year')} ${get('hour')}:${get('minute')}:${get('second')}`;
+}
+
+function formatDuration(value) {
+  const total = Number(value);
+  if (!Number.isFinite(total)) return '';
+  const seconds = Math.max(0, Math.round(total));
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (hours > 0) return `${hours}h ${remainingMinutes}m ${remainingSeconds}s`;
+  if (remainingMinutes > 0) return `${remainingMinutes}m ${remainingSeconds}s`;
+  return `${remainingSeconds}s`;
 }

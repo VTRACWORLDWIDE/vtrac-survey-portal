@@ -956,6 +956,45 @@ textarea {
   gap: 12px;
 }
 
+.component-settings {
+  background: #f8fbfa;
+  border: 1px solid #dfe9e6;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.component-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.component-toggle {
+  align-items: flex-start;
+  background: #ffffff;
+  border: 1px solid #dfe9e6;
+  border-radius: 8px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.component-toggle span {
+  align-items: flex-start;
+  display: grid;
+  gap: 3px;
+}
+
+.component-toggle strong {
+  color: #21363b;
+  font-size: 0.92rem;
+}
+
+.component-toggle small {
+  color: #617579;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
 .question-card {
   background: #f8fbfa;
   border: 1px solid #dfe9e6;
@@ -1261,6 +1300,7 @@ tbody tr:hover {
 
   .inline-grid,
   .location-grid,
+  .component-grid,
   .filters,
   .metric-grid,
   .client-kpi-grid,

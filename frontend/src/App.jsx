@@ -22,6 +22,13 @@ const apiBase = import.meta.env.VITE_API_BASE || '';
 const blankQuestion = { id: '', label: '', type: 'text', options: '', required: false };
 const airportPrefix = 'Kempegowda International Airport - ';
 const defaultProjectSlug = 'bengaluru-second-airport-feasibility';
+const defaultProjectSettings = {
+  airportLocationMode: false,
+  captureGps: false,
+  captureAudio: false,
+  showRespondentPhone: true,
+  showHouseholdId: false
+};
 const airportTerminals = ['Terminal 1', 'Terminal 2'];
 const airportMovements = ['Departures', 'Arrivals'];
 const airportSurveyPoints = {
@@ -203,6 +210,7 @@ export default function App() {
 
 function SurveyForm({ projectSlug }) {
   const [config, setConfig] = useState({ locations: [], questions: [] });
+  const settings = { ...defaultProjectSettings, ...(config.settings || {}) };
   const [form, setForm] = useState({
     enumeratorName: '',
     location: '',
@@ -222,6 +230,10 @@ function SurveyForm({ projectSlug }) {
   const mediaRecorderRef = useRef(null);
   const audioStartAttemptedRef = useRef(false);
   const audioStartPromiseRef = useRef(null);
+  const [surveyStartedAt, setSurveyStartedAt] = useState(() => new Date().toISOString());
+  const [gpsPosition, setGpsPosition] = useState(null);
+  const [gpsStatus, setGpsStatus] = useState('Not captured');
+  const gpsAttemptedRef = useRef(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [syncStatus, setSyncStatus] = useState('');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -285,11 +297,18 @@ function SurveyForm({ projectSlug }) {
     }
   }
 
+  function activateCaptureModules() {
+    if (settings.captureAudio) beginRequiredAudio();
+    if (settings.captureGps) requestGpsCapture();
+  }
+
   function update(field, value) {
+    activateCaptureModules();
     setForm((current) => ({ ...current, [field]: value }));
   }
 
   function updateAnswer(questionId, value) {
+    activateCaptureModules();
     const originMapping = questionId === 'origin_locality' ? originLocalityMap[value] : null;
     const destinationMapping = questionId === 'destination_locality' ? originLocalityMap[value] : null;
     setForm((current) => ({
@@ -375,6 +394,31 @@ function SurveyForm({ projectSlug }) {
     }
   }
 
+  function requestGpsCapture() {
+    if (!settings.captureGps || gpsAttemptedRef.current || gpsPosition) return;
+    gpsAttemptedRef.current = true;
+    if (!navigator.geolocation) {
+      setGpsStatus('GPS is not supported on this browser.');
+      return;
+    }
+    setGpsStatus('Capturing GPS...');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const nextPosition = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          gpsAccuracy: position.coords.accuracy
+        };
+        setGpsPosition(nextPosition);
+        setGpsStatus(`Captured ${nextPosition.latitude.toFixed(6)}, ${nextPosition.longitude.toFixed(6)}`);
+      },
+      () => {
+        setGpsStatus('GPS not available. Submit will continue without GPS.');
+      },
+      { enableHighAccuracy: false, maximumAge: 600000, timeout: 8000 }
+    );
+  }
+
   function finalizeAudioRecording() {
     const activeRecorder = mediaRecorderRef.current || mediaRecorder;
     if (!activeRecorder || activeRecorder.state !== 'recording') return Promise.resolve(audioRef.current || audio);
@@ -400,6 +444,10 @@ function SurveyForm({ projectSlug }) {
   }
 
   function resetAfterSubmit() {
+    setSurveyStartedAt(new Date().toISOString());
+    gpsAttemptedRef.current = false;
+    setGpsPosition(null);
+    setGpsStatus('Not captured');
     setForm({
       enumeratorName: form.enumeratorName,
       location: form.location,
@@ -484,9 +532,20 @@ function SurveyForm({ projectSlug }) {
     event.preventDefault();
     setSaving(true);
     setStatus('');
+    const surveyEndedAt = new Date().toISOString();
+    const surveyDurationSeconds = Math.max(0, Math.round((new Date(surveyEndedAt).getTime() - new Date(surveyStartedAt).getTime()) / 1000));
+    let finalAudio = audioRef.current || audio;
+    if (settings.captureAudio) {
+      finalAudio = await finalizeAudioRecording();
+    }
     const submissionPayload = {
       ...form,
       projectSlug,
+      ...gpsPosition,
+      audio: settings.captureAudio ? finalAudio : null,
+      surveyStartedAt,
+      surveyEndedAt,
+      surveyDurationSeconds,
       clientSubmissionId: createLocalSubmissionId()
     };
     try {
@@ -551,7 +610,7 @@ function SurveyForm({ projectSlug }) {
               locations={config.locations || []}
               value={form.location}
               onChange={(value) => update('location', value)}
-              airportMode={projectSlug === defaultProjectSlug}
+              airportMode={settings.airportLocationMode}
             />
           </div>
 
@@ -562,10 +621,18 @@ function SurveyForm({ projectSlug }) {
                 Respondent name
                 <input value={form.respondentName} onChange={(event) => update('respondentName', event.target.value)} />
               </label>
-              <label>
-                Phone
-                <input inputMode="tel" value={form.respondentPhone} onChange={(event) => update('respondentPhone', event.target.value)} />
-              </label>
+              {settings.showRespondentPhone && (
+                <label>
+                  Phone
+                  <input inputMode="tel" value={form.respondentPhone} onChange={(event) => update('respondentPhone', event.target.value)} />
+                </label>
+              )}
+              {settings.showHouseholdId && (
+                <label>
+                  Household ID
+                  <input value={form.householdId} onChange={(event) => update('householdId', event.target.value)} />
+                </label>
+              )}
             </div>
           </div>
 
@@ -641,6 +708,15 @@ function SurveyForm({ projectSlug }) {
             <p>{syncStatus || 'Pending responses sync automatically when online.'}</p>
             <button className="secondary" onClick={syncPendingSubmissions} type="button"><RefreshCw size={18} /> Sync now</button>
           </div>
+          {(settings.captureGps || settings.captureAudio) && (
+            <div className="panel quiet-panel">
+              <h2>Capture Modules</h2>
+              <div className="info-list">
+                {settings.captureGps && <span><MapPin size={17} /> GPS: {gpsStatus}</span>}
+                {settings.captureAudio && <span><ShieldCheck size={17} /> Audio: {audioStatus}</span>}
+              </div>
+            </div>
+          )}
         </aside>
       </div>
     </section>
@@ -1464,6 +1540,7 @@ function AdminDashboard({ token, onLogout }) {
       slug: '',
       description: '',
       locations: 'Kadiri\nAnantapur\nOther',
+      settings: { ...defaultProjectSettings },
       isActive: true,
       questions: [{ ...blankQuestion, label: 'Sample question', type: 'text', required: true }]
     });
@@ -1473,6 +1550,7 @@ function AdminDashboard({ token, onLogout }) {
     setEditing({
       ...project,
       locations: project.locations.join('\n'),
+      settings: { ...defaultProjectSettings, ...(project.settings || {}) },
       questions: project.questions.map((question) => ({
         ...question,
         options: (question.options || []).join('\n')
@@ -1693,8 +1771,14 @@ function AdminDashboard({ token, onLogout }) {
 }
 
 function ProjectEditor({ project, onChange, onCancel, onSave }) {
+  const settings = { ...defaultProjectSettings, ...(project.settings || {}) };
+
   function update(field, value) {
     onChange({ ...project, [field]: value });
+  }
+
+  function updateSetting(field, value) {
+    onChange({ ...project, settings: { ...settings, [field]: value } });
   }
 
   function updateQuestion(index, field, value) {
@@ -1742,6 +1826,47 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
         Locations
         <textarea value={project.locations} onChange={(event) => update('locations', event.target.value)} />
       </label>
+
+      <div className="form-section component-settings">
+        <div className="section-kicker"><ShieldCheck size={16} /> Survey components</div>
+        <div className="component-grid">
+          <label className="check-row component-toggle">
+            <input type="checkbox" checked={settings.airportLocationMode} onChange={(event) => updateSetting('airportLocationMode', event.target.checked)} />
+            <span>
+              <strong>Airport terminal location flow</strong>
+              <small>Terminal, movement, and survey point branching.</small>
+            </span>
+          </label>
+          <label className="check-row component-toggle">
+            <input type="checkbox" checked={settings.captureGps} onChange={(event) => updateSetting('captureGps', event.target.checked)} />
+            <span>
+              <strong>GPS coordinates</strong>
+              <small>Capture latitude, longitude, and accuracy when browser permission is allowed.</small>
+            </span>
+          </label>
+          <label className="check-row component-toggle">
+            <input type="checkbox" checked={settings.captureAudio} onChange={(event) => updateSetting('captureAudio', event.target.checked)} />
+            <span>
+              <strong>Audio recording</strong>
+              <small>Attach a compressed browser audio recording to each response.</small>
+            </span>
+          </label>
+          <label className="check-row component-toggle">
+            <input type="checkbox" checked={settings.showRespondentPhone} onChange={(event) => updateSetting('showRespondentPhone', event.target.checked)} />
+            <span>
+              <strong>Respondent phone field</strong>
+              <small>Show or hide phone collection for this project.</small>
+            </span>
+          </label>
+          <label className="check-row component-toggle">
+            <input type="checkbox" checked={settings.showHouseholdId} onChange={(event) => updateSetting('showHouseholdId', event.target.checked)} />
+            <span>
+              <strong>Household ID field</strong>
+              <small>Use only for household surveys where an ID is required.</small>
+            </span>
+          </label>
+        </div>
+      </div>
 
       <div className="question-list">
         {project.questions.map((question, index) => (

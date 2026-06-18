@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS survey_projects (
   slug TEXT NOT NULL UNIQUE,
   description TEXT,
   locations TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  settings JSONB NOT NULL DEFAULT '{}'::jsonb,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -34,6 +35,9 @@ CREATE TABLE IF NOT EXISTS survey_responses (
   latitude NUMERIC(10, 7),
   longitude NUMERIC(10, 7),
   gps_accuracy NUMERIC(10, 2),
+  survey_started_at TIMESTAMPTZ,
+  survey_ended_at TIMESTAMPTZ,
+  survey_duration_seconds INT,
   submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -52,4 +56,3 @@ CREATE INDEX IF NOT EXISTS idx_survey_responses_location
 
 CREATE INDEX IF NOT EXISTS idx_survey_responses_answers
   ON survey_responses USING GIN (answers);
-

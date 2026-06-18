@@ -1,0 +1,18 @@
+{
+  "name": "VTRAC Survey Portal",
+  "short_name": "VTRAC Survey",
+  "description": "VTRAC field survey collection portal with offline queue support.",
+  "start_url": "/p/bengaluru-second-airport-feasibility",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f7f6",
+  "theme_color": "#173f3b",
+  "icons": [
+    {
+      "src": "/vtrac-logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}

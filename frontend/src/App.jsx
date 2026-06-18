@@ -243,9 +243,18 @@ function SurveyForm({ projectSlug }) {
       .then((response) => response.json())
       .then((payload) => {
         setConfig(payload);
+        if (!payload.error) saveCachedSurveyConfig(projectSlug, payload);
         if (payload.error) setStatus(payload.error);
       })
-      .catch(() => setStatus('Unable to load survey questions.'));
+      .catch(() => {
+        const cachedConfig = loadCachedSurveyConfig(projectSlug);
+        if (cachedConfig) {
+          setConfig(cachedConfig);
+          setStatus('Offline mode: using the last saved questionnaire. Submissions will sync when internet is back.');
+          return;
+        }
+        setStatus('Unable to load survey questions. Open this survey once while online before using it offline.');
+      });
   }, [projectSlug]);
 
   useEffect(() => {
@@ -834,6 +843,31 @@ function formatBytes(bytes) {
 function createLocalSubmissionId() {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID();
   return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function surveyConfigCacheKey(projectSlug) {
+  return `vtrac-survey-config:${projectSlug}`;
+}
+
+function saveCachedSurveyConfig(projectSlug, config) {
+  try {
+    localStorage.setItem(surveyConfigCacheKey(projectSlug), JSON.stringify({
+      savedAt: new Date().toISOString(),
+      config
+    }));
+  } catch {
+    // Local storage can be unavailable in private browsing.
+  }
+}
+
+function loadCachedSurveyConfig(projectSlug) {
+  try {
+    const raw = localStorage.getItem(surveyConfigCacheKey(projectSlug));
+    if (!raw) return null;
+    return JSON.parse(raw)?.config || null;
+  } catch {
+    return null;
+  }
 }
 
 function openOfflineDb() {

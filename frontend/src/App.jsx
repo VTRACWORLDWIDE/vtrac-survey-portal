@@ -2854,7 +2854,7 @@ function RecentTable({ rows, project, loading, onReview }) {
     <div className="data-grid-shell">
       <div className="data-grid-toolbar">
         <button className="field-toggle" onClick={() => setShowFields(!showFields)}>
-          <Eye size={18} /> {showFields ? 'hide fields' : 'show fields'}
+          <Eye size={18} /> hide fields
         </button>
         <div className="data-grid-tools">
           <span>{loading ? 'Refreshing...' : `${filteredRows.length} results`}</span>

@@ -863,10 +863,14 @@ textarea {
   border-left: 3px solid transparent;
   color: #5f6c85;
   cursor: pointer;
+  display: -webkit-box;
   font-size: 0.82rem;
   font-weight: 750;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   line-height: 1.35;
-  min-height: 34px;
+  max-height: 54px;
+  min-height: 42px;
   overflow: hidden;
   padding: 7px 8px;
   text-align: left;

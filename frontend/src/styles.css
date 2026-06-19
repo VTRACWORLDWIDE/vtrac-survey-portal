@@ -2118,36 +2118,35 @@ textarea {
   background: #f7fbfc;
   border: 1px solid #dfe7ef;
   border-radius: 8px;
+  min-height: 520px;
   overflow: hidden;
+  position: relative;
 }
 
-.coordinate-map-canvas svg {
-  display: block;
+.osm-map {
+  height: min(62vh, 620px);
+  min-height: 520px;
   width: 100%;
 }
 
-.map-city-shape {
-  fill: rgba(10, 167, 164, 0.1);
-  stroke: rgba(19, 62, 152, 0.2);
-  stroke-width: 2;
+.coordinate-map-canvas .leaflet-container {
+  color: #1f2f52;
+  font-family: inherit;
 }
 
-.map-grid-line {
-  stroke: rgba(100, 112, 139, 0.18);
-  stroke-dasharray: 6 8;
+.coordinate-map-canvas .leaflet-control-attribution {
+  font-size: 0.68rem;
 }
 
-.map-label {
-  fill: rgba(31, 47, 82, 0.56);
-  font-size: 18px;
-  font-weight: 850;
+.coordinate-map-canvas .leaflet-popup-content {
+  color: #30394d;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  margin: 10px 12px;
 }
 
-.map-point {
-  fill: #0aa7a4;
-  fill-opacity: 0.68;
-  stroke: #ffffff;
-  stroke-width: 1.4;
+.coordinate-map-canvas .leaflet-popup-content strong {
+  color: #133e98;
 }
 
 .coordinate-map-foot {
@@ -2165,6 +2164,14 @@ textarea {
 
 .map-empty {
   min-height: 240px;
+}
+
+.map-empty-overlay {
+  background: rgba(255, 255, 255, 0.92);
+  inset: 0;
+  min-height: 0;
+  position: absolute;
+  z-index: 500;
 }
 
 .map-panel {

@@ -281,7 +281,7 @@ app.get('/api/public/enumerator-stats', async (req, res, next) => {
 app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
   try {
     const filters = buildFilters(req.query);
-    const [totals, byDate, byEnumerator, byLocation, recent] = await Promise.all([
+    const [totals, byDate, byEnumerator, byLocation, recent, reportRows] = await Promise.all([
       query(
         `SELECT
           COUNT(*)::int AS total_samples,
@@ -323,6 +323,14 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
         ORDER BY submitted_at DESC
         LIMIT 100`,
         filters.params
+      ),
+      query(
+        `SELECT id, enumerator_name, location, submitted_at, answers
+        FROM survey_responses
+        ${filters.where}
+        ORDER BY submitted_at DESC
+        LIMIT 2000`,
+        filters.params
       )
     ]);
 
@@ -331,7 +339,8 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
       byDate: byDate.rows,
       byEnumerator: byEnumerator.rows,
       byLocation: byLocation.rows,
-      recent: recent.rows
+      recent: recent.rows,
+      reportRows: reportRows.rows
     });
   } catch (error) {
     next(error);

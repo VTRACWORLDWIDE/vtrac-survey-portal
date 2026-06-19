@@ -1629,7 +1629,222 @@ textarea {
   border-radius: 8px;
   color: #5d4322;
   font-weight: 750;
-  padding: 16px 18px;
+  padding: 12px 14px;
+}
+
+.auto-report {
+  display: grid;
+  gap: 12px;
+}
+
+.report-hero {
+  align-items: stretch;
+  background:
+    linear-gradient(135deg, rgba(19, 62, 152, 0.96), rgba(10, 167, 164, 0.9)),
+    #133e98;
+  border-radius: 8px;
+  color: #ffffff;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.72fr);
+  padding: 18px;
+}
+
+.report-hero span {
+  color: rgba(255, 255, 255, 0.78);
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.report-hero h2 {
+  font-size: 1.18rem;
+  line-height: 1.25;
+  margin: 6px 0;
+}
+
+.report-hero p {
+  color: rgba(255, 255, 255, 0.82);
+  margin: 0;
+  max-width: 760px;
+}
+
+.report-kpi-strip {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.report-kpi {
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.report-kpi span {
+  letter-spacing: 0;
+}
+
+.report-kpi strong {
+  color: #ffffff;
+  font-size: 1.35rem;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-kpi.compact strong {
+  font-size: 0.9rem;
+  line-height: 1.25;
+}
+
+.report-dashboard-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.question-report-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.question-report-card {
+  background: #ffffff;
+  border: 1px solid #dfe7ef;
+  border-left: 4px solid #0aa7a4;
+  border-radius: 8px;
+  box-shadow: 0 12px 24px rgba(31, 47, 82, 0.06);
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.question-report-head {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.question-report-head span {
+  color: #0a7777;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.question-report-head h3 {
+  color: #1f2f52;
+  font-size: 0.98rem;
+  line-height: 1.28;
+  margin: 3px 0;
+}
+
+.question-report-head p {
+  color: #64708b;
+  font-size: 0.78rem;
+  margin: 0;
+}
+
+.question-report-head > strong {
+  align-items: center;
+  background: #e9f8f7;
+  border-radius: 999px;
+  color: #0a7777;
+  display: inline-flex;
+  font-size: 0.86rem;
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.report-mini-bars {
+  display: grid;
+  gap: 8px;
+}
+
+.report-mini-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(92px, 0.7fr) minmax(100px, 1fr) 52px;
+}
+
+.report-mini-row span,
+.report-frequency-table td:first-child {
+  color: #30394d;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-mini-row div {
+  background: #eef3f8;
+  border-radius: 999px;
+  height: 9px;
+  overflow: hidden;
+}
+
+.report-mini-row i {
+  background: linear-gradient(90deg, #0aa7a4, #133e98);
+  display: block;
+  height: 100%;
+}
+
+.report-mini-row strong {
+  color: #52617c;
+  font-size: 0.78rem;
+  text-align: right;
+}
+
+.report-frequency-table {
+  overflow-x: auto;
+}
+
+.report-frequency-table table {
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  min-width: 100%;
+}
+
+.report-frequency-table th,
+.report-frequency-table td {
+  border-top: 1px solid #e2e8f0;
+  padding: 7px 6px;
+  text-align: left;
+}
+
+.report-frequency-table th {
+  color: #68758e;
+  font-weight: 900;
+}
+
+.numeric-stat-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.numeric-stat-grid .report-kpi {
+  background: #f6fafb;
+  border-color: #dfe7ef;
+}
+
+.numeric-stat-grid .report-kpi span {
+  color: #64708b;
+}
+
+.numeric-stat-grid .report-kpi strong {
+  color: #1f2f52;
+  font-size: 1rem;
 }
 
 .empty-state-panel {
@@ -2324,7 +2539,10 @@ tbody tr:hover {
   }
 
   .page-grid,
-  .chart-grid {
+  .chart-grid,
+  .report-hero,
+  .report-dashboard-grid,
+  .question-report-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2349,7 +2567,8 @@ tbody tr:hover {
 
   .metric-grid,
   .client-kpi-grid,
-  .client-insight-grid {
+  .client-insight-grid,
+  .numeric-stat-grid {
     grid-template-columns: 1fr 1fr;
   }
 

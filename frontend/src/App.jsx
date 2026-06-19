@@ -2169,12 +2169,7 @@ function AdminDashboard({ token, onLogout }) {
 
                     {projectDataTab === 'reports' && (
                       <div className="reports-workspace">
-                        <div className="report-warning">Automated report based on submitted data. Review and clean records before using figures for final client reports.</div>
-                        <div className="chart-grid admin-chart-grid">
-                          <Breakdown title="Samples by date" rows={data?.byDate || []} labelKey="date" valueKey="samples" />
-                          <Breakdown title="Samples by location" rows={data?.byLocation || []} labelKey="location" valueKey="samples" />
-                          <Breakdown title="Samples by enumerator" rows={data?.byEnumerator || []} labelKey="enumerator_name" valueKey="samples" />
-                        </div>
+                        <ProjectReport project={selectedProject} data={data} />
                       </div>
                     )}
 
@@ -3015,6 +3010,223 @@ function ClientInsight({ title, value, meta }) {
       <p>{meta}</p>
     </div>
   );
+}
+
+function ProjectReport({ project, data }) {
+  const reportRows = data?.reportRows || data?.recent || [];
+  const questionReports = useMemo(
+    () => buildQuestionReports(project?.questions || [], reportRows),
+    [project?.questions, reportRows]
+  );
+  const totalResponses = reportRows.length;
+  const totalQuestions = (project?.questions || []).filter((question) => !hiddenQuestionIds.has(question.id)).length;
+  const averageCompletion = questionReports.length
+    ? Math.round(questionReports.reduce((sum, report) => sum + report.answerRate, 0) / questionReports.length)
+    : 0;
+  const strongestSignal = questionReports.find((report) => report.topValue);
+
+  return (
+    <div className="auto-report">
+      <div className="report-warning">
+        Automated report based on submitted survey data. Review and clean records before using final client figures.
+      </div>
+
+      <div className="report-hero">
+        <div>
+          <span>Generated analytics report</span>
+          <h2>{project?.name || 'Project report'}</h2>
+          <p>
+            Kobo-style question summaries with VTRAC infographics, frequencies, percentages,
+            response coverage, and numeric statistics.
+          </p>
+        </div>
+        <div className="report-kpi-strip">
+          <ReportKpi label="Responses analyzed" value={totalResponses} />
+          <ReportKpi label="Questions" value={totalQuestions} />
+          <ReportKpi label="Avg. answered" value={`${averageCompletion}%`} />
+          <ReportKpi label="Top signal" value={strongestSignal?.topValue || '-'} compact />
+        </div>
+      </div>
+
+      <div className="report-dashboard-grid">
+        <Breakdown title="Samples by date" rows={data?.byDate || []} labelKey="date" valueKey="samples" />
+        <Breakdown title="Samples by location" rows={data?.byLocation || []} labelKey="location" valueKey="samples" />
+        <Breakdown title="Samples by enumerator" rows={data?.byEnumerator || []} labelKey="enumerator_name" valueKey="samples" />
+      </div>
+
+      <div className="question-report-grid">
+        {questionReports.length === 0 && (
+          <div className="panel empty-state-panel">
+            <BarChart3 size={34} />
+            <h2>No report data yet</h2>
+            <p>Question-level summaries will appear after responses are submitted.</p>
+          </div>
+        )}
+        {questionReports.map((report, index) => (
+          <QuestionReportCard key={report.id} report={report} index={index} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ReportKpi({ label, value, compact = false }) {
+  return (
+    <div className={`report-kpi ${compact ? 'compact' : ''}`.trim()}>
+      <span>{label}</span>
+      <strong title={String(value)}>{value}</strong>
+    </div>
+  );
+}
+
+function QuestionReportCard({ report, index }) {
+  const max = Math.max(...report.rows.map((row) => row.frequency), 1);
+  return (
+    <div className="question-report-card">
+      <div className="question-report-head">
+        <div>
+          <span>{index + 1}. {report.typeLabel}</span>
+          <h3>{report.label}</h3>
+          <p>
+            {report.answered} out of {report.total} respondents answered this question.
+            {' '}({report.missing} without data)
+          </p>
+        </div>
+        <strong>{report.answerRate}%</strong>
+      </div>
+
+      {report.kind === 'number' ? (
+        <div className="numeric-stat-grid">
+          <ReportKpi label="Mean" value={report.stats.mean} />
+          <ReportKpi label="Median" value={report.stats.median} />
+          <ReportKpi label="Mode" value={report.stats.mode} />
+          <ReportKpi label="Std. dev." value={report.stats.stdDev} />
+        </div>
+      ) : (
+        <>
+          <div className="report-mini-bars">
+            {report.rows.slice(0, 6).map((row) => (
+              <div className="report-mini-row" key={row.value}>
+                <span title={row.value}>{row.value}</span>
+                <div><i style={{ width: `${(row.frequency / max) * 100}%` }} /></div>
+                <strong>{row.percentage}%</strong>
+              </div>
+            ))}
+          </div>
+          <div className="report-frequency-table">
+            <table>
+              <thead>
+                <tr><th>Value</th><th>Frequency</th><th>Percentage</th></tr>
+              </thead>
+              <tbody>
+                {report.rows.slice(0, 8).map((row) => (
+                  <tr key={row.value}>
+                    <td title={row.value}>{row.value}</td>
+                    <td>{row.frequency}</td>
+                    <td>{row.percentage}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function buildQuestionReports(questions, rows) {
+  const visibleQuestions = questions.filter((question) => !hiddenQuestionIds.has(question.id));
+  return visibleQuestions.map((question) => {
+    const values = rows
+      .map((row) => row.answers?.[question.id])
+      .map((value) => String(value ?? '').trim())
+      .filter(Boolean);
+    const total = rows.length;
+    const answered = values.length;
+    const missing = Math.max(total - answered, 0);
+    const answerRate = total ? Math.round((answered / total) * 100) : 0;
+    const kind = question.type === 'number' ? 'number' : 'category';
+    const rowsForQuestion = kind === 'number'
+      ? []
+      : buildFrequencyRows(values, answered, question.options || [], question.type);
+
+    return {
+      id: question.id,
+      label: question.label,
+      typeLabel: reportTypeLabel(question.type),
+      kind,
+      total,
+      answered,
+      missing,
+      answerRate,
+      topValue: rowsForQuestion[0]?.value || '',
+      rows: rowsForQuestion,
+      stats: kind === 'number' ? numericStats(values) : null
+    };
+  });
+}
+
+function buildFrequencyRows(values, answered, options, questionType) {
+  const optionLookup = new Map((options || []).map((option) => [normalizeForMatch(option), option]));
+  const counts = new Map();
+  for (const rawValue of values) {
+    const cleanValue = optionLookup.get(normalizeForMatch(rawValue)) || rawValue;
+    counts.set(cleanValue, (counts.get(cleanValue) || 0) + 1);
+  }
+
+  const ordered = [...counts.entries()]
+    .map(([value, frequency]) => ({
+      value,
+      frequency,
+      percentage: answered ? Number(((frequency / answered) * 100).toFixed(2)) : 0
+    }))
+    .sort((a, b) => {
+      if (b.frequency !== a.frequency) return b.frequency - a.frequency;
+      if (questionType === 'select') {
+        const aIndex = options.indexOf(a.value);
+        const bIndex = options.indexOf(b.value);
+        if (aIndex !== -1 || bIndex !== -1) return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+      }
+      return a.value.localeCompare(b.value);
+    });
+
+  return ordered.length ? ordered : [{ value: 'No data', frequency: 0, percentage: 0 }];
+}
+
+function numericStats(values) {
+  const numbers = values.map((value) => Number(value)).filter((value) => Number.isFinite(value));
+  if (numbers.length === 0) {
+    return { mean: '-', median: '-', mode: '-', stdDev: '-' };
+  }
+  const sorted = [...numbers].sort((a, b) => a - b);
+  const mean = numbers.reduce((sum, value) => sum + value, 0) / numbers.length;
+  const median = sorted.length % 2
+    ? sorted[Math.floor(sorted.length / 2)]
+    : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+  const counts = new Map();
+  numbers.forEach((value) => counts.set(value, (counts.get(value) || 0) + 1));
+  const mode = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0] ?? '-';
+  const variance = numbers.reduce((sum, value) => sum + ((value - mean) ** 2), 0) / numbers.length;
+  return {
+    mean: formatStatNumber(mean),
+    median: formatStatNumber(median),
+    mode: formatStatNumber(mode),
+    stdDev: formatStatNumber(Math.sqrt(variance))
+  };
+}
+
+function formatStatNumber(value) {
+  if (value === '-') return value;
+  return Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function reportTypeLabel(type) {
+  if (type === 'select') return 'TYPE: SELECT ONE';
+  if (type === 'number') return 'TYPE: NUMERIC';
+  if (type === 'date') return 'TYPE: DATE';
+  if (type === 'textarea') return 'TYPE: LONG TEXT';
+  return 'TYPE: TEXT';
 }
 
 function Breakdown({ title, rows, labelKey, valueKey, className = '' }) {

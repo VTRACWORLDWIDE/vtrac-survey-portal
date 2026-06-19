@@ -2182,7 +2182,7 @@ function AdminDashboard({ token, onLogout }) {
 
               {projectWorkspaceTab === 'data' && (
                 <div className="project-data-layout">
-                  <aside className="project-data-nav">
+                  <nav className="project-data-nav" aria-label="Data sections">
                     {[
                       ['table', 'Table', <Table2 size={21} />],
                       ['reports', 'Reports', <BarChart3 size={21} />],
@@ -2194,7 +2194,7 @@ function AdminDashboard({ token, onLogout }) {
                         {icon}{label}
                       </button>
                     ))}
-                  </aside>
+                  </nav>
 
                   <div className="project-data-content">
                     {projectDataTab === 'table' && (

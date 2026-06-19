@@ -1315,7 +1315,13 @@ textarea {
   padding: 16px;
 }
 
-.project-data-layout,
+.project-data-layout {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+}
+
 .settings-layout {
   align-items: start;
   display: grid;
@@ -1324,7 +1330,17 @@ textarea {
   min-height: 0;
 }
 
-.project-data-nav,
+.project-data-nav {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dfe7ef;
+  border-radius: 8px;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 8px;
+}
+
 .settings-nav {
   background: #ffffff;
   border-right: 1px solid #dfe7ef;
@@ -1334,7 +1350,25 @@ textarea {
   padding: 10px 8px;
 }
 
-.project-data-nav button,
+.project-data-nav button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 4px solid transparent;
+  border-radius: 8px;
+  color: #5c6983;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.84rem;
+  font-weight: 850;
+  gap: 8px;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 14px;
+  text-align: center;
+}
+
 .settings-nav button {
   align-items: center;
   background: transparent;
@@ -1353,14 +1387,24 @@ textarea {
   text-transform: capitalize;
 }
 
-.project-data-nav button.active,
+.project-data-nav button.active {
+  background: #f1fbfb;
+  border-bottom-color: #0aa7a4;
+  color: #1f2f52;
+}
+
 .settings-nav button.active {
   background: #f1fbfb;
   border-left-color: #0aa7a4;
   color: #1f2f52;
 }
 
-.project-data-content,
+.project-data-content {
+  background: #f4f6fa;
+  min-width: 0;
+  padding: 0;
+}
+
 .settings-content {
   background: #f4f6fa;
   min-width: 0;
@@ -3157,7 +3201,6 @@ tbody tr:hover {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .project-data-nav,
   .settings-nav {
     border-right: 0;
     border-bottom: 1px solid #dfe7ef;
@@ -3165,14 +3208,12 @@ tbody tr:hover {
     overflow-x: auto;
   }
 
-  .project-data-nav button,
   .settings-nav button {
     border-left: 0;
     border-bottom: 4px solid transparent;
     flex: 0 0 auto;
   }
 
-  .project-data-nav button.active,
   .settings-nav button.active {
     border-bottom-color: #0aa7a4;
     border-left-color: transparent;

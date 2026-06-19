@@ -2154,7 +2154,7 @@ function AdminDashboard({ token, onLogout }) {
                             <button className="icon-button" onClick={loadDashboard} aria-label="Refresh dashboard"><RefreshCw size={18} /></button>
                           </div>
                         </div>
-                        <RecentTable rows={data?.recent || []} loading={loading} onReview={reviewResponse} />
+                        <RecentTable rows={data?.recent || []} project={selectedProject} loading={loading} onReview={reviewResponse} />
                       </>
                     )}
 
@@ -2368,7 +2368,7 @@ function AdminDashboard({ token, onLogout }) {
               <Breakdown title="Samples by enumerator" rows={data?.byEnumerator || []} labelKey="enumerator_name" valueKey="samples" />
             </div>
 
-            <RecentTable rows={data?.recent || []} loading={loading} onReview={reviewResponse} />
+            <RecentTable rows={data?.recent || []} project={selectedProject} loading={loading} onReview={reviewResponse} />
             </section>
           )}
 
@@ -2775,38 +2775,194 @@ function editDistance(a, b) {
   return dp[a.length][b.length];
 }
 
-function RecentTable({ rows, loading, onReview }) {
+function RecentTable({ rows, project, loading, onReview }) {
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [columnFilters, setColumnFilters] = useState({});
+  const [showFields, setShowFields] = useState(false);
+  const [hiddenColumns, setHiddenColumns] = useState([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(30);
+
+  const questionColumns = (project?.questions || [])
+    .filter((question) => !hiddenQuestionIds.has(question.id))
+    .map((question) => ({
+      key: `answer:${question.id}`,
+      label: question.label,
+      type: question.type,
+      options: question.options || [],
+      width: 220,
+      value: (row) => row.answers?.[question.id] ?? ''
+    }));
+
+  const baseColumns = [
+    { key: 'validation', label: 'Validation', type: 'select', options: ['-'], width: 170, value: () => '-' },
+    { key: 'submitted_at', label: 'Submitted', type: 'date', width: 170, value: (row) => formatProjectDate(row.submitted_at) },
+    { key: 'enumerator_name', label: 'Enumerator', type: 'text', width: 170, value: (row) => row.enumerator_name || '-' },
+    { key: 'location', label: 'Location', type: 'text', width: 280, value: (row) => row.location || '-' },
+    { key: 'respondent_name', label: 'Respondent', type: 'text', width: 180, value: (row) => row.respondent_name || '-' }
+  ];
+
+  const allColumns = [...baseColumns, ...questionColumns];
+  const visibleColumns = allColumns.filter((column) => !hiddenColumns.includes(column.key));
+
+  const filteredRows = rows.filter((row) => visibleColumns.every((column) => {
+    const filterValue = String(columnFilters[column.key] || '').trim().toLowerCase();
+    if (!filterValue) return true;
+    return String(column.value(row) || '').toLowerCase().includes(filterValue);
+  }));
+
+  const totalPages = Math.max(Math.ceil(filteredRows.length / pageSize), 1);
+  const currentPage = Math.min(page, totalPages);
+  const startIndex = (currentPage - 1) * pageSize;
+  const pageRows = filteredRows.slice(startIndex, startIndex + pageSize);
+  const visibleRowIds = pageRows.map((row) => row.id);
+  const allVisibleSelected = visibleRowIds.length > 0 && visibleRowIds.every((id) => selectedRows.includes(id));
+
+  function toggleRow(rowId, checked) {
+    setSelectedRows((current) => {
+      const next = new Set(current);
+      if (checked) next.add(rowId);
+      else next.delete(rowId);
+      return [...next];
+    });
+  }
+
+  function toggleVisibleRows(checked) {
+    setSelectedRows((current) => {
+      const next = new Set(current);
+      visibleRowIds.forEach((id) => {
+        if (checked) next.add(id);
+        else next.delete(id);
+      });
+      return [...next];
+    });
+  }
+
+  function updateFilter(key, value) {
+    setColumnFilters((current) => ({ ...current, [key]: value }));
+    setPage(1);
+  }
+
+  function toggleColumn(key, checked) {
+    setHiddenColumns((current) => {
+      if (checked) return current.filter((item) => item !== key);
+      return [...current, key];
+    });
+  }
+
   return (
-    <div className="panel table-panel">
-      <div className="section-title">
-        <h2>Recent Submissions</h2>
-        <p>{loading ? 'Refreshing...' : `${rows.length} shown`}</p>
+    <div className="data-grid-shell">
+      <div className="data-grid-toolbar">
+        <button className="field-toggle" onClick={() => setShowFields(!showFields)}>
+          <Eye size={18} /> {showFields ? 'hide fields' : 'show fields'}
+        </button>
+        <div className="data-grid-tools">
+          <span>{loading ? 'Refreshing...' : `${filteredRows.length} results`}</span>
+          <button className="icon-button" aria-label="Expand table"><ExternalLink size={18} /></button>
+          <button className="icon-button" aria-label="Table settings"><ShieldCheck size={18} /></button>
+        </div>
       </div>
-      <div className="table-scroll">
-        <table>
+
+      {showFields && (
+        <div className="field-panel">
+          {allColumns.map((column) => (
+            <label className="check-row" key={column.key}>
+              <input
+                type="checkbox"
+                checked={!hiddenColumns.includes(column.key)}
+                onChange={(event) => toggleColumn(column.key, event.target.checked)}
+              />
+              {column.label}
+            </label>
+          ))}
+        </div>
+      )}
+
+      <div className="data-grid-scroll">
+        <table className="response-grid-table">
+          <colgroup>
+            <col style={{ width: '170px' }} />
+            {visibleColumns.map((column) => <col key={column.key} style={{ width: `${column.width}px` }} />)}
+          </colgroup>
           <thead>
-            <tr>
-              <th>ID</th>
-              <th>Submitted</th>
-              <th>Enumerator</th>
-              <th>Location</th>
-              <th>Respondent</th>
-              <th>Review</th>
+            <tr className="grid-heading-row">
+              <th className="grid-counter-cell">
+                <strong>{filteredRows.length === 0 ? '0' : `${startIndex + 1} - ${Math.min(startIndex + pageSize, filteredRows.length)}`}</strong>
+                <span>{filteredRows.length} results</span>
+              </th>
+              {visibleColumns.map((column) => (
+                <th key={column.key}>
+                  <span className="grid-column-title">{column.type === 'number' && <small>123</small>}{column.label}</span>
+                </th>
+              ))}
+            </tr>
+            <tr className="grid-filter-row">
+              <th>
+                <input
+                  className="row-checkbox-input"
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={(event) => toggleVisibleRows(event.target.checked)}
+                  aria-label="Select visible responses"
+                />
+              </th>
+              {visibleColumns.map((column) => (
+                <th key={column.key}>
+                  {column.type === 'select' && column.options.length <= 12 ? (
+                    <select value={columnFilters[column.key] || ''} onChange={(event) => updateFilter(column.key, event.target.value)}>
+                      <option value="">Show All</option>
+                      {column.options.map((option) => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                  ) : (
+                    <input
+                      value={columnFilters[column.key] || ''}
+                      onChange={(event) => updateFilter(column.key, event.target.value)}
+                      placeholder="Search"
+                    />
+                  )}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.id}>
-                <td>{row.id}</td>
-                <td>{new Date(row.submitted_at).toLocaleString()}</td>
-                <td>{row.enumerator_name}</td>
-                <td>{row.location}</td>
-                <td>{row.respondent_name || '-'}</td>
-                <td><button className="secondary compact-button" onClick={() => onReview(row.id)}>Review</button></td>
+            {pageRows.map((row) => (
+              <tr className={selectedRows.includes(row.id) ? 'checked-row' : ''} key={row.id}>
+                <td className="grid-actions-cell">
+                  <input
+                    className="row-checkbox-input"
+                    type="checkbox"
+                    checked={selectedRows.includes(row.id)}
+                    onChange={(event) => toggleRow(row.id, event.target.checked)}
+                    aria-label={`Select response ${row.id}`}
+                  />
+                  <button onClick={() => onReview(row.id)} aria-label={`View response ${row.id}`}><Eye size={18} /></button>
+                  <button onClick={() => onReview(row.id)} aria-label={`Edit response ${row.id}`}><Pencil size={18} /></button>
+                </td>
+                {visibleColumns.map((column) => (
+                  <td key={column.key} title={String(column.value(row) || '-')}>{String(column.value(row) || '-')}</td>
+                ))}
               </tr>
             ))}
+            {pageRows.length === 0 && (
+              <tr>
+                <td colSpan={visibleColumns.length + 1}><p className="empty">No responses match the current filters.</p></td>
+              </tr>
+            )}
           </tbody>
         </table>
+      </div>
+
+      <div className="data-grid-pagination">
+        <button className="secondary compact-button" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>Prev</button>
+        <span>Page <strong>{currentPage}</strong> of {totalPages}</span>
+        <label>
+          <select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}>
+            <option value={15}>15 rows</option>
+            <option value={30}>30 rows</option>
+            <option value={50}>50 rows</option>
+          </select>
+        </label>
+        <button className="secondary compact-button" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>Next</button>
       </div>
     </div>
   );

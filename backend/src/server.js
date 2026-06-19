@@ -317,7 +317,7 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
         filters.params
       ),
       query(
-        `SELECT id, enumerator_name, location, respondent_name, audio_mime_type, submitted_at
+        `SELECT id, enumerator_name, location, respondent_name, audio_mime_type, submitted_at, answers
         FROM survey_responses
         ${filters.where}
         ORDER BY submitted_at DESC

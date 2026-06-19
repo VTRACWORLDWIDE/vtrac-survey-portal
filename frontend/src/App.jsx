@@ -2230,14 +2230,7 @@ function AdminDashboard({ token, onLogout }) {
 
                     {projectDataTab === 'map' && (
                       <div className="map-workspace">
-                        <div className="map-panel">
-                          <div>
-                            <MapPin size={42} />
-                            <h2>Location intelligence</h2>
-                            <p>Map-ready survey locations by sample volume. GPS layers can be enabled for future projects that capture coordinates.</p>
-                          </div>
-                          <strong>{data?.totals?.total_samples ?? 0}</strong>
-                        </div>
+                        <SurveyCoordinateMap rows={data?.mapRows || []} totalSamples={data?.totals?.total_samples ?? 0} />
                         <Breakdown title="Survey locations" rows={projectLocationRows} labelKey="label" valueKey="samples" />
                       </div>
                     )}
@@ -2409,6 +2402,101 @@ function AdminDashboard({ token, onLogout }) {
         </div>
       </div>
     </section>
+  );
+}
+
+function SurveyCoordinateMap({ rows, totalSamples }) {
+  const points = (rows || [])
+    .map((row) => ({
+      ...row,
+      latitude: Number(row.latitude),
+      longitude: Number(row.longitude)
+    }))
+    .filter((row) => Number.isFinite(row.latitude) && Number.isFinite(row.longitude));
+  const bounds = {
+    minLat: 12.78,
+    maxLat: 13.16,
+    minLng: 77.42,
+    maxLng: 77.84
+  };
+  const width = 860;
+  const height = 420;
+  const projected = points.slice(0, 800).map((point, index) => {
+    const x = ((point.longitude - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * width;
+    const y = height - (((point.latitude - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * height);
+    return {
+      ...point,
+      index,
+      x: Math.max(8, Math.min(width - 8, x)),
+      y: Math.max(8, Math.min(height - 8, y))
+    };
+  });
+  const latest = points[0];
+  const coverage = totalSamples ? Math.round((points.length / totalSamples) * 100) : 0;
+
+  return (
+    <div className="panel coordinate-map-panel">
+      <div className="coordinate-map-head">
+        <div>
+          <p className="eyebrow">GPS Layer</p>
+          <h2><MapPin size={19} /> Bengaluru coordinate map</h2>
+          <p>Plots submitted latitude and longitude points within Bengaluru city bounds for map QA and spatial review.</p>
+        </div>
+        <div className="coordinate-map-stats">
+          <ReportKpi label="GPS samples" value={points.length} />
+          <ReportKpi label="Coverage" value={`${coverage}%`} />
+          <ReportKpi label="Total samples" value={totalSamples} />
+        </div>
+      </div>
+
+      {points.length === 0 ? (
+        <div className="empty-state-panel map-empty">
+          <MapPin size={34} />
+          <h2>No GPS coordinates yet</h2>
+          <p>Once latitude and longitude exist in submitted records, points will appear here.</p>
+        </div>
+      ) : (
+        <>
+          <div className="coordinate-map-canvas">
+            <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Bengaluru submitted GPS points">
+              <defs>
+                <linearGradient id="mapWater" x1="0" x2="1" y1="0" y2="1">
+                  <stop offset="0%" stopColor="#f4fbfb" />
+                  <stop offset="100%" stopColor="#eaf3fb" />
+                </linearGradient>
+              </defs>
+              <rect width={width} height={height} rx="18" fill="url(#mapWater)" />
+              <path d="M94 318 C166 238 186 151 302 126 C414 103 486 47 606 91 C724 135 742 247 675 329 C608 410 472 369 368 383 C249 400 177 396 94 318Z" className="map-city-shape" />
+              {[0.2, 0.4, 0.6, 0.8].map((step) => (
+                <g key={step}>
+                  <line x1={width * step} y1="24" x2={width * step} y2={height - 24} className="map-grid-line" />
+                  <line x1="24" y1={height * step} x2={width - 24} y2={height * step} className="map-grid-line" />
+                </g>
+              ))}
+              <text x="36" y="48" className="map-label">North Bengaluru</text>
+              <text x="630" y="96" className="map-label">East Bengaluru</text>
+              <text x="560" y="365" className="map-label">South Bengaluru</text>
+              <text x="52" y="365" className="map-label">West Bengaluru</text>
+              {projected.map((point) => (
+                <circle
+                  className="map-point"
+                  cx={point.x}
+                  cy={point.y}
+                  key={point.id || point.index}
+                  r={point.index < 80 ? 4.2 : 3.2}
+                >
+                  <title>{`${point.enumerator_name || 'Enumerator'} - ${point.location || 'Location'} (${point.latitude.toFixed(5)}, ${point.longitude.toFixed(5)})`}</title>
+                </circle>
+              ))}
+            </svg>
+          </div>
+          <div className="coordinate-map-foot">
+            <span>Bounds: 12.78-13.16 lat, 77.42-77.84 lng</span>
+            {latest && <strong>Latest: {Number(latest.latitude).toFixed(5)}, {Number(latest.longitude).toFixed(5)}</strong>}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

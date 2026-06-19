@@ -281,7 +281,10 @@ app.get('/api/public/enumerator-stats', async (req, res, next) => {
 app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
   try {
     const filters = buildFilters(req.query);
-    const [totals, byDate, byEnumerator, byLocation, recent, reportRows] = await Promise.all([
+    const mapWhere = filters.where
+      ? `${filters.where} AND latitude IS NOT NULL AND longitude IS NOT NULL`
+      : 'WHERE latitude IS NOT NULL AND longitude IS NOT NULL';
+    const [totals, byDate, byEnumerator, byLocation, recent, reportRows, mapRows] = await Promise.all([
       query(
         `SELECT
           COUNT(*)::int AS total_samples,
@@ -331,6 +334,14 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
         ORDER BY submitted_at DESC
         LIMIT 2000`,
         filters.params
+      ),
+      query(
+        `SELECT id, enumerator_name, location, latitude, longitude, gps_accuracy, submitted_at
+        FROM survey_responses
+        ${mapWhere}
+        ORDER BY submitted_at DESC
+        LIMIT 2500`,
+        filters.params
       )
     ]);
 
@@ -340,7 +351,8 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
       byEnumerator: byEnumerator.rows,
       byLocation: byLocation.rows,
       recent: recent.rows,
-      reportRows: reportRows.rows
+      reportRows: reportRows.rows,
+      mapRows: mapRows.rows
     });
   } catch (error) {
     next(error);

@@ -2067,6 +2067,106 @@ textarea {
   gap: 18px;
 }
 
+.coordinate-map-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.coordinate-map-head {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 0.72fr);
+}
+
+.coordinate-map-head h2 {
+  align-items: center;
+  color: #1f2f52;
+  display: flex;
+  font-size: 1.1rem;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.coordinate-map-head p {
+  color: #63708a;
+  margin: 0;
+}
+
+.coordinate-map-stats {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.coordinate-map-stats .report-kpi {
+  background: #f6fafb;
+  border-color: #dfe7ef;
+}
+
+.coordinate-map-stats .report-kpi span {
+  color: #64708b;
+}
+
+.coordinate-map-stats .report-kpi strong {
+  color: #1f2f52;
+  font-size: 1.12rem;
+}
+
+.coordinate-map-canvas {
+  background: #f7fbfc;
+  border: 1px solid #dfe7ef;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.coordinate-map-canvas svg {
+  display: block;
+  width: 100%;
+}
+
+.map-city-shape {
+  fill: rgba(10, 167, 164, 0.1);
+  stroke: rgba(19, 62, 152, 0.2);
+  stroke-width: 2;
+}
+
+.map-grid-line {
+  stroke: rgba(100, 112, 139, 0.18);
+  stroke-dasharray: 6 8;
+}
+
+.map-label {
+  fill: rgba(31, 47, 82, 0.56);
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.map-point {
+  fill: #0aa7a4;
+  fill-opacity: 0.68;
+  stroke: #ffffff;
+  stroke-width: 1.4;
+}
+
+.coordinate-map-foot {
+  align-items: center;
+  color: #68758e;
+  display: flex;
+  font-size: 0.82rem;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.coordinate-map-foot strong {
+  color: #1f2f52;
+}
+
+.map-empty {
+  min-height: 240px;
+}
+
 .map-panel {
   align-items: center;
   background:
@@ -2885,9 +2985,12 @@ tbody tr:hover {
   .project-workspace-header,
   .form-version-card,
   .collect-card,
-  .map-panel {
+  .map-panel,
+  .coordinate-map-head,
+  .coordinate-map-stats {
     align-items: stretch;
     display: grid;
+    grid-template-columns: 1fr;
   }
 
   .project-tabs {

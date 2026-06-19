@@ -782,8 +782,15 @@ textarea {
   grid-column: 1;
   grid-row: 1;
   justify-content: center;
+  justify-self: stretch;
   min-height: 52px;
   padding: 0;
+}
+
+.admin-collapse-button:hover {
+  background: #e7f5f5;
+  border-color: #0aa7a4;
+  color: #0a7777;
 }
 
 .admin-new-button {
@@ -838,12 +845,14 @@ textarea {
 }
 
 .admin-sidebar-project-list {
+  align-content: start;
   border-top: 1px solid #e3e9f1;
   display: grid;
   gap: 4px;
+  grid-auto-rows: max-content;
   grid-column: 1 / -1;
   margin-top: 8px;
-  max-height: 340px;
+  max-height: 260px;
   overflow-y: auto;
   padding-top: 10px;
 }

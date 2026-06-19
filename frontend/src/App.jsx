@@ -1842,9 +1842,13 @@ function AdminDashboard({ token, onLogout }) {
         </aside>
 
         <aside className="admin-sidebar">
-          <button className="admin-collapse-button" onClick={() => setMenuCollapsed(!menuCollapsed)} aria-label={menuCollapsed ? 'Expand menu' : 'Collapse menu'}>
+          <button
+            className="admin-collapse-button"
+            onClick={() => setMenuCollapsed(!menuCollapsed)}
+            aria-label={menuCollapsed ? 'Expand menu' : 'Collapse menu'}
+            title={menuCollapsed ? 'Expand menu' : 'Collapse menu'}
+          >
             {menuCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-            <span>{menuCollapsed ? 'Expand' : 'Collapse menu'}</span>
           </button>
           <button className="admin-new-button" onClick={startNewProject}>NEW FORM</button>
           <button className={`admin-sidebar-row ${projectStatusFilter === 'all' ? 'active' : ''}`} onClick={() => filterProjects('all')}>
@@ -1874,7 +1878,7 @@ function AdminDashboard({ token, onLogout }) {
               </button>
             ))}
           </div>
-          {selectedProject && (
+          {selectedProject && activeAdminSection === 'projectWorkspace' && (
             <div className="admin-selected-card">
               <span>Selected project</span>
               <strong>{selectedProject.name}</strong>

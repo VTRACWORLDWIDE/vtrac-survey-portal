@@ -11,12 +11,16 @@ import {
   ExternalLink,
   Eye,
   FileText,
+  Flame,
   Image as ImageIcon,
+  Layers,
   Link2,
   LogOut,
+  Maximize2,
   MapPin,
   Pencil,
   Plus,
+  Settings,
   RefreshCw,
   Save,
   Search,
@@ -25,7 +29,9 @@ import {
   Share2,
   Table2,
   Trash2,
+  Upload,
   UserRound,
+  X,
   PanelLeftClose,
   PanelLeftOpen,
   PieChart,
@@ -36,6 +42,50 @@ const apiBase = import.meta.env.VITE_API_BASE || '';
 const blankQuestion = { id: '', label: '', type: 'text', options: '', required: false };
 const airportPrefix = 'Kempegowda International Airport - ';
 const defaultProjectSlug = 'bengaluru-second-airport-feasibility';
+const exportTypes = [
+  { value: 'xlsx', label: 'Excel workbook (.xlsx)' },
+  { value: 'csv', label: 'CSV' },
+  { value: 'geojson', label: 'GeoJSON' },
+  { value: 'kml', label: 'GPS coordinates (KML)' }
+];
+const exportHistory = [
+  { value: 'xlsx', label: 'XLSX', format: 'Labels', groups: 'Departures + Arrivals tabs' },
+  { value: 'csv', label: 'CSV', format: 'Labels', groups: 'All filtered responses' },
+  { value: 'geojson', label: 'GeoJSON', format: 'GPS points', groups: 'Map-ready coordinates' },
+  { value: 'kml', label: 'KML', format: 'GPS points', groups: 'Google Earth / GIS' }
+];
+const mapBaseLayers = {
+  osm: {
+    label: 'OpenStreetMap',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19
+  },
+  topo: {
+    label: 'OpenTopoMap',
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap contributors, SRTM | &copy; OpenTopoMap',
+    maxZoom: 17
+  },
+  imagery: {
+    label: 'ESRI World Imagery',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri',
+    maxZoom: 19
+  },
+  humanitarian: {
+    label: 'Humanitarian',
+    url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap contributors, HOT',
+    maxZoom: 19
+  }
+};
+const markerPalettes = {
+  vtrac: ['#0aa7a4', '#133e98', '#2f80ed', '#7b61ff', '#e0a12f', '#ef476f', '#2fbf71'],
+  qualitative: ['#ff8c7a', '#a8f080', '#a678de', '#7ee0a1', '#7a85df', '#f0d36b', '#ea7fce', '#79c7c2'],
+  sequential: ['#133e98', '#1d5fbf', '#2f80ed', '#48a4d8', '#77c7c2', '#aae2c1', '#e1f5d8'],
+  diverging: ['#2f80ed', '#79c7c2', '#dff3ef', '#fde7dc', '#ff9b79', '#ef476f']
+};
 const defaultProjectSettings = {
   airportLocationMode: false,
   captureGps: false,
@@ -1504,6 +1554,9 @@ function AdminDashboard({ token, onLogout }) {
   const [projectSettingsTab, setProjectSettingsTab] = useState('general');
   const [filters, setFilters] = useState({ enumerator: '', location: '', dateFrom: '', dateTo: '' });
   const [appliedFilters, setAppliedFilters] = useState(filters);
+  const [exportType, setExportType] = useState('xlsx');
+  const [exportHeaderFormat, setExportHeaderFormat] = useState('labels');
+  const [advancedExportsOpen, setAdvancedExportsOpen] = useState(false);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
@@ -1812,8 +1865,15 @@ function AdminDashboard({ token, onLogout }) {
     URL.revokeObjectURL(url);
   }
 
-  async function download(type) {
-    const response = await fetch(`${apiBase}/api/responses/export.${type}?${queryString}`, { headers: authHeaders });
+  async function download(type = exportType) {
+    const exportQuery = new URLSearchParams(queryString);
+    exportQuery.set('headerFormat', exportHeaderFormat);
+    const response = await fetch(`${apiBase}/api/responses/export.${type}?${exportQuery.toString()}`, { headers: authHeaders });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      setStatus(payload.error || 'Unable to download export.');
+      return;
+    }
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -1821,6 +1881,10 @@ function AdminDashboard({ token, onLogout }) {
     anchor.download = `vtrac-${selectedProject.slug}-responses.${type}`;
     anchor.click();
     URL.revokeObjectURL(url);
+  }
+
+  function handleExportSubmit() {
+    download(exportType);
   }
 
   return (
@@ -2184,41 +2248,76 @@ function AdminDashboard({ token, onLogout }) {
                     {projectDataTab === 'downloads' && (
                       <div className="downloads-workspace">
                         <div className="download-builder panel">
-                          <h2>Downloads</h2>
-                          <div className="inline-grid">
-                            <label>
+                          <div className="download-builder-head">
+                            <div>
+                              <h2>Downloads</h2>
+                              <p>Export filtered project responses, GPS files, and analysis-ready workbooks.</p>
+                            </div>
+                            <button className="download export-primary" onClick={handleExportSubmit}><Download size={17} /> Export</button>
+                          </div>
+                          <div className="download-options-grid">
+                            <label className="field-label">
                               Select export type
-                              <select defaultValue="xlsx">
-                                <option value="xlsx">Excel (.xlsx)</option>
-                                <option value="csv">CSV</option>
+                              <select value={exportType} onChange={(event) => setExportType(event.target.value)}>
+                                {exportTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+                                <option disabled>SPSS labels (Phase 2)</option>
+                                <option disabled>Media attachments ZIP (Phase 2)</option>
                               </select>
                             </label>
-                            <label>
+                            <label className="field-label">
                               Value and header format
-                              <select defaultValue="labels">
+                              <select value={exportHeaderFormat} onChange={(event) => setExportHeaderFormat(event.target.value)}>
                                 <option value="labels">Labels</option>
-                                <option value="raw">Raw values</option>
+                                <option value="raw">Field keys / raw headers</option>
                               </select>
                             </label>
                           </div>
-                          <div className="actions">
-                            <button className="download" onClick={() => download('csv')}><Download size={16} /> CSV</button>
-                            <button className="download" onClick={() => download('xlsx')}><Download size={16} /> Excel</button>
+                          <button className="link-button advanced-export-toggle" onClick={() => setAdvancedExportsOpen((open) => !open)}>
+                            Advanced options {advancedExportsOpen ? 'hide' : 'show'}
+                          </button>
+                          {advancedExportsOpen && (
+                            <div className="advanced-export-panel">
+                              <label className="check-row">
+                                <input type="checkbox" checked readOnly />
+                                Apply current table filters to export
+                              </label>
+                              <label className="check-row">
+                                <input type="checkbox" checked={exportType === 'xlsx'} readOnly />
+                                Include Departures and Arrivals sheets for Excel
+                              </label>
+                              <label className="check-row muted">
+                                <input type="checkbox" disabled />
+                                Include media attachments when enabled for future projects
+                              </label>
+                            </div>
+                          )}
+                          <div className="quick-export-row">
+                            <button className="secondary compact-button" onClick={() => download('xlsx')}><Download size={15} /> XLSX</button>
+                            <button className="secondary compact-button" onClick={() => download('csv')}><Download size={15} /> CSV</button>
+                            <button className="secondary compact-button" onClick={() => download('geojson')}><Download size={15} /> GeoJSON</button>
+                            <button className="secondary compact-button" onClick={() => download('kml')}><Download size={15} /> KML</button>
                           </div>
                         </div>
                         <div className="panel exports-table">
                           <div className="section-title">
                             <h2>Exports</h2>
-                            <p>Latest export options</p>
+                            <p>Ready-to-download export formats for the current filters</p>
                           </div>
                           <div className="table-scroll">
                             <table>
                               <thead>
-                                <tr><th>Type</th><th>Created</th><th>Format</th><th>Action</th></tr>
+                                <tr><th>Type</th><th>Created</th><th>Format</th><th>Include groups</th><th>Action</th></tr>
                               </thead>
                               <tbody>
-                                <tr><td>XLSX</td><td>On demand</td><td>Labels</td><td><button className="secondary compact-button" onClick={() => download('xlsx')}><Download size={15} /> Download</button></td></tr>
-                                <tr><td>CSV</td><td>On demand</td><td>Labels</td><td><button className="secondary compact-button" onClick={() => download('csv')}><Download size={15} /> Download</button></td></tr>
+                                {exportHistory.map((row) => (
+                                  <tr key={row.value}>
+                                    <td>{row.label}</td>
+                                    <td>On demand</td>
+                                    <td>{['xlsx', 'csv'].includes(row.value) ? (exportHeaderFormat === 'raw' ? 'Field keys' : 'Labels') : row.format}</td>
+                                    <td>{row.groups}</td>
+                                    <td><button className="secondary compact-button" onClick={() => download(row.value)}><Download size={15} /> Download</button></td>
+                                  </tr>
+                                ))}
                               </tbody>
                             </table>
                           </div>
@@ -2405,7 +2504,20 @@ function AdminDashboard({ token, onLogout }) {
 function SurveyCoordinateMap({ rows, totalSamples }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
+  const tileLayerRef = useRef(null);
   const markerLayerRef = useRef(null);
+  const overlayLayerRef = useRef(null);
+  const [baseLayer, setBaseLayer] = useState('osm');
+  const [mapMode, setMapMode] = useState('points');
+  const [showLayerPicker, setShowLayerPicker] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState('overlays');
+  const [palette, setPalette] = useState('vtrac');
+  const [colorBy, setColorBy] = useState('location');
+  const [fullscreen, setFullscreen] = useState(false);
+  const [overlayName, setOverlayName] = useState('');
+  const [overlayFile, setOverlayFile] = useState(null);
+  const [overlayMessage, setOverlayMessage] = useState('');
   const points = useMemo(() => (
     (rows || [])
       .map((row) => ({
@@ -2417,6 +2529,11 @@ function SurveyCoordinateMap({ rows, totalSamples }) {
   ), [rows]);
   const latest = points[0];
   const coverage = totalSamples ? Math.round((points.length / totalSamples) * 100) : 0;
+  const paletteColors = markerPalettes[palette] || markerPalettes.vtrac;
+  const groupColorMap = useMemo(() => {
+    const values = [...new Set(points.map((point) => mapGroupValue(point, colorBy)))];
+    return Object.fromEntries(values.map((value, index) => [value, paletteColors[index % paletteColors.length]]));
+  }, [points, colorBy, paletteColors]);
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return undefined;
@@ -2425,20 +2542,30 @@ function SurveyCoordinateMap({ rows, totalSamples }) {
       zoom: 11,
       scrollWheelZoom: false
     });
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 19
-    }).addTo(map);
     markerLayerRef.current = L.layerGroup().addTo(map);
+    overlayLayerRef.current = L.layerGroup().addTo(map);
     mapInstanceRef.current = map;
     setTimeout(() => map.invalidateSize(), 80);
 
     return () => {
       map.remove();
       mapInstanceRef.current = null;
+      tileLayerRef.current = null;
       markerLayerRef.current = null;
+      overlayLayerRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    if (tileLayerRef.current) map.removeLayer(tileLayerRef.current);
+    const layer = mapBaseLayers[baseLayer] || mapBaseLayers.osm;
+    tileLayerRef.current = L.tileLayer(layer.url, {
+      attribution: layer.attribution,
+      maxZoom: layer.maxZoom
+    }).addTo(map);
+  }, [baseLayer]);
 
   useEffect(() => {
     const map = mapInstanceRef.current;
@@ -2450,17 +2577,22 @@ function SurveyCoordinateMap({ rows, totalSamples }) {
     const bounds = [];
     visiblePoints.forEach((point, index) => {
       const latLng = [point.latitude, point.longitude];
+      const groupValue = mapGroupValue(point, colorBy);
+      const markerColor = groupColorMap[groupValue] || '#0aa7a4';
       bounds.push(latLng);
-      L.circleMarker(latLng, {
-        radius: index < 100 ? 6 : 4.5,
-        color: '#ffffff',
-        weight: 1.5,
-        fillColor: '#0aa7a4',
-        fillOpacity: 0.72
-      })
+      const marker = L.circleMarker(latLng, {
+        radius: mapMode === 'heat' ? 22 : index < 100 ? 6 : 4.5,
+        color: mapMode === 'heat' ? markerColor : '#ffffff',
+        opacity: mapMode === 'heat' ? 0.16 : 1,
+        weight: mapMode === 'heat' ? 0 : 1.5,
+        fillColor: markerColor,
+        fillOpacity: mapMode === 'heat' ? 0.2 : 0.74
+      });
+      marker
         .bindPopup(`
           <strong>${escapeHtml(point.enumerator_name || 'Enumerator')}</strong><br />
           ${escapeHtml(point.location || 'Location')}<br />
+          Group: ${escapeHtml(groupValue)}<br />
           ${point.latitude.toFixed(6)}, ${point.longitude.toFixed(6)}
         `)
         .addTo(markerLayer);
@@ -2474,10 +2606,60 @@ function SurveyCoordinateMap({ rows, totalSamples }) {
       map.setView([12.9716, 77.5946], 11);
     }
     setTimeout(() => map.invalidateSize(), 80);
-  }, [points]);
+  }, [points, mapMode, colorBy, groupColorMap]);
+
+  useEffect(() => {
+    setTimeout(() => mapInstanceRef.current?.invalidateSize(), 160);
+  }, [fullscreen]);
+
+  async function uploadOverlay() {
+    const map = mapInstanceRef.current;
+    const overlayLayer = overlayLayerRef.current;
+    if (!map || !overlayLayer || !overlayFile) return;
+    setOverlayMessage('');
+    const text = await overlayFile.text();
+    const name = overlayName.trim() || overlayFile.name;
+    try {
+      if (overlayFile.name.toLowerCase().endsWith('.geojson') || overlayFile.name.toLowerCase().endsWith('.json')) {
+        const geoJson = JSON.parse(text);
+        const layer = L.geoJSON(geoJson, {
+          style: { color: '#133e98', weight: 2, fillColor: '#0aa7a4', fillOpacity: 0.18 },
+          pointToLayer: (_feature, latLng) => L.circleMarker(latLng, { radius: 7, color: '#ffffff', weight: 1, fillColor: '#e0a12f', fillOpacity: 0.85 })
+        }).bindPopup(name);
+        layer.addTo(overlayLayer);
+        map.fitBounds(layer.getBounds(), { padding: [26, 26], maxZoom: 13 });
+        setOverlayMessage(`${name} added as a map overlay.`);
+        return;
+      }
+
+      if (overlayFile.name.toLowerCase().endsWith('.csv')) {
+        const [headerLine, ...lines] = text.split(/\r?\n/).filter(Boolean);
+        const headers = headerLine.split(',').map((item) => item.trim().toLowerCase());
+        const latIndex = headers.findIndex((item) => ['lat', 'latitude'].includes(item));
+        const lngIndex = headers.findIndex((item) => ['lng', 'lon', 'long', 'longitude'].includes(item));
+        if (latIndex === -1 || lngIndex === -1) throw new Error('CSV requires latitude and longitude columns.');
+        const bounds = [];
+        lines.slice(0, 1500).forEach((line) => {
+          const cells = line.split(',');
+          const latitude = Number(cells[latIndex]);
+          const longitude = Number(cells[lngIndex]);
+          if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+          bounds.push([latitude, longitude]);
+          L.circleMarker([latitude, longitude], { radius: 5, color: '#ffffff', weight: 1, fillColor: '#e0a12f', fillOpacity: 0.82 }).bindPopup(name).addTo(overlayLayer);
+        });
+        if (bounds.length) map.fitBounds(bounds, { padding: [26, 26], maxZoom: 13 });
+        setOverlayMessage(`${bounds.length} overlay points added from ${name}.`);
+        return;
+      }
+
+      setOverlayMessage('Please upload GeoJSON or CSV overlays. KML/KMZ overlay parsing can be added in the next GIS phase.');
+    } catch (error) {
+      setOverlayMessage(error.message || 'Unable to load overlay.');
+    }
+  }
 
   return (
-    <div className="panel coordinate-map-panel">
+    <div className={`panel coordinate-map-panel ${fullscreen ? 'fullscreen-map' : ''}`}>
       <div className="coordinate-map-head">
         <div>
           <p className="eyebrow">GPS Layer</p>
@@ -2493,6 +2675,70 @@ function SurveyCoordinateMap({ rows, totalSamples }) {
 
       <div className="coordinate-map-canvas">
         <div className="osm-map" ref={mapRef} />
+        <div className="map-control-stack">
+          <button className="map-icon-button" title="Map settings" onClick={() => setSettingsOpen(true)}><Settings size={20} /></button>
+          <button className="map-icon-button" title="Toggle layers" onClick={() => setShowLayerPicker((open) => !open)}><Layers size={20} /></button>
+          <button className="map-icon-button" title="Toggle fullscreen" onClick={() => setFullscreen((active) => !active)}><Maximize2 size={20} /></button>
+          <button className={`map-icon-button ${mapMode === 'points' ? 'active' : ''}`} title="Show as points" onClick={() => setMapMode('points')}><MapPin size={20} /></button>
+          <button className={`map-icon-button ${mapMode === 'heat' ? 'active' : ''}`} title="Show as heatmap" onClick={() => setMapMode('heat')}><Flame size={20} /></button>
+        </div>
+        {showLayerPicker && (
+          <div className="map-layer-popover">
+            {Object.entries(mapBaseLayers).map(([key, layer]) => (
+              <label key={key}>
+                <input type="radio" checked={baseLayer === key} onChange={() => setBaseLayer(key)} />
+                {layer.label}
+              </label>
+            ))}
+          </div>
+        )}
+        <label className="map-disaggregate">
+          <span>Disaggregate by</span>
+          <select value={colorBy} onChange={(event) => setColorBy(event.target.value)}>
+            <option value="location">Survey location</option>
+            <option value="enumerator">Enumerator</option>
+            <option value="terminal">Terminal</option>
+            <option value="movement">Movement</option>
+          </select>
+        </label>
+        {settingsOpen && (
+          <div className="map-settings-backdrop">
+            <div className="map-settings-modal">
+              <div className="map-settings-header">
+                <h3>Map Settings</h3>
+                <button onClick={() => setSettingsOpen(false)}><X size={22} /></button>
+              </div>
+              <div className="map-settings-tabs">
+                <button className={settingsTab === 'overlays' ? 'active' : ''} onClick={() => setSettingsTab('overlays')}>Overlays</button>
+                <button className={settingsTab === 'colors' ? 'active' : ''} onClick={() => setSettingsTab('colors')}>Marker colors</button>
+              </div>
+              {settingsTab === 'overlays' ? (
+                <div className="map-settings-body">
+                  <p>Upload a GeoJSON or CSV file with latitude and longitude columns to view it as a temporary overlay on this map.</p>
+                  <div className="overlay-upload-row">
+                    <input value={overlayName} onChange={(event) => setOverlayName(event.target.value)} placeholder="Layer name" />
+                    <input type="file" accept=".geojson,.json,.csv,.kml,.kmz" onChange={(event) => setOverlayFile(event.target.files?.[0] || null)} />
+                    <button className="download" onClick={uploadOverlay} disabled={!overlayFile}><Upload size={16} /> Upload</button>
+                  </div>
+                  {overlayMessage && <p className="overlay-message">{overlayMessage}</p>}
+                </div>
+              ) : (
+                <div className="map-settings-body">
+                  <p>Choose a marker palette for the selected disaggregation.</p>
+                  {Object.entries(markerPalettes).map(([key, colors]) => (
+                    <label className="palette-row" key={key}>
+                      <input type="radio" checked={palette === key} onChange={() => setPalette(key)} />
+                      <span>{key === 'vtrac' ? 'VTRAC brand' : key}</span>
+                      <span className="palette-swatches">
+                        {colors.map((color) => <i key={color} style={{ background: color }} />)}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {points.length === 0 && (
           <div className="empty-state-panel map-empty map-empty-overlay">
             <MapPin size={34} />
@@ -2508,6 +2754,22 @@ function SurveyCoordinateMap({ rows, totalSamples }) {
       </div>
     </div>
   );
+}
+
+function mapGroupValue(point, colorBy) {
+  const location = point.location || 'Unassigned';
+  if (colorBy === 'enumerator') return point.enumerator_name || 'Unassigned';
+  if (colorBy === 'terminal') {
+    if (location.includes('Terminal 1')) return 'Terminal 1';
+    if (location.includes('Terminal 2')) return 'Terminal 2';
+    return 'Unassigned terminal';
+  }
+  if (colorBy === 'movement') {
+    if (location.includes('Departures')) return 'Departures';
+    if (location.includes('Arrivals')) return 'Arrivals';
+    return 'Unassigned movement';
+  }
+  return location;
 }
 
 function escapeHtml(value) {

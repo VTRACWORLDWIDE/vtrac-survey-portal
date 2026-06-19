@@ -579,8 +579,9 @@ app.get('/api/client/dashboard', requireClient, async (req, res, next) => {
 app.get('/api/responses/export.csv', requireAdmin, async (req, res, next) => {
   try {
     const { rows, questions } = await loadExportRows(req.query);
-    const records = rows.map((row) => flattenResponse(row, questions));
-    const csv = stringify(records, { header: true, columns: Object.keys(records[0] || defaultExportRow(questions)) });
+    const headerFormat = req.query.headerFormat === 'raw' ? 'raw' : 'labels';
+    const records = rows.map((row) => flattenResponse(row, questions, headerFormat));
+    const csv = stringify(records, { header: true, columns: Object.keys(records[0] || defaultExportRow(questions, headerFormat)) });
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="vtrac-survey-responses.csv"');
     res.send(csv);
@@ -592,26 +593,85 @@ app.get('/api/responses/export.csv', requireAdmin, async (req, res, next) => {
 app.get('/api/responses/export.xlsx', requireAdmin, async (req, res, next) => {
   try {
     const { rows, questions } = await loadExportRows(req.query);
-    const records = rows.map((row) => flattenResponse(row, questions));
+    const headerFormat = req.query.headerFormat === 'raw' ? 'raw' : 'labels';
+    const records = rows.map((row) => flattenResponse(row, questions, headerFormat));
     const workbook = new ExcelJS.Workbook();
-    addExportWorksheet(workbook, 'All Responses', records, questions);
+    addExportWorksheet(workbook, 'All Responses', records, questions, headerFormat);
     addExportWorksheet(
       workbook,
       'Departures',
       records.filter((record) => String(record.location || '').includes(' - Departures')),
-      questions
+      questions,
+      headerFormat
     );
     addExportWorksheet(
       workbook,
       'Arrivals',
       records.filter((record) => String(record.location || '').includes(' - Arrivals')),
-      questions
+      questions,
+      headerFormat
     );
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="vtrac-survey-responses.xlsx"');
     await workbook.xlsx.write(res);
     res.end();
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/responses/export.geojson', requireAdmin, async (req, res, next) => {
+  try {
+    const { rows } = await loadExportRows(req.query);
+    const features = rows
+      .filter((row) => row.latitude !== null && row.longitude !== null)
+      .map((row) => ({
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [Number(row.longitude), Number(row.latitude)]
+        },
+        properties: {
+          id: row.id,
+          submitted_at: formatTimestamp(row.submitted_at),
+          enumerator_name: row.enumerator_name || '',
+          location: row.location || '',
+          respondent_name: row.respondent_name || '',
+          gps_accuracy: row.gps_accuracy ?? ''
+        }
+      }));
+    res.setHeader('Content-Type', 'application/geo+json');
+    res.setHeader('Content-Disposition', 'attachment; filename="vtrac-survey-responses.geojson"');
+    res.json({ type: 'FeatureCollection', features });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/responses/export.kml', requireAdmin, async (req, res, next) => {
+  try {
+    const { rows } = await loadExportRows(req.query);
+    const placemarks = rows
+      .filter((row) => row.latitude !== null && row.longitude !== null)
+      .map((row) => `
+        <Placemark>
+          <name>${escapeXml(row.enumerator_name || `Response ${row.id}`)}</name>
+          <description>${escapeXml(`${row.location || ''}\nSubmitted: ${formatTimestamp(row.submitted_at)}`)}</description>
+          <Point><coordinates>${Number(row.longitude)},${Number(row.latitude)},0</coordinates></Point>
+        </Placemark>
+      `)
+      .join('');
+    const kml = `<?xml version="1.0" encoding="UTF-8"?>
+      <kml xmlns="http://www.opengis.net/kml/2.2">
+        <Document>
+          <name>VTRAC Survey GPS Coordinates</name>
+          ${placemarks}
+        </Document>
+      </kml>`;
+    res.setHeader('Content-Type', 'application/vnd.google-earth.kml+xml');
+    res.setHeader('Content-Disposition', 'attachment; filename="vtrac-survey-responses.kml"');
+    res.send(kml);
   } catch (error) {
     next(error);
   }
@@ -1092,7 +1152,7 @@ async function loadExportRows(queryParams) {
   return { rows: result.rows, questions };
 }
 
-function flattenResponse(row, questions) {
+function flattenResponse(row, questions, headerFormat = 'labels') {
   const base = {
     id: row.id || '',
     submitted_at: formatExportTimestamp(row.submitted_at),
@@ -1115,7 +1175,7 @@ function flattenResponse(row, questions) {
 
   for (const question of questions) {
     if (question.id === 'google_coordinates') continue;
-    base[question.label] = row.answers?.[question.id] ?? '';
+    base[headerFormat === 'raw' ? question.id : question.label] = row.answers?.[question.id] ?? '';
   }
 
   return base;
@@ -1185,13 +1245,13 @@ function audioExtensionFromMime(mimeType) {
   return 'webm';
 }
 
-function defaultExportRow(questions) {
-  return flattenResponse({ answers: {} }, questions);
+function defaultExportRow(questions, headerFormat = 'labels') {
+  return flattenResponse({ answers: {} }, questions, headerFormat);
 }
 
-function addExportWorksheet(workbook, name, records, questions = []) {
+function addExportWorksheet(workbook, name, records, questions = [], headerFormat = 'labels') {
   const sheet = workbook.addWorksheet(name);
-  const columns = Object.keys(records[0] || defaultExportRow(questions)).map((key) => ({
+  const columns = Object.keys(records[0] || defaultExportRow(questions, headerFormat)).map((key) => ({
     header: key,
     key,
     width: Math.min(Math.max(key.length + 4, 14), 36)
@@ -1204,6 +1264,15 @@ function addExportWorksheet(workbook, name, records, questions = []) {
     from: { row: 1, column: 1 },
     to: { row: 1, column: Math.max(columns.length, 1) }
   };
+}
+
+function escapeXml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
 }
 
 function questionAppliesToLocation(questionId, location = '') {

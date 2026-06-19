@@ -25,7 +25,9 @@ import {
   Trash2,
   UserRound,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  PieChart,
+  TrendingUp
 } from 'lucide-react';
 
 const apiBase = import.meta.env.VITE_API_BASE || '';
@@ -3048,10 +3050,10 @@ function ProjectReport({ project, data }) {
         </div>
       </div>
 
-      <div className="report-dashboard-grid">
-        <Breakdown title="Samples by date" rows={data?.byDate || []} labelKey="date" valueKey="samples" />
-        <Breakdown title="Samples by location" rows={data?.byLocation || []} labelKey="location" valueKey="samples" />
-        <Breakdown title="Samples by enumerator" rows={data?.byEnumerator || []} labelKey="enumerator_name" valueKey="samples" />
+      <div className="report-dashboard-grid mixed-report-grid">
+        <TrendChartPanel title="Submission trend" rows={data?.byDate || []} labelKey="date" valueKey="samples" />
+        <DonutBreakdownPanel title="Location mix" rows={data?.byLocation || []} labelKey="location" valueKey="samples" />
+        <RankedBreakdownPanel title="Enumerator contribution" rows={data?.byEnumerator || []} labelKey="enumerator_name" valueKey="samples" />
       </div>
 
       <div className="question-report-grid">
@@ -3079,8 +3081,145 @@ function ReportKpi({ label, value, compact = false }) {
   );
 }
 
+const reportChartPalette = ['#0aa7a4', '#133e98', '#2f80ed', '#7c5cff', '#f59e0b', '#ef476f', '#27ae60'];
+
+function TrendChartPanel({ title, rows, labelKey, valueKey }) {
+  return (
+    <div className="panel report-chart-card trend-card">
+      <h2><TrendingUp size={17} /> {title}</h2>
+      <TrendLineChart rows={rows} labelKey={labelKey} valueKey={valueKey} />
+    </div>
+  );
+}
+
+function DonutBreakdownPanel({ title, rows, labelKey, valueKey }) {
+  const chartRows = toReportChartRows(rows, labelKey, valueKey, 5);
+  return (
+    <div className="panel report-chart-card">
+      <h2><PieChart size={17} /> {title}</h2>
+      {chartRows.length === 0 ? <p className="empty">No samples yet.</p> : <DonutQuestionChart rows={chartRows} />}
+    </div>
+  );
+}
+
+function RankedBreakdownPanel({ title, rows, labelKey, valueKey }) {
+  const chartRows = toReportChartRows(rows, labelKey, valueKey, 7);
+  return (
+    <div className="panel report-chart-card">
+      <h2><BarChart3 size={17} /> {title}</h2>
+      {chartRows.length === 0 ? <p className="empty">No samples yet.</p> : <RankQuestionChart rows={chartRows} />}
+    </div>
+  );
+}
+
+function DonutQuestionChart({ rows }) {
+  const topRows = rows.filter((row) => row.frequency > 0).slice(0, 6);
+  const topValue = topRows[0];
+  if (topRows.length === 0) return <p className="empty">No answer distribution yet.</p>;
+
+  return (
+    <div className="donut-chart-wrap">
+      <div
+        className="donut-chart"
+        style={{ background: makeDonutGradient(topRows) }}
+        aria-label="Response split donut chart"
+      >
+        <span>{topValue?.percentage || 0}%</span>
+        <small>top</small>
+      </div>
+      <div className="donut-legend">
+        {topRows.map((row, index) => (
+          <div className="donut-legend-row" key={row.value}>
+            <i style={{ background: reportChartPalette[index % reportChartPalette.length] }} />
+            <span title={row.value}>{row.value}</span>
+            <strong>{row.frequency}</strong>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TrendQuestionChart({ rows }) {
+  return (
+    <div className="question-trend-wrap">
+      <TrendLineChart rows={rows} labelKey="value" valueKey="frequency" compact />
+    </div>
+  );
+}
+
+function RankQuestionChart({ rows }) {
+  const max = Math.max(...rows.map((row) => row.frequency), 1);
+  return (
+    <div className="report-mini-bars rank-chart">
+      {rows.slice(0, 7).map((row, index) => (
+        <div className="report-mini-row" key={row.value}>
+          <span title={row.value}>{row.value}</span>
+          <div><i style={{ width: `${(row.frequency / max) * 100}%`, background: reportChartPalette[index % reportChartPalette.length] }} /></div>
+          <strong>{row.percentage}%</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TileQuestionChart({ rows }) {
+  const max = Math.max(...rows.map((row) => row.frequency), 1);
+  return (
+    <div className="tile-chart">
+      {rows.slice(0, 9).map((row, index) => (
+        <div
+          className="tile-chart-cell"
+          key={row.value}
+          style={{
+            '--tile-weight': Math.max(1, Math.round((row.frequency / max) * 5)),
+            '--tile-color': reportChartPalette[index % reportChartPalette.length]
+          }}
+        >
+          <span title={row.value}>{row.value}</span>
+          <strong>{row.percentage}%</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TrendLineChart({ rows, labelKey, valueKey, compact = false }) {
+  const series = normalizeTrendRows(rows, labelKey, valueKey);
+  if (series.length === 0) return <p className="empty">No trend data yet.</p>;
+  const width = 260;
+  const height = compact ? 112 : 148;
+  const chartHeight = compact ? 68 : 88;
+  const max = Math.max(...series.map((row) => row.value), 1);
+  const points = series.map((row, index) => {
+    const x = series.length === 1 ? width / 2 : 12 + (index * ((width - 24) / (series.length - 1)));
+    const y = 14 + (chartHeight - ((row.value / max) * chartHeight));
+    return { ...row, x, y };
+  });
+  const linePoints = points.map((point) => `${point.x},${point.y}`).join(' ');
+  const areaPoints = `${points[0].x},${height - 28} ${linePoints} ${points[points.length - 1].x},${height - 28}`;
+  const latest = series[series.length - 1];
+  const total = series.reduce((sum, row) => sum + row.value, 0);
+
+  return (
+    <div className={`trend-chart ${compact ? 'compact' : ''}`.trim()}>
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Submission trend line chart">
+        <polygon points={areaPoints} className="trend-area" />
+        <polyline points={linePoints} className="trend-line" />
+        {points.map((point) => (
+          <circle key={`${point.label}-${point.x}`} cx={point.x} cy={point.y} r="3.5" />
+        ))}
+      </svg>
+      <div className="trend-chart-foot">
+        <span>{series[0]?.label}</span>
+        <strong>{total} total</strong>
+        <span>{latest?.label}</span>
+      </div>
+    </div>
+  );
+}
+
 function QuestionReportCard({ report, index }) {
-  const max = Math.max(...report.rows.map((row) => row.frequency), 1);
   return (
     <div className="question-report-card">
       <div className="question-report-head">
@@ -3104,15 +3243,10 @@ function QuestionReportCard({ report, index }) {
         </div>
       ) : (
         <>
-          <div className="report-mini-bars">
-            {report.rows.slice(0, 6).map((row) => (
-              <div className="report-mini-row" key={row.value}>
-                <span title={row.value}>{row.value}</span>
-                <div><i style={{ width: `${(row.frequency / max) * 100}%` }} /></div>
-                <strong>{row.percentage}%</strong>
-              </div>
-            ))}
-          </div>
+          {report.chartType === 'donut' && <DonutQuestionChart rows={report.rows} />}
+          {report.chartType === 'trend' && <TrendQuestionChart rows={report.rows} />}
+          {report.chartType === 'tiles' && <TileQuestionChart rows={report.rows} />}
+          {report.chartType === 'rank' && <RankQuestionChart rows={report.rows} />}
           <div className="report-frequency-table">
             <table>
               <thead>
@@ -3162,9 +3296,65 @@ function buildQuestionReports(questions, rows) {
       answerRate,
       topValue: rowsForQuestion[0]?.value || '',
       rows: rowsForQuestion,
+      chartType: kind === 'number' ? 'stats' : getQuestionChartType(question, rowsForQuestion),
       stats: kind === 'number' ? numericStats(values) : null
     };
   });
+}
+
+function getQuestionChartType(question, rowsForQuestion) {
+  if (question.type === 'date') return 'trend';
+  if (question.type === 'textarea') return 'tiles';
+  if (question.type === 'text') return rowsForQuestion.length > 8 ? 'tiles' : 'rank';
+  if (rowsForQuestion.length <= 5) return 'donut';
+  if (rowsForQuestion.length <= 10) return 'rank';
+  return 'tiles';
+}
+
+function toReportChartRows(rows, labelKey, valueKey, limit = 5) {
+  const normalized = rows
+    .map((row) => ({
+      value: String(row[labelKey] || '-'),
+      frequency: Number(row[valueKey]) || 0
+    }))
+    .filter((row) => row.frequency > 0)
+    .sort((a, b) => b.frequency - a.frequency);
+  const total = normalized.reduce((sum, row) => sum + row.frequency, 0);
+  const topRows = normalized.slice(0, limit);
+  const otherTotal = normalized.slice(limit).reduce((sum, row) => sum + row.frequency, 0);
+  const combined = otherTotal > 0 ? [...topRows, { value: 'Other', frequency: otherTotal }] : topRows;
+  return combined.map((row) => ({
+    ...row,
+    percentage: total ? Number(((row.frequency / total) * 100).toFixed(2)) : 0
+  }));
+}
+
+function makeDonutGradient(rows) {
+  const total = rows.reduce((sum, row) => sum + row.frequency, 0);
+  if (!total) return '#eef3f8';
+  let cursor = 0;
+  const segments = rows.map((row, index) => {
+    const start = cursor;
+    const end = cursor + ((row.frequency / total) * 100);
+    cursor = end;
+    return `${reportChartPalette[index % reportChartPalette.length]} ${start}% ${end}%`;
+  });
+  return `conic-gradient(from -90deg, ${segments.join(', ')})`;
+}
+
+function normalizeTrendRows(rows, labelKey, valueKey) {
+  return rows
+    .map((row) => ({
+      label: String(row[labelKey] || '-'),
+      value: Number(row[valueKey]) || 0
+    }))
+    .filter((row) => row.value > 0)
+    .sort((a, b) => {
+      const aDate = Date.parse(a.label);
+      const bDate = Date.parse(b.label);
+      if (Number.isFinite(aDate) && Number.isFinite(bDate)) return aDate - bDate;
+      return a.label.localeCompare(b.label);
+    });
 }
 
 function buildFrequencyRows(values, answered, options, questionType) {

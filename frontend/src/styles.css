@@ -935,16 +935,17 @@ textarea {
 }
 
 .admin-main {
+  align-content: start;
   background: #ffffff;
   display: grid;
-  gap: 24px;
+  gap: 18px;
   min-width: 0;
   overflow: hidden;
   padding: 24px 22px 44px;
 }
 
 .admin-project-toolbar {
-  align-items: center;
+  align-items: flex-start;
   display: flex;
   gap: 16px;
   justify-content: space-between;

@@ -1534,10 +1534,6 @@ function AdminDashboard({ token, onLogout }) {
   }));
   const selectedProjectLatest = data?.recent?.[0]?.submitted_at ? formatProjectDate(data.recent[0].submitted_at) : '-';
   const selectedProjectQuestions = selectedProject?.questions?.length || 0;
-  const projectLocationRows = (data?.byLocation || []).map((row) => ({
-    label: row.location,
-    samples: row.samples
-  }));
   const authHeaders = { Authorization: `Bearer ${token}` };
 
   const queryString = useMemo(() => {
@@ -2233,7 +2229,6 @@ function AdminDashboard({ token, onLogout }) {
                     {projectDataTab === 'map' && (
                       <div className="map-workspace">
                         <SurveyCoordinateMap rows={data?.mapRows || []} totalSamples={data?.totals?.total_samples ?? 0} />
-                        <Breakdown title="Survey locations" rows={projectLocationRows} labelKey="label" valueKey="samples" />
                       </div>
                     )}
                   </div>

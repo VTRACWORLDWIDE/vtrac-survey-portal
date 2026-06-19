@@ -734,7 +734,7 @@ textarea {
   gap: 16px;
   grid-auto-rows: 46px;
   justify-items: center;
-  padding-top: 28px;
+  padding-top: 24px;
 }
 
 .admin-icon-rail button {
@@ -757,14 +757,15 @@ textarea {
 }
 
 .admin-sidebar {
+  align-content: start;
   background: #ffffff;
   border-right: 1px solid #d5e4ec;
   box-shadow: 4px 0 14px rgba(39, 49, 69, 0.08);
   display: grid;
   gap: 12px;
-  align-content: start;
+  grid-template-columns: 44px minmax(0, 1fr);
   min-width: 0;
-  padding: 18px 14px;
+  padding: 24px 14px 18px;
 }
 
 .admin-collapse-button {
@@ -778,9 +779,11 @@ textarea {
   font-size: 0.84rem;
   font-weight: 900;
   gap: 8px;
+  grid-column: 1;
+  grid-row: 1;
   justify-content: center;
-  min-height: 38px;
-  padding: 0 10px;
+  min-height: 52px;
+  padding: 0;
 }
 
 .admin-new-button {
@@ -791,6 +794,8 @@ textarea {
   cursor: pointer;
   font-size: 1rem;
   font-weight: 900;
+  grid-column: 2;
+  grid-row: 1;
   min-height: 52px;
 }
 
@@ -804,6 +809,7 @@ textarea {
   display: flex;
   font-size: 0.98rem;
   font-weight: 800;
+  grid-column: 1 / -1;
   justify-content: space-between;
   min-height: 40px;
   padding: 0 6px;
@@ -835,6 +841,7 @@ textarea {
   border-top: 1px solid #e3e9f1;
   display: grid;
   gap: 4px;
+  grid-column: 1 / -1;
   margin-top: 8px;
   max-height: 340px;
   overflow-y: auto;
@@ -863,6 +870,7 @@ textarea {
 }
 
 .menu-collapsed .admin-sidebar {
+  grid-template-columns: 1fr;
   padding: 18px 10px;
 }
 
@@ -876,6 +884,7 @@ textarea {
 .menu-collapsed .admin-collapse-button,
 .menu-collapsed .admin-new-button,
 .menu-collapsed .admin-sidebar-row {
+  grid-column: 1;
   justify-content: center;
   padding-left: 0;
   padding-right: 0;
@@ -894,6 +903,7 @@ textarea {
   border-top: 1px solid #e3e9f1;
   display: grid;
   gap: 8px;
+  grid-column: 1 / -1;
   margin-top: 10px;
   padding-top: 16px;
 }
@@ -930,7 +940,7 @@ textarea {
   gap: 24px;
   min-width: 0;
   overflow: hidden;
-  padding: 32px 22px 44px;
+  padding: 24px 22px 44px;
 }
 
 .admin-project-toolbar {

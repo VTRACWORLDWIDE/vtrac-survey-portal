@@ -700,10 +700,12 @@ textarea {
   color: #ffffff;
   cursor: pointer;
   display: inline-flex;
+  flex: 0 0 44px;
   font-size: 1.05rem;
   font-weight: 900;
   height: 44px;
   justify-content: center;
+  margin-left: auto;
   width: 44px;
 }
 
@@ -912,27 +914,6 @@ textarea {
   margin: 4px 0 0;
 }
 
-.admin-toolbar-actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: flex-end;
-}
-
-.toolbar-link {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  color: #133e98;
-  cursor: pointer;
-  display: inline-flex;
-  font-weight: 900;
-  gap: 6px;
-  min-height: 36px;
-  padding: 0 8px;
-}
-
 .admin-project-table {
   border-top: 1px solid #dde4ee;
   min-width: 0;
@@ -972,12 +953,21 @@ textarea {
   background: #f3fbfb;
 }
 
-.row-checkbox {
-  border: 1px solid #aeb8cc;
-  border-radius: 5px;
-  display: inline-block;
-  height: 24px;
-  width: 24px;
+.admin-project-table tbody tr.checked-row {
+  background: #ecf8fb;
+}
+
+.row-checkbox-input {
+  accent-color: #0aa7a4;
+  cursor: pointer;
+  height: 22px;
+  min-height: 22px;
+  width: 22px;
+}
+
+.row-checkbox-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .project-name-button {
@@ -1044,6 +1034,27 @@ textarea {
   display: grid;
   gap: 16px;
   padding-top: 22px;
+}
+
+.admin-dashboard-section {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.project-kpi-grid .metric:nth-child(1) {
+  border-top: 4px solid #0aa7a4;
+}
+
+.project-kpi-grid .metric:nth-child(2) {
+  border-top: 4px solid #133e98;
+}
+
+.project-kpi-grid .metric:nth-child(3) {
+  border-top: 4px solid #2f80ed;
+}
+
+.project-kpi-grid .metric:nth-child(4) {
+  border-top: 4px solid #d89b38;
 }
 
 .admin-filters,

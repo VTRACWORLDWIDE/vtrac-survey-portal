@@ -8,6 +8,7 @@ import {
   Download,
   FileText,
   Link2,
+  LogOut,
   MapPin,
   Plus,
   RefreshCw,
@@ -1481,6 +1482,7 @@ function AdminDashboard({ token, onLogout }) {
   const [projectStatusFilter, setProjectStatusFilter] = useState('deployed');
   const [activeAdminSection, setActiveAdminSection] = useState('projects');
   const [menuCollapsed, setMenuCollapsed] = useState(false);
+  const [selectedProjectIds, setSelectedProjectIds] = useState([]);
   const [filters, setFilters] = useState({ enumerator: '', location: '', dateFrom: '', dateTo: '' });
   const [appliedFilters, setAppliedFilters] = useState(filters);
   const [data, setData] = useState(null);
@@ -1504,6 +1506,13 @@ function AdminDashboard({ token, onLogout }) {
     draft: projects.filter((project) => !project.isActive).length,
     archived: 0
   };
+  const selectedVisibleProjects = filteredProjects.filter((project) => selectedProjectIds.includes(project.id));
+  const allVisibleProjectsSelected = filteredProjects.length > 0 && selectedVisibleProjects.length === filteredProjects.length;
+  const totalProjectSubmissions = projects.reduce((sum, project) => sum + Number(project.responseCount || 0), 0);
+  const clientProjectRows = clients.map((client) => ({
+    label: client.displayName || client.username,
+    samples: client.projectIds?.length || 0
+  }));
   const authHeaders = { Authorization: `Bearer ${token}` };
 
   const queryString = useMemo(() => {
@@ -1563,14 +1572,32 @@ function AdminDashboard({ token, onLogout }) {
 
   function openAdminSection(section) {
     setActiveAdminSection(section);
-    const targetId = section === 'library' ? 'response-filters' : section === 'account' ? 'client-access' : 'project-library';
-    document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function filterProjects(statusFilter) {
     setProjectStatusFilter(statusFilter);
     setActiveAdminSection('projects');
-    document.getElementById('project-library')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function toggleProjectSelection(projectId, checked) {
+    setSelectedProjectIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(projectId);
+      else next.delete(projectId);
+      return [...next];
+    });
+  }
+
+  function toggleVisibleProjectSelection(checked) {
+    setSelectedProjectIds((current) => {
+      const next = new Set(current);
+      filteredProjects.forEach((project) => {
+        if (checked) next.add(project.id);
+        else next.delete(project.id);
+      });
+      return [...next];
+    });
   }
 
   useEffect(() => {
@@ -1623,6 +1650,7 @@ function AdminDashboard({ token, onLogout }) {
   }, [editingResponse?.id, editingResponse?.hasAudio]);
 
   function startNewProject() {
+    setActiveAdminSection('projects');
     setEditing({
       name: '',
       slug: '',
@@ -1635,6 +1663,7 @@ function AdminDashboard({ token, onLogout }) {
   }
 
   function editProject(project) {
+    setActiveAdminSection('projects');
     setEditing({
       ...project,
       locations: project.locations.join('\n'),
@@ -1765,7 +1794,7 @@ function AdminDashboard({ token, onLogout }) {
           <Search size={22} />
           <input value={projectSearch} onChange={(event) => setProjectSearch(event.target.value)} placeholder="Search projects" />
         </label>
-        <button className="admin-avatar" onClick={onLogout} title="Logout">A</button>
+        <button className="admin-avatar" onClick={onLogout} title="Logout" aria-label="Logout"><LogOut size={20} /></button>
       </div>
 
       <div className={`admin-console-shell ${menuCollapsed ? 'menu-collapsed' : ''}`}>
@@ -1780,7 +1809,7 @@ function AdminDashboard({ token, onLogout }) {
             {menuCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
             <span>{menuCollapsed ? 'Expand' : 'Collapse menu'}</span>
           </button>
-          <button className="admin-new-button" onClick={startNewProject}>NEW</button>
+          <button className="admin-new-button" onClick={startNewProject}>NEW FORM</button>
           <button className={`admin-sidebar-row ${projectStatusFilter === 'all' ? 'active' : ''}`} onClick={() => filterProjects('all')}>
             <span>All projects</span>
             <strong>{projectCounts.all}</strong>
@@ -1807,87 +1836,108 @@ function AdminDashboard({ token, onLogout }) {
         </aside>
 
         <div className="admin-main">
-          <div id="project-library" />
-          <div className="admin-project-toolbar">
-            <div>
-              <h2>My Projects</h2>
-              <p>{filteredProjects.length} shown · {projects.length} total · {projectStatusFilter}</p>
-            </div>
-            <div className="admin-toolbar-actions">
-              <button className="toolbar-link" onClick={() => openAdminSection('library')}>
-                <Search size={16} /> filter
-              </button>
-              <button className="toolbar-link" onClick={() => selectedProject && editProject(selectedProject)}>
-                <FileText size={16} /> fields
-              </button>
-              <button className="icon-button" onClick={() => selectedProject && editProject(selectedProject)} aria-label="Edit selected project"><FileText size={18} /></button>
-              <button className="icon-button" onClick={startNewClient} aria-label="Add client"><UserRound size={18} /></button>
-              <button className="icon-button danger-button" onClick={() => setStatus('Archive/delete workflow is not enabled for pilot safety.')} aria-label="Archive disabled"><Trash2 size={18} /></button>
-            </div>
-          </div>
+          {activeAdminSection === 'projects' && (
+            <>
+              <div className="admin-project-toolbar">
+                <div>
+                  <h2>My Projects</h2>
+                  <p>{filteredProjects.length} shown · {projects.length} total · {projectStatusFilter}{selectedProjectIds.length > 0 ? ` · ${selectedProjectIds.length} selected` : ''}</p>
+                </div>
+              </div>
 
-          <div className="admin-project-table">
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th></th>
-                    <th>Project name</th>
-                    <th>Status</th>
-                    <th>Owner</th>
-                    <th>Last modified</th>
-                    <th>Date deployed</th>
-                    <th>Submissions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredProjects.map((project) => (
-                    <tr className={project.id === selectedProject?.id ? 'selected-row' : ''} key={project.id} onClick={() => changeSelectedProject(project.id)}>
-                      <td><span className="row-checkbox" /></td>
-                      <td>
-                        <button className="project-name-button" onClick={(event) => { event.stopPropagation(); editProject(project); }}>
-                          {project.name}
-                        </button>
-                        <small>{project.slug}</small>
-                      </td>
-                      <td><span className={`project-status ${project.isActive ? 'deployed' : 'draft'}`}>{project.isActive ? 'deployed' : 'draft'}</span></td>
-                      <td>admin</td>
-                      <td>{formatProjectDate(project.updatedAt)}</td>
-                      <td>{project.isActive ? formatProjectDate(project.createdAt) : '-'}</td>
-                      <td><span className="submission-pill">{project.responseCount || 0}</span></td>
-                    </tr>
-                  ))}
-                  {filteredProjects.length === 0 && (
-                    <tr>
-                      <td colSpan="7"><p className="empty">No projects match this view.</p></td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+              <div className="admin-project-table">
+                <div className="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>
+                          <input
+                            className="row-checkbox-input"
+                            type="checkbox"
+                            checked={allVisibleProjectsSelected}
+                            disabled={filteredProjects.length === 0}
+                            onChange={(event) => toggleVisibleProjectSelection(event.target.checked)}
+                            aria-label="Select all visible projects"
+                          />
+                        </th>
+                        <th>Project name</th>
+                        <th>Status</th>
+                        <th>Owner</th>
+                        <th>Last modified</th>
+                        <th>Date deployed</th>
+                        <th>Submissions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredProjects.map((project) => {
+                        const rowSelected = selectedProjectIds.includes(project.id);
+                        return (
+                          <tr className={`${project.id === selectedProject?.id ? 'selected-row' : ''} ${rowSelected ? 'checked-row' : ''}`.trim()} key={project.id} onClick={() => changeSelectedProject(project.id)}>
+                            <td>
+                              <input
+                                className="row-checkbox-input"
+                                type="checkbox"
+                                checked={rowSelected}
+                                onClick={(event) => event.stopPropagation()}
+                                onChange={(event) => toggleProjectSelection(project.id, event.target.checked)}
+                                aria-label={`Select ${project.name}`}
+                              />
+                            </td>
+                            <td>
+                              <button className="project-name-button" onClick={(event) => { event.stopPropagation(); editProject(project); }}>
+                                {project.name}
+                              </button>
+                              <small>{project.slug}</small>
+                            </td>
+                            <td><span className={`project-status ${project.isActive ? 'deployed' : 'draft'}`}>{project.isActive ? 'deployed' : 'draft'}</span></td>
+                            <td>admin</td>
+                            <td>{formatProjectDate(project.updatedAt)}</td>
+                            <td>{project.isActive ? formatProjectDate(project.createdAt) : '-'}</td>
+                            <td><span className="submission-pill">{project.responseCount || 0}</span></td>
+                          </tr>
+                        );
+                      })}
+                      {filteredProjects.length === 0 && (
+                        <tr>
+                          <td colSpan="7"><p className="empty">No projects match this view.</p></td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
 
-          {selectedProject && <div className="admin-public-link"><Link2 size={16} /> {window.location.origin}{selectedProject.publicUrl}</div>}
+              {selectedProject && <div className="admin-public-link"><Link2 size={16} /> {window.location.origin}{selectedProject.publicUrl}</div>}
 
-          {editing && (
-            <ProjectEditor
-              project={editing}
-              onChange={setEditing}
-              onCancel={() => setEditing(null)}
-              onSave={saveProject}
-            />
+              {editing && (
+                <ProjectEditor
+                  project={editing}
+                  onChange={setEditing}
+                  onCancel={() => setEditing(null)}
+                  onSave={saveProject}
+                />
+              )}
+            </>
           )}
 
-          <section id="response-filters" className="admin-section">
+          {activeAdminSection === 'library' && (
+            <section id="response-filters" className="admin-section admin-dashboard-section">
             <div className="section-title">
               <div>
-                <p className="eyebrow">Response Review</p>
-                <h2>Submissions and exports</h2>
+                <p className="eyebrow">Project Dashboard</p>
+                <h2>{selectedProject?.name || 'Project analytics'}</h2>
               </div>
               <div className="actions">
                 <button className="download" onClick={() => download('csv')}><Download size={16} /> CSV</button>
                 <button className="download" onClick={() => download('xlsx')}><Download size={16} /> Excel</button>
               </div>
+            </div>
+
+            <div className="metric-grid admin-metrics project-kpi-grid">
+              <Metric icon={<ClipboardList size={19} />} label="Total projects" value={projectCounts.all} />
+              <Metric icon={<CheckCircle2 size={19} />} label="Deployed" value={projectCounts.deployed} />
+              <Metric icon={<BarChart3 size={19} />} label="All samples" value={totalProjectSubmissions} />
+              <Metric icon={<UserRound size={19} />} label="Client logins" value={clients.length} />
             </div>
 
             <div className="panel filters admin-filters">
@@ -1933,15 +1983,18 @@ function AdminDashboard({ token, onLogout }) {
             </div>
 
             <div className="chart-grid admin-chart-grid">
+              <Breakdown title="Projects by client access" rows={clientProjectRows} labelKey="label" valueKey="samples" />
               <Breakdown title="Samples by date" rows={data?.byDate || []} labelKey="date" valueKey="samples" />
-              <Breakdown title="Samples by enumerator" rows={data?.byEnumerator || []} labelKey="enumerator_name" valueKey="samples" />
               <Breakdown title="Samples by location" rows={data?.byLocation || []} labelKey="location" valueKey="samples" />
+              <Breakdown title="Samples by enumerator" rows={data?.byEnumerator || []} labelKey="enumerator_name" valueKey="samples" />
             </div>
 
             <RecentTable rows={data?.recent || []} loading={loading} onReview={reviewResponse} />
-          </section>
+            </section>
+          )}
 
-          <section id="client-access">
+          {activeAdminSection === 'account' && (
+            <section id="client-access">
             <ClientAccessManager
               clients={clients}
               projects={projects}
@@ -1952,7 +2005,8 @@ function AdminDashboard({ token, onLogout }) {
               onCancel={() => setEditingClient(null)}
               onSave={saveClient}
             />
-          </section>
+            </section>
+          )}
 
           {editingResponse && (
             <ResponseEditor

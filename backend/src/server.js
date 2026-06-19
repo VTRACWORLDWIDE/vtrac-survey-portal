@@ -1285,6 +1285,8 @@ function normalizeProject(project) {
     settings: normalizeProjectSettings(project.settings, project.slug),
     isActive: project.is_active,
     responseCount: project.response_count || 0,
+    createdAt: formatTimestamp(project.created_at),
+    updatedAt: formatTimestamp(project.updated_at),
     publicUrl: `/p/${project.slug}`
   };
 }

@@ -180,11 +180,12 @@ export default function App() {
   }
 
   const isPublicSurvey = route.startsWith('/p/');
+  const isAdminRoute = route.startsWith('/admin');
   const publicSlug = isPublicSurvey ? route.replace('/p/', '') : defaultProjectSlug;
 
   return (
     <main>
-      <header className="topbar">
+      {!isPublicSurvey && !isAdminRoute && <header className="topbar">
         <div className="brand-block">
           <img className="brand-logo" src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
           <div>
@@ -198,7 +199,7 @@ export default function App() {
             <button className={route.startsWith('/admin') ? 'active' : ''} onClick={() => navigate('/admin')}>Admin</button>
           </nav>
         )}
-      </header>
+      </header>}
       {isPublicSurvey
         ? <SurveyForm projectSlug={publicSlug} />
         : route.startsWith('/admin')
@@ -1271,6 +1272,13 @@ function formatDateScope(dateFrom, dateTo) {
   return 'All dates';
 }
 
+function formatProjectDate(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
 function ClientDashboard({ token, onLogout }) {
   const [projects, setProjects] = useState([]);
   const [selectedId, setSelectedId] = useState('');
@@ -1431,13 +1439,17 @@ function AdminLogin({ onLogin }) {
   }
 
   return (
-    <section className="login-wrap">
-      <form className="panel login-panel" onSubmit={submit}>
-        <div className="login-mark"><ShieldCheck size={24} /></div>
-        <div>
-          <p className="eyebrow">VTRAC Admin</p>
-          <h2>Sign in to manage surveys</h2>
+    <section className="admin-login-screen">
+      <div className="admin-login-topbar">
+        <div className="admin-brand-mark">
+          <img src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
+          <span>VTRAC Survey Console</span>
         </div>
+      </div>
+      <form className="admin-login-card" onSubmit={submit}>
+        <div className="login-mark"><ShieldCheck size={24} /></div>
+        <p className="eyebrow">Administrator</p>
+        <h2>Sign in to manage field projects</h2>
         <label>
           Username
           <input value={username} onChange={(event) => setUsername(event.target.value)} required />
@@ -1462,6 +1474,7 @@ function AdminDashboard({ token, onLogout }) {
   const [editingClient, setEditingClient] = useState(null);
   const [editingResponse, setEditingResponse] = useState(null);
   const [audioPreview, setAudioPreview] = useState(null);
+  const [projectSearch, setProjectSearch] = useState('');
   const [filters, setFilters] = useState({ enumerator: '', location: '', dateFrom: '', dateTo: '' });
   const [appliedFilters, setAppliedFilters] = useState(filters);
   const [data, setData] = useState(null);
@@ -1469,6 +1482,16 @@ function AdminDashboard({ token, onLogout }) {
   const [status, setStatus] = useState('');
 
   const selectedProject = projects.find((project) => project.id === selectedId) || projects[0];
+  const filteredProjects = projects.filter((project) => {
+    const search = projectSearch.trim().toLowerCase();
+    if (!search) return true;
+    return `${project.name} ${project.slug}`.toLowerCase().includes(search);
+  });
+  const projectCounts = {
+    deployed: projects.filter((project) => project.isActive).length,
+    draft: projects.filter((project) => !project.isActive).length,
+    archived: 0
+  };
   const authHeaders = { Authorization: `Bearer ${token}` };
 
   const queryString = useMemo(() => {
@@ -1517,6 +1540,13 @@ function AdminDashboard({ token, onLogout }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  function changeSelectedProject(projectId) {
+    const emptyFilters = { enumerator: '', location: '', dateFrom: '', dateTo: '' };
+    setSelectedId(projectId);
+    setFilters(emptyFilters);
+    setAppliedFilters(emptyFilters);
   }
 
   useEffect(() => {
@@ -1701,105 +1731,208 @@ function AdminDashboard({ token, onLogout }) {
   }
 
   return (
-    <section className="dashboard">
-      <div className="admin-heading">
-        <div>
-          <p className="eyebrow">Operations</p>
-          <h2>Admin Dashboard</h2>
-          <p>{selectedProject ? selectedProject.name : 'Survey operations'}</p>
+    <section className="admin-console">
+      <div className="admin-console-topbar">
+        <div className="admin-brand-mark">
+          <img src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
+          <span>VTRAC Survey Console</span>
         </div>
-        <button className="secondary" onClick={onLogout}>Logout</button>
+        <label className="admin-search">
+          <Search size={22} />
+          <input value={projectSearch} onChange={(event) => setProjectSearch(event.target.value)} placeholder="Search projects" />
+        </label>
+        <button className="admin-avatar" onClick={onLogout} title="Logout">A</button>
       </div>
 
-      <div className="panel project-bar">
-        <button className="secondary" onClick={() => selectedProject && editProject(selectedProject)}><FileText size={18} /> Edit Form</button>
-        <button className="primary" onClick={startNewProject}><Plus size={18} /> New Project</button>
-        {selectedProject && <span className="public-link"><Link2 size={16} /> {window.location.origin}{selectedProject.publicUrl}</span>}
-      </div>
+      <div className="admin-console-shell">
+        <aside className="admin-icon-rail">
+          <button className="active" title="Projects"><ClipboardList size={24} /></button>
+          <button title="Analytics"><BarChart3 size={24} /></button>
+          <button title="Clients"><UserRound size={24} /></button>
+        </aside>
 
-      {editing && (
-        <ProjectEditor
-          project={editing}
-          onChange={setEditing}
-          onCancel={() => setEditing(null)}
-          onSave={saveProject}
-        />
-      )}
+        <aside className="admin-sidebar">
+          <button className="admin-new-button" onClick={startNewProject}>NEW</button>
+          <button className={`admin-sidebar-row ${selectedProject?.isActive ? 'active' : ''}`}>
+            <span>Deployed</span>
+            <strong>{projectCounts.deployed}</strong>
+          </button>
+          <button className={`admin-sidebar-row ${selectedProject && !selectedProject.isActive ? 'active' : ''}`}>
+            <span>Draft</span>
+            <strong>{projectCounts.draft}</strong>
+          </button>
+          <button className="admin-sidebar-row">
+            <span>Archived</span>
+            <strong>{projectCounts.archived}</strong>
+          </button>
+          {selectedProject && (
+            <div className="admin-selected-card">
+              <span>Selected project</span>
+              <strong>{selectedProject.name}</strong>
+              <a href={selectedProject.publicUrl} target="_blank" rel="noreferrer"><Link2 size={15} /> Public survey link</a>
+            </div>
+          )}
+        </aside>
 
-      <ClientAccessManager
-        clients={clients}
-        projects={projects}
-        editingClient={editingClient}
-        onStartNew={startNewClient}
-        onEdit={editClient}
-        onChange={setEditingClient}
-        onCancel={() => setEditingClient(null)}
-        onSave={saveClient}
-      />
+        <div className="admin-main">
+          <div className="admin-project-toolbar">
+            <div>
+              <h2>My Projects</h2>
+              <p>{filteredProjects.length} shown · {projects.length} total</p>
+            </div>
+            <div className="admin-toolbar-actions">
+              <button className="toolbar-link" onClick={() => document.getElementById('response-filters')?.scrollIntoView({ behavior: 'smooth' })}>
+                <Search size={16} /> filter
+              </button>
+              <button className="toolbar-link" onClick={() => selectedProject && editProject(selectedProject)}>
+                <FileText size={16} /> fields
+              </button>
+              <button className="icon-button" onClick={() => selectedProject && editProject(selectedProject)} aria-label="Edit selected project"><FileText size={18} /></button>
+              <button className="icon-button" onClick={startNewClient} aria-label="Add client"><UserRound size={18} /></button>
+              <button className="icon-button danger-button" onClick={() => setStatus('Archive/delete workflow is not enabled for pilot safety.')} aria-label="Archive disabled"><Trash2 size={18} /></button>
+            </div>
+          </div>
 
-      <div className="panel filters">
-        <label className="filter-project">
-          <span>Project</span>
-          <select value={selectedProject?.id || ''} onChange={(event) => changeSelectedProject(event.target.value)}>
-            {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-          </select>
-        </label>
-        <label>
-          <span>Enumerator</span>
-          <select value={filters.enumerator} onChange={(event) => setFilters({ ...filters, enumerator: event.target.value })}>
-            <option value="">All enumerators</option>
-            {filterOptions.enumerators.map((enumerator) => <option key={enumerator}>{enumerator}</option>)}
-          </select>
-        </label>
-        <label>
-          <span>Location</span>
-          <select value={filters.location} onChange={(event) => setFilters({ ...filters, location: event.target.value })}>
-            <option value="">All locations</option>
-            {filterOptions.locations.map((location) => <option key={location}>{location}</option>)}
-          </select>
-        </label>
-        <label>
-          <span>Date from</span>
-          <input type="date" value={filters.dateFrom} onChange={(event) => setFilters({ ...filters, dateFrom: event.target.value })} />
-        </label>
-        <label>
-          <span>Date to</span>
-          <input type="date" value={filters.dateTo} onChange={(event) => setFilters({ ...filters, dateTo: event.target.value })} />
-        </label>
-        <div className="filter-actions">
-          <button className="primary" onClick={() => setAppliedFilters(filters)}><Search size={18} /> Search</button>
-          <button className="icon-button" onClick={loadDashboard} aria-label="Refresh dashboard"><RefreshCw size={18} /></button>
-          <button className="download" onClick={() => download('csv')}><Download size={16} /> CSV</button>
-          <button className="download" onClick={() => download('xlsx')}><Download size={16} /> Excel</button>
+          <div className="admin-project-table">
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Project name</th>
+                    <th>Status</th>
+                    <th>Owner</th>
+                    <th>Last modified</th>
+                    <th>Date deployed</th>
+                    <th>Submissions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredProjects.map((project) => (
+                    <tr className={project.id === selectedProject?.id ? 'selected-row' : ''} key={project.id} onClick={() => changeSelectedProject(project.id)}>
+                      <td><span className="row-checkbox" /></td>
+                      <td>
+                        <button className="project-name-button" onClick={(event) => { event.stopPropagation(); editProject(project); }}>
+                          {project.name}
+                        </button>
+                        <small>{project.slug}</small>
+                      </td>
+                      <td><span className={`project-status ${project.isActive ? 'deployed' : 'draft'}`}>{project.isActive ? 'deployed' : 'draft'}</span></td>
+                      <td>admin</td>
+                      <td>{formatProjectDate(project.updatedAt)}</td>
+                      <td>{project.isActive ? formatProjectDate(project.createdAt) : '-'}</td>
+                      <td><span className="submission-pill">{project.responseCount || 0}</span></td>
+                    </tr>
+                  ))}
+                  {filteredProjects.length === 0 && (
+                    <tr>
+                      <td colSpan="7"><p className="empty">No projects match this search.</p></td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {selectedProject && <div className="admin-public-link"><Link2 size={16} /> {window.location.origin}{selectedProject.publicUrl}</div>}
+
+          {editing && (
+            <ProjectEditor
+              project={editing}
+              onChange={setEditing}
+              onCancel={() => setEditing(null)}
+              onSave={saveProject}
+            />
+          )}
+
+          <section id="response-filters" className="admin-section">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Response Review</p>
+                <h2>Submissions and exports</h2>
+              </div>
+              <div className="actions">
+                <button className="download" onClick={() => download('csv')}><Download size={16} /> CSV</button>
+                <button className="download" onClick={() => download('xlsx')}><Download size={16} /> Excel</button>
+              </div>
+            </div>
+
+            <div className="panel filters admin-filters">
+              <label className="filter-project">
+                <span>Project</span>
+                <select value={selectedProject?.id || ''} onChange={(event) => changeSelectedProject(event.target.value)}>
+                  {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Enumerator</span>
+                <select value={filters.enumerator} onChange={(event) => setFilters({ ...filters, enumerator: event.target.value })}>
+                  <option value="">All enumerators</option>
+                  {filterOptions.enumerators.map((enumerator) => <option key={enumerator}>{enumerator}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Location</span>
+                <select value={filters.location} onChange={(event) => setFilters({ ...filters, location: event.target.value })}>
+                  <option value="">All locations</option>
+                  {filterOptions.locations.map((location) => <option key={location}>{location}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Date from</span>
+                <input type="date" value={filters.dateFrom} onChange={(event) => setFilters({ ...filters, dateFrom: event.target.value })} />
+              </label>
+              <label>
+                <span>Date to</span>
+                <input type="date" value={filters.dateTo} onChange={(event) => setFilters({ ...filters, dateTo: event.target.value })} />
+              </label>
+              <div className="filter-actions">
+                <button className="primary" onClick={() => setAppliedFilters(filters)}><Search size={18} /> Search</button>
+                <button className="icon-button" onClick={loadDashboard} aria-label="Refresh dashboard"><RefreshCw size={18} /></button>
+              </div>
+            </div>
+
+            <div className="metric-grid admin-metrics">
+              <Metric icon={<ClipboardList size={19} />} label="Total samples" value={data?.totals?.total_samples ?? 0} />
+              <Metric icon={<CalendarClock size={19} />} label="Samples today" value={data?.totals?.samples_today ?? 0} />
+              <Metric icon={<UserRound size={19} />} label="Enumerators" value={data?.byEnumerator?.length ?? 0} />
+              <Metric icon={<MapPin size={19} />} label="Locations" value={data?.byLocation?.length ?? 0} />
+            </div>
+
+            <div className="chart-grid admin-chart-grid">
+              <Breakdown title="Samples by date" rows={data?.byDate || []} labelKey="date" valueKey="samples" />
+              <Breakdown title="Samples by enumerator" rows={data?.byEnumerator || []} labelKey="enumerator_name" valueKey="samples" />
+              <Breakdown title="Samples by location" rows={data?.byLocation || []} labelKey="location" valueKey="samples" />
+            </div>
+
+            <RecentTable rows={data?.recent || []} loading={loading} onReview={reviewResponse} />
+          </section>
+
+          <ClientAccessManager
+            clients={clients}
+            projects={projects}
+            editingClient={editingClient}
+            onStartNew={startNewClient}
+            onEdit={editClient}
+            onChange={setEditingClient}
+            onCancel={() => setEditingClient(null)}
+            onSave={saveClient}
+          />
+
+          {editingResponse && (
+            <ResponseEditor
+              response={editingResponse}
+              project={selectedProject}
+              onChange={setEditingResponse}
+              onCancel={() => setEditingResponse(null)}
+              onSave={saveResponse}
+              onDownloadAudio={downloadAudio}
+              audioPreview={audioPreview}
+            />
+          )}
+          {status && <p className="status success">{status}</p>}
         </div>
       </div>
-
-      <div className="metric-grid">
-        <Metric icon={<ClipboardList size={19} />} label="Total samples" value={data?.totals?.total_samples ?? 0} />
-        <Metric icon={<CalendarClock size={19} />} label="Samples today" value={data?.totals?.samples_today ?? 0} />
-        <Metric icon={<UserRound size={19} />} label="Enumerators" value={data?.byEnumerator?.length ?? 0} />
-        <Metric icon={<MapPin size={19} />} label="Locations" value={data?.byLocation?.length ?? 0} />
-      </div>
-
-      <div className="chart-grid">
-        <Breakdown title="Samples by date" rows={data?.byDate || []} labelKey="date" valueKey="samples" />
-        <Breakdown title="Samples by enumerator" rows={data?.byEnumerator || []} labelKey="enumerator_name" valueKey="samples" />
-        <Breakdown title="Samples by location" rows={data?.byLocation || []} labelKey="location" valueKey="samples" />
-      </div>
-
-      <RecentTable rows={data?.recent || []} loading={loading} onReview={reviewResponse} />
-      {editingResponse && (
-        <ResponseEditor
-          response={editingResponse}
-          project={selectedProject}
-          onChange={setEditingResponse}
-          onCancel={() => setEditingResponse(null)}
-          onSave={saveResponse}
-          onDownloadAudio={downloadAudio}
-          audioPreview={audioPreview}
-        />
-      )}
-      {status && <p className="status success">{status}</p>}
     </section>
   );
 }

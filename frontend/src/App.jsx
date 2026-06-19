@@ -1124,7 +1124,7 @@ function parseAirportLocation(location = '') {
   return { location, terminal, movement, point: 'Other', otherText: rawPoint };
 }
 
-function QuestionInput({ question, index, value, onChange }) {
+function QuestionInput({ question, index, value, onChange, disabled = false }) {
   const numberProps = question.id.includes('minutes')
     ? { min: 0, max: 59, inputMode: 'numeric' }
     : question.id.includes('hours')
@@ -1136,7 +1136,7 @@ function QuestionInput({ question, index, value, onChange }) {
       <label>
         <span>{index + 1}. {question.label}{question.required && <b>Required</b>}</span>
         {question.type === 'textarea' && (
-          <textarea value={value} onChange={(event) => onChange(event.target.value)} required={question.required} />
+          <textarea value={value} onChange={(event) => onChange(event.target.value)} required={question.required} disabled={disabled} />
         )}
         {question.type === 'select' && question.options.length > 8 && (
           <SearchableSelect
@@ -1144,29 +1144,30 @@ function QuestionInput({ question, index, value, onChange }) {
             value={value}
             onChange={onChange}
             required={question.required}
+            disabled={disabled}
           />
         )}
         {question.type === 'select' && question.options.length <= 8 && (
-          <select value={value} onChange={(event) => onChange(event.target.value)} required={question.required}>
+          <select value={value} onChange={(event) => onChange(event.target.value)} required={question.required} disabled={disabled}>
             <option value="">Select answer</option>
             {question.options.map((option) => <option key={option}>{option}</option>)}
           </select>
         )}
         {question.type === 'number' && (
-          <input type="number" value={value} onChange={(event) => onChange(event.target.value)} required={question.required} {...numberProps} />
+          <input type="number" value={value} onChange={(event) => onChange(event.target.value)} required={question.required} disabled={disabled} {...numberProps} />
         )}
         {question.type === 'date' && (
-          <input type="date" value={value} onChange={(event) => onChange(event.target.value)} required={question.required} />
+          <input type="date" value={value} onChange={(event) => onChange(event.target.value)} required={question.required} disabled={disabled} />
         )}
         {question.type === 'text' && (
-          <input value={value} onChange={(event) => onChange(event.target.value)} required={question.required} />
+          <input value={value} onChange={(event) => onChange(event.target.value)} required={question.required} disabled={disabled} />
         )}
       </label>
     </div>
   );
 }
 
-function SearchableSelect({ options, value, onChange, required }) {
+function SearchableSelect({ options, value, onChange, required, disabled = false }) {
   const [open, setOpen] = useState(false);
   const query = value.toLowerCase();
   const matches = options
@@ -1179,14 +1180,16 @@ function SearchableSelect({ options, value, onChange, required }) {
         value={value}
         onBlur={() => window.setTimeout(() => setOpen(false), 120)}
         onChange={(event) => {
+          if (disabled) return;
           onChange(event.target.value);
           setOpen(true);
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => !disabled && setOpen(true)}
         placeholder="Search and select"
         required={required}
+        disabled={disabled}
       />
-      {open && matches.length > 0 && (
+      {!disabled && open && matches.length > 0 && (
         <div className="search-menu">
           {matches.map((option) => (
             <button
@@ -1485,6 +1488,7 @@ function AdminDashboard({ token, onLogout }) {
   const [editing, setEditing] = useState(null);
   const [editingClient, setEditingClient] = useState(null);
   const [editingResponse, setEditingResponse] = useState(null);
+  const [responseMode, setResponseMode] = useState('edit');
   const [audioPreview, setAudioPreview] = useState(null);
   const [projectSearch, setProjectSearch] = useState('');
   const [projectStatusFilter, setProjectStatusFilter] = useState('deployed');
@@ -1763,7 +1767,7 @@ function AdminDashboard({ token, onLogout }) {
     await loadClients();
   }
 
-  async function reviewResponse(responseId) {
+  async function openResponse(responseId, mode = 'view') {
     setStatus('');
     const response = await fetch(`${apiBase}/api/responses/${responseId}`, { headers: authHeaders });
     if (response.status === 401) return onLogout();
@@ -1772,6 +1776,7 @@ function AdminDashboard({ token, onLogout }) {
       setStatus(payload.error || 'Unable to load response.');
       return;
     }
+    setResponseMode(mode);
     setEditingResponse(payload.response);
   }
 
@@ -2158,7 +2163,7 @@ function AdminDashboard({ token, onLogout }) {
                             <button className="icon-button" onClick={loadDashboard} aria-label="Refresh dashboard"><RefreshCw size={18} /></button>
                           </div>
                         </div>
-                        <RecentTable rows={data?.recent || []} project={selectedProject} loading={loading} onReview={reviewResponse} />
+                        <RecentTable rows={data?.recent || []} project={selectedProject} loading={loading} onView={(responseId) => openResponse(responseId, 'view')} onEdit={(responseId) => openResponse(responseId, 'edit')} />
                       </>
                     )}
 
@@ -2372,7 +2377,7 @@ function AdminDashboard({ token, onLogout }) {
               <Breakdown title="Samples by enumerator" rows={data?.byEnumerator || []} labelKey="enumerator_name" valueKey="samples" />
             </div>
 
-            <RecentTable rows={data?.recent || []} project={selectedProject} loading={loading} onReview={reviewResponse} />
+            <RecentTable rows={data?.recent || []} project={selectedProject} loading={loading} onView={(responseId) => openResponse(responseId, 'view')} onEdit={(responseId) => openResponse(responseId, 'edit')} />
             </section>
           )}
 
@@ -2394,6 +2399,7 @@ function AdminDashboard({ token, onLogout }) {
           {editingResponse && (
             <ResponseEditor
               response={editingResponse}
+              mode={responseMode}
               project={selectedProject}
               onChange={setEditingResponse}
               onCancel={() => setEditingResponse(null)}
@@ -2626,12 +2632,16 @@ function ClientAccessManager({ clients, projects, editingClient, onStartNew, onE
   );
 }
 
-function ResponseEditor({ response, project, onChange, onCancel, onSave, onDownloadAudio, audioPreview }) {
+function ResponseEditor({ response, mode = 'edit', project, onChange, onCancel, onSave, onDownloadAudio, audioPreview }) {
+  const readOnly = mode === 'view';
+
   function update(field, value) {
+    if (readOnly) return;
     onChange({ ...response, [field]: value });
   }
 
   function updateAnswer(questionId, value) {
+    if (readOnly) return;
     onChange({
       ...response,
       answers: deriveAnswers({ ...response.answers, [questionId]: value })
@@ -2639,6 +2649,7 @@ function ResponseEditor({ response, project, onChange, onCancel, onSave, onDownl
   }
 
   function autoClean() {
+    if (readOnly) return;
     onChange({
       ...response,
       answers: autoCleanAnswers(response.answers, project?.questions || [])
@@ -2646,79 +2657,82 @@ function ResponseEditor({ response, project, onChange, onCancel, onSave, onDownl
   }
 
   return (
-    <div className="panel response-editor">
-      <div className="section-title">
-        <div>
-          <p className="eyebrow">Review Submission</p>
-          <h2>Response #{response.id}</h2>
-          <p>Submitted {new Date(response.submittedAt).toLocaleString()}</p>
-        </div>
-        <div className="actions">
-          {response.hasAudio && (
-            <button className="download audio-download" onClick={() => onDownloadAudio(response.id)}>
-              <Download size={16} /> Audio
-            </button>
-          )}
-          <button className="secondary" onClick={autoClean}><RefreshCw size={18} /> Auto-clean</button>
-          <button className="secondary" onClick={onCancel}>Cancel</button>
-          <button className="primary" onClick={() => onSave(response)}><Save size={18} /> Save Response</button>
-        </div>
-      </div>
-
-      {response.hasAudio && (
-        <div className="audio-review-card">
+    <div className="response-editor-backdrop" role="presentation">
+      <div className="panel response-editor" role="dialog" aria-modal="true" aria-label={`${readOnly ? 'View' : 'Edit'} response ${response.id}`}>
+        <div className="section-title">
           <div>
-            <strong>Audio review</strong>
-            <span>{audioPreview?.mimeType ? audioPreview.mimeType : 'Loading recording...'}</span>
+            <p className="eyebrow">{readOnly ? 'View Submission' : 'Edit Submission'}</p>
+            <h2>Response #{response.id}</h2>
+            <p>Submitted {new Date(response.submittedAt).toLocaleString()}</p>
           </div>
-          {audioPreview?.url ? (
-            <audio controls preload="metadata">
-              <source src={audioPreview.url} type={audioPreview.mimeType || response.audioMimeType || 'audio/webm'} />
-              Your browser cannot play this audio. Please download it.
-            </audio>
-          ) : (
-            <p>{audioPreview?.error || 'Preparing audio preview...'}</p>
-          )}
+          <div className="actions">
+            {response.hasAudio && (
+              <button className="download audio-download" onClick={() => onDownloadAudio(response.id)}>
+                <Download size={16} /> Audio
+              </button>
+            )}
+            {!readOnly && <button className="secondary" onClick={autoClean}><RefreshCw size={18} /> Auto-clean</button>}
+            <button className="secondary" onClick={onCancel}>{readOnly ? 'Close' : 'Cancel'}</button>
+            {!readOnly && <button className="primary" onClick={() => onSave(response)}><Save size={18} /> Save Response</button>}
+          </div>
         </div>
-      )}
 
-      <div className="inline-grid">
-        <label>
-          Enumerator
-          <input value={response.enumeratorName} onChange={(event) => update('enumeratorName', event.target.value)} />
-        </label>
-        <label>
-          Location
-          <select value={response.location} onChange={(event) => update('location', event.target.value)}>
-            {(project?.locations || []).map((location) => <option key={location}>{location}</option>)}
-          </select>
-        </label>
-      </div>
+        {response.hasAudio && (
+          <div className="audio-review-card">
+            <div>
+              <strong>Audio review</strong>
+              <span>{audioPreview?.mimeType ? audioPreview.mimeType : 'Loading recording...'}</span>
+            </div>
+            {audioPreview?.url ? (
+              <audio controls preload="metadata">
+                <source src={audioPreview.url} type={audioPreview.mimeType || response.audioMimeType || 'audio/webm'} />
+                Your browser cannot play this audio. Please download it.
+              </audio>
+            ) : (
+              <p>{audioPreview?.error || 'Preparing audio preview...'}</p>
+            )}
+          </div>
+        )}
 
-      <div className="inline-grid">
-        <label>
-          Respondent name
-          <input value={response.respondentName || ''} onChange={(event) => update('respondentName', event.target.value)} />
-        </label>
-        <label>
-          Respondent phone
-          <input value={response.respondentPhone || ''} onChange={(event) => update('respondentPhone', event.target.value)} />
-        </label>
-      </div>
+        <div className="inline-grid">
+          <label>
+            Enumerator
+            <input value={response.enumeratorName} onChange={(event) => update('enumeratorName', event.target.value)} disabled={readOnly} />
+          </label>
+          <label>
+            Location
+            <select value={response.location} onChange={(event) => update('location', event.target.value)} disabled={readOnly}>
+              {(project?.locations || []).map((location) => <option key={location}>{location}</option>)}
+            </select>
+          </label>
+        </div>
 
-      <div className="review-question-list">
-        {(project?.questions || [])
-          .filter((question) => !hiddenQuestionIds.has(question.id))
-          .filter((question) => questionAppliesToLocation(question.id, response.location))
-          .map((question) => (
-            <QuestionInput
-              key={question.id}
-              question={question}
-              index={(project?.questions || []).findIndex((item) => item.id === question.id)}
-              value={response.answers?.[question.id] || ''}
-              onChange={(value) => updateAnswer(question.id, value)}
-            />
-          ))}
+        <div className="inline-grid">
+          <label>
+            Respondent name
+            <input value={response.respondentName || ''} onChange={(event) => update('respondentName', event.target.value)} disabled={readOnly} />
+          </label>
+          <label>
+            Respondent phone
+            <input value={response.respondentPhone || ''} onChange={(event) => update('respondentPhone', event.target.value)} disabled={readOnly} />
+          </label>
+        </div>
+
+        <div className="review-question-list">
+          {(project?.questions || [])
+            .filter((question) => !hiddenQuestionIds.has(question.id))
+            .filter((question) => questionAppliesToLocation(question.id, response.location))
+            .map((question) => (
+              <QuestionInput
+                key={question.id}
+                question={question}
+                index={(project?.questions || []).findIndex((item) => item.id === question.id)}
+                value={response.answers?.[question.id] || ''}
+                onChange={(value) => updateAnswer(question.id, value)}
+                disabled={readOnly}
+              />
+            ))}
+        </div>
       </div>
     </div>
   );
@@ -2779,7 +2793,7 @@ function editDistance(a, b) {
   return dp[a.length][b.length];
 }
 
-function RecentTable({ rows, project, loading, onReview }) {
+function RecentTable({ rows, project, loading, onView, onEdit }) {
   const [selectedRows, setSelectedRows] = useState([]);
   const [columnFilters, setColumnFilters] = useState({});
   const [showFields, setShowFields] = useState(false);
@@ -2799,10 +2813,10 @@ function RecentTable({ rows, project, loading, onReview }) {
     }));
 
   const baseColumns = [
-    { key: 'validation', label: 'Validation', type: 'select', options: ['-'], width: 170, value: () => '-' },
-    { key: 'submitted_at', label: 'Submitted', type: 'date', width: 170, value: (row) => formatProjectDate(row.submitted_at) },
-    { key: 'enumerator_name', label: 'Enumerator', type: 'text', width: 170, value: (row) => row.enumerator_name || '-' },
-    { key: 'location', label: 'Location', type: 'text', width: 280, value: (row) => row.location || '-' },
+    { key: 'validation', label: 'Validation', type: 'select', options: ['-'], width: 150, value: () => '-' },
+    { key: 'submitted_at', label: 'Submitted', type: 'date', width: 155, value: (row) => formatProjectDate(row.submitted_at) },
+    { key: 'enumerator_name', label: 'Enumerator', type: 'text', width: 165, value: (row) => row.enumerator_name || '-' },
+    { key: 'location', label: 'Location', type: 'text', width: 260, value: (row) => row.location || '-' },
     { key: 'respondent_name', label: 'Respondent', type: 'text', width: 180, value: (row) => row.respondent_name || '-' }
   ];
 
@@ -2885,7 +2899,7 @@ function RecentTable({ rows, project, loading, onReview }) {
       <div className="data-grid-scroll">
         <table className="response-grid-table">
           <colgroup>
-            <col style={{ width: '170px' }} />
+            <col style={{ width: '140px' }} />
             {visibleColumns.map((column) => <col key={column.key} style={{ width: `${column.width}px` }} />)}
           </colgroup>
           <thead>
@@ -2939,8 +2953,8 @@ function RecentTable({ rows, project, loading, onReview }) {
                     onChange={(event) => toggleRow(row.id, event.target.checked)}
                     aria-label={`Select response ${row.id}`}
                   />
-                  <button onClick={() => onReview(row.id)} aria-label={`View response ${row.id}`}><Eye size={18} /></button>
-                  <button onClick={() => onReview(row.id)} aria-label={`Edit response ${row.id}`}><Pencil size={18} /></button>
+                  <button onClick={() => onView(row.id)} aria-label={`View response ${row.id}`} title="View response"><Eye size={18} /></button>
+                  <button onClick={() => onEdit(row.id)} aria-label={`Edit response ${row.id}`} title="Edit response"><Pencil size={18} /></button>
                 </td>
                 {visibleColumns.map((column) => (
                   <td key={column.key} title={String(column.value(row) || '-')}>{String(column.value(row) || '-')}</td>

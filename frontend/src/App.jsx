@@ -3124,8 +3124,10 @@ function DonutQuestionChart({ rows }) {
         style={{ background: makeDonutGradient(topRows) }}
         aria-label="Response split donut chart"
       >
-        <span>{topValue?.percentage || 0}%</span>
-        <small>top</small>
+        <div className="donut-center">
+          <strong>{topValue?.percentage || 0}%</strong>
+          <span>Top</span>
+        </div>
       </div>
       <div className="donut-legend">
         {topRows.map((row, index) => (

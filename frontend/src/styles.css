@@ -1732,6 +1732,7 @@ textarea {
 }
 
 .question-report-grid {
+  align-items: start;
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1743,6 +1744,7 @@ textarea {
   border-left: 4px solid #0aa7a4;
   border-radius: 8px;
   box-shadow: 0 12px 24px rgba(31, 47, 82, 0.06);
+  align-content: start;
   display: grid;
   gap: 12px;
   min-width: 0;
@@ -1837,23 +1839,44 @@ textarea {
   align-items: center;
   aspect-ratio: 1;
   border-radius: 50%;
-  box-shadow: inset 0 0 0 18px rgba(255, 255, 255, 0.9), 0 16px 28px rgba(31, 47, 82, 0.1);
+  box-shadow: 0 16px 28px rgba(31, 47, 82, 0.1);
   display: grid;
   justify-items: center;
+  overflow: hidden;
   place-content: center;
+  position: relative;
 }
 
-.donut-chart span {
-  color: #1f2f52;
-  font-size: 1.25rem;
-  font-weight: 950;
+.donut-chart::before {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 50%;
+  content: "";
+  inset: 28%;
+  position: absolute;
+  z-index: 1;
+}
+
+.donut-center {
+  align-items: center;
+  display: grid;
+  justify-items: center;
   line-height: 1;
+  position: relative;
+  z-index: 2;
 }
 
-.donut-chart small {
+.donut-center strong {
+  color: #1f2f52;
+  font-size: 1.05rem;
+  font-weight: 950;
+}
+
+.donut-center span {
   color: #64708b;
-  font-size: 0.68rem;
+  font-size: 0.55rem;
   font-weight: 900;
+  margin-top: 3px;
   text-transform: uppercase;
 }
 

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BarChart3,
-  BookOpen,
   CalendarClock,
   CheckCircle2,
   ClipboardList,
@@ -1800,7 +1799,7 @@ function AdminDashboard({ token, onLogout }) {
       <div className={`admin-console-shell ${menuCollapsed ? 'menu-collapsed' : ''}`}>
         <aside className="admin-icon-rail">
           <button className={activeAdminSection === 'projects' ? 'active' : ''} onClick={() => openAdminSection('projects')} title="Projects"><ClipboardList size={24} /></button>
-          <button className={activeAdminSection === 'library' ? 'active' : ''} onClick={() => openAdminSection('library')} title="Response library"><BookOpen size={24} /></button>
+          <button className={activeAdminSection === 'library' ? 'active' : ''} onClick={() => openAdminSection('library')} title="Project dashboard"><BarChart3 size={24} /></button>
           <button className={activeAdminSection === 'account' ? 'active' : ''} onClick={() => openAdminSection('account')} title="Client accounts"><UserRound size={24} /></button>
         </aside>
 

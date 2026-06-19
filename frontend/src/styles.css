@@ -631,6 +631,9 @@ textarea {
   color: #edf4fb;
   font-size: 1.18rem;
   font-weight: 900;
+  max-width: min(720px, 48vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -826,12 +829,44 @@ textarea {
   color: #ffffff;
 }
 
+.admin-sidebar-project-list {
+  border-top: 1px solid #e3e9f1;
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding-top: 10px;
+}
+
+.admin-sidebar-project-list button {
+  background: transparent;
+  border: 0;
+  border-left: 3px solid transparent;
+  color: #5f6c85;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 750;
+  line-height: 1.35;
+  min-height: 34px;
+  overflow: hidden;
+  padding: 7px 8px;
+  text-align: left;
+}
+
+.admin-sidebar-project-list button.active {
+  background: #edf2f7;
+  border-left-color: #0aa7a4;
+  color: #133e98;
+}
+
 .menu-collapsed .admin-sidebar {
   padding: 18px 10px;
 }
 
 .menu-collapsed .admin-collapse-button span,
 .menu-collapsed .admin-sidebar-row span,
+.menu-collapsed .admin-sidebar-project-list,
 .menu-collapsed .admin-selected-card {
   display: none;
 }
@@ -1039,6 +1074,334 @@ textarea {
 .admin-dashboard-section {
   border-top: 0;
   padding-top: 0;
+}
+
+.back-link {
+  background: transparent;
+  border: 0;
+  color: #0a7777;
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 900;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.project-workspace {
+  display: grid;
+  gap: 18px;
+}
+
+.project-workspace-header {
+  align-items: end;
+  border-bottom: 1px solid #dce5ee;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding-bottom: 14px;
+}
+
+.project-workspace-header h2 {
+  color: #1f2f52;
+  font-size: 1.35rem;
+  margin: 0 0 4px;
+}
+
+.project-workspace-header p {
+  color: #65718b;
+  margin: 0;
+}
+
+.project-tabs {
+  align-items: center;
+  background: #ffffff;
+  border-bottom: 1px solid #dce5ee;
+  display: flex;
+  gap: clamp(18px, 5vw, 72px);
+  justify-content: center;
+  overflow-x: auto;
+}
+
+.project-tabs button {
+  background: transparent;
+  border: 0;
+  border-bottom: 4px solid transparent;
+  color: #64708b;
+  cursor: pointer;
+  font-weight: 900;
+  min-height: 54px;
+  padding: 0 4px;
+  text-transform: uppercase;
+}
+
+.project-tabs button.active {
+  border-bottom-color: #0aa7a4;
+  color: #1f2f52;
+}
+
+.project-summary-grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) minmax(270px, 340px);
+}
+
+.project-summary-grid .span-2 {
+  grid-column: 1 / -1;
+}
+
+.project-info-card,
+.summary-submissions,
+.form-version-card,
+.collect-card,
+.download-builder,
+.exports-table,
+.settings-content {
+  background: #ffffff;
+  border: 1px solid #dfe7ef;
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(31, 47, 82, 0.06);
+}
+
+.project-info-card {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.project-info-card .section-title,
+.project-info-row {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 18px;
+}
+
+.project-info-card .section-title {
+  grid-column: 1 / -1;
+}
+
+.project-info-row {
+  display: grid;
+  gap: 8px;
+}
+
+.project-info-row.span-2 {
+  grid-column: 1 / -1;
+}
+
+.project-info-row span {
+  color: #68758e;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.project-info-row strong {
+  color: #17243f;
+  font-size: 0.98rem;
+  line-height: 1.45;
+}
+
+.quick-link-stack {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.quick-link-stack h2 {
+  color: #1f2f52;
+  margin-bottom: 8px;
+}
+
+.quick-link-stack button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dfe7ef;
+  border-radius: 0;
+  color: #52617c;
+  cursor: pointer;
+  display: grid;
+  font-weight: 850;
+  gap: 12px;
+  grid-template-columns: auto 1fr auto;
+  min-height: 56px;
+  padding: 0 16px;
+  text-align: left;
+}
+
+.quick-link-stack button:hover {
+  background: #f4fbfb;
+}
+
+.summary-submissions {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.period-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.period-pills span {
+  background: #e9f8f7;
+  border-radius: 7px;
+  color: #0a7777;
+  font-size: 0.84rem;
+  font-weight: 850;
+  padding: 8px 10px;
+}
+
+.project-form-workspace,
+.downloads-workspace,
+.reports-workspace {
+  display: grid;
+  gap: 18px;
+}
+
+.form-version-card,
+.collect-card {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 22px;
+}
+
+.form-version-card h2,
+.collect-card h2 {
+  margin-bottom: 6px;
+}
+
+.collect-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.form-access-row {
+  background: #ffffff;
+  border: 1px solid #dfe7ef;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.project-data-layout,
+.settings-layout {
+  display: grid;
+  gap: 0;
+  grid-template-columns: 210px minmax(0, 1fr);
+  min-height: 560px;
+}
+
+.project-data-nav,
+.settings-nav {
+  background: #ffffff;
+  border-right: 1px solid #dfe7ef;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding: 16px 12px;
+}
+
+.project-data-nav button,
+.settings-nav button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-left: 4px solid transparent;
+  color: #5c6983;
+  cursor: pointer;
+  display: flex;
+  font-weight: 850;
+  gap: 12px;
+  justify-content: flex-start;
+  min-height: 48px;
+  padding: 0 12px;
+  text-align: left;
+  text-transform: capitalize;
+}
+
+.project-data-nav button.active,
+.settings-nav button.active {
+  background: #f1fbfb;
+  border-left-color: #0aa7a4;
+  color: #1f2f52;
+}
+
+.project-data-content,
+.settings-content {
+  background: #f4f6fa;
+  min-width: 0;
+  padding: 20px;
+}
+
+.report-warning {
+  background: #fff0d9;
+  border: 1px solid #ffd29b;
+  border-radius: 8px;
+  color: #5d4322;
+  font-weight: 750;
+  padding: 16px 18px;
+}
+
+.empty-state-panel {
+  align-items: center;
+  color: #65718b;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  min-height: 260px;
+  padding: 24px;
+  text-align: center;
+}
+
+.download-builder {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+}
+
+.exports-table {
+  padding: 18px;
+}
+
+.map-workspace {
+  display: grid;
+  gap: 18px;
+}
+
+.map-panel {
+  align-items: center;
+  background:
+    linear-gradient(135deg, rgba(10, 167, 164, 0.14), rgba(19, 62, 152, 0.08)),
+    #ffffff;
+  border: 1px solid #cfe3e9;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  min-height: 260px;
+  padding: clamp(22px, 4vw, 42px);
+}
+
+.map-panel h2 {
+  color: #1f2f52;
+  font-size: 1.7rem;
+  margin: 12px 0 8px;
+}
+
+.map-panel p {
+  color: #5f6c85;
+  max-width: 560px;
+}
+
+.map-panel strong {
+  align-items: center;
+  background: #0aa7a4;
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 1.8rem;
+  height: 84px;
+  justify-content: center;
+  width: 84px;
 }
 
 .project-kpi-grid .metric:nth-child(1) {
@@ -1676,6 +2039,37 @@ tbody tr:hover {
     grid-template-columns: 1fr 1fr;
   }
 
+  .project-summary-grid,
+  .project-data-layout,
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .project-info-card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .project-data-nav,
+  .settings-nav {
+    border-right: 0;
+    border-bottom: 1px solid #dfe7ef;
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .project-data-nav button,
+  .settings-nav button {
+    border-left: 0;
+    border-bottom: 4px solid transparent;
+    flex: 0 0 auto;
+  }
+
+  .project-data-nav button.active,
+  .settings-nav button.active {
+    border-bottom-color: #0aa7a4;
+    border-left-color: transparent;
+  }
+
   .client-analytics-grid .span-2 {
     grid-column: auto;
   }
@@ -1700,6 +2094,7 @@ tbody tr:hover {
 
   .admin-brand-mark span {
     font-size: 1rem;
+    max-width: calc(100vw - 88px);
   }
 
   .admin-search {
@@ -1749,6 +2144,54 @@ tbody tr:hover {
 
   .admin-project-table table {
     min-width: 980px;
+  }
+
+  .admin-sidebar-project-list {
+    grid-column: 1 / -1;
+    max-height: 150px;
+  }
+
+  .project-workspace-header,
+  .form-version-card,
+  .collect-card,
+  .map-panel {
+    align-items: stretch;
+    display: grid;
+  }
+
+  .project-tabs {
+    justify-content: flex-start;
+  }
+
+  .project-info-card,
+  .metric-grid,
+  .component-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .project-info-card .section-title,
+  .project-info-row,
+  .project-info-row.span-2 {
+    grid-column: auto;
+  }
+
+  .project-data-content,
+  .settings-content {
+    padding: 12px;
+  }
+
+  .project-data-nav,
+  .settings-nav {
+    padding: 10px;
+  }
+
+  .collect-actions,
+  .period-pills {
+    display: grid;
+  }
+
+  .quick-link-stack button {
+    min-height: 52px;
   }
 
   .topbar {

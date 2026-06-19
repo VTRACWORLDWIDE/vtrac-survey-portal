@@ -4,17 +4,24 @@ import {
   CalendarClock,
   CheckCircle2,
   ClipboardList,
+  Copy,
   Download,
+  ExternalLink,
+  Eye,
   FileText,
+  Image as ImageIcon,
   Link2,
   LogOut,
   MapPin,
+  Pencil,
   Plus,
   RefreshCw,
   Save,
   Search,
   Send,
   ShieldCheck,
+  Share2,
+  Table2,
   Trash2,
   UserRound,
   PanelLeftClose,
@@ -1446,7 +1453,9 @@ function AdminLogin({ onLogin }) {
       <div className="admin-login-topbar">
         <div className="admin-brand-mark">
           <img src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
-          <span>VTRAC Survey Console</span>
+          <span title={activeAdminSection === 'projectWorkspace' ? selectedProject?.name : 'VTRAC Survey Console'}>
+            {activeAdminSection === 'projectWorkspace' && selectedProject ? selectedProject.name : 'VTRAC Survey Console'}
+          </span>
         </div>
       </div>
       <form className="admin-login-card" onSubmit={submit}>
@@ -1482,6 +1491,9 @@ function AdminDashboard({ token, onLogout }) {
   const [activeAdminSection, setActiveAdminSection] = useState('projects');
   const [menuCollapsed, setMenuCollapsed] = useState(false);
   const [selectedProjectIds, setSelectedProjectIds] = useState([]);
+  const [projectWorkspaceTab, setProjectWorkspaceTab] = useState('summary');
+  const [projectDataTab, setProjectDataTab] = useState('table');
+  const [projectSettingsTab, setProjectSettingsTab] = useState('general');
   const [filters, setFilters] = useState({ enumerator: '', location: '', dateFrom: '', dateTo: '' });
   const [appliedFilters, setAppliedFilters] = useState(filters);
   const [data, setData] = useState(null);
@@ -1511,6 +1523,12 @@ function AdminDashboard({ token, onLogout }) {
   const clientProjectRows = clients.map((client) => ({
     label: client.displayName || client.username,
     samples: client.projectIds?.length || 0
+  }));
+  const selectedProjectLatest = data?.recent?.[0]?.submitted_at ? formatProjectDate(data.recent[0].submitted_at) : '-';
+  const selectedProjectQuestions = selectedProject?.questions?.length || 0;
+  const projectLocationRows = (data?.byLocation || []).map((row) => ({
+    label: row.location,
+    samples: row.samples
   }));
   const authHeaders = { Authorization: `Bearer ${token}` };
 
@@ -1571,6 +1589,8 @@ function AdminDashboard({ token, onLogout }) {
 
   function openAdminSection(section) {
     setActiveAdminSection(section);
+    setEditing(null);
+    setEditingResponse(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -1586,6 +1606,23 @@ function AdminDashboard({ token, onLogout }) {
       else next.delete(projectId);
       return [...next];
     });
+  }
+
+  function openProjectWorkspace(project, tab = 'summary') {
+    changeSelectedProject(project.id);
+    setActiveAdminSection('projectWorkspace');
+    setProjectWorkspaceTab(tab);
+    setEditing(null);
+    setEditingClient(null);
+    setEditingResponse(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function copyPublicLink() {
+    if (!selectedProject) return;
+    const link = `${window.location.origin}${selectedProject.publicUrl}`;
+    navigator.clipboard?.writeText(link);
+    setStatus('Public survey link copied.');
   }
 
   function toggleVisibleProjectSelection(checked) {
@@ -1662,7 +1699,6 @@ function AdminDashboard({ token, onLogout }) {
   }
 
   function editProject(project) {
-    setActiveAdminSection('projects');
     setEditing({
       ...project,
       locations: project.locations.join('\n'),
@@ -1798,8 +1834,8 @@ function AdminDashboard({ token, onLogout }) {
 
       <div className={`admin-console-shell ${menuCollapsed ? 'menu-collapsed' : ''}`}>
         <aside className="admin-icon-rail">
-          <button className={activeAdminSection === 'projects' ? 'active' : ''} onClick={() => openAdminSection('projects')} title="Projects"><ClipboardList size={24} /></button>
-          <button className={activeAdminSection === 'library' ? 'active' : ''} onClick={() => openAdminSection('library')} title="Project dashboard"><BarChart3 size={24} /></button>
+          <button className={activeAdminSection === 'projects' || activeAdminSection === 'projectWorkspace' ? 'active' : ''} onClick={() => openAdminSection('projects')} title="Projects"><ClipboardList size={24} /></button>
+          <button className={activeAdminSection === 'library' ? 'active' : ''} onClick={() => openAdminSection('library')} title="Portfolio dashboard"><BarChart3 size={24} /></button>
           <button className={activeAdminSection === 'account' ? 'active' : ''} onClick={() => openAdminSection('account')} title="Client accounts"><UserRound size={24} /></button>
         </aside>
 
@@ -1825,6 +1861,17 @@ function AdminDashboard({ token, onLogout }) {
             <span>Archived</span>
             <strong>{projectCounts.archived}</strong>
           </button>
+          <div className="admin-sidebar-project-list">
+            {filteredProjects.slice(0, 10).map((project) => (
+              <button
+                className={project.id === selectedProject?.id ? 'active' : ''}
+                key={project.id}
+                onClick={() => openProjectWorkspace(project)}
+              >
+                {project.name}
+              </button>
+            ))}
+          </div>
           {selectedProject && (
             <div className="admin-selected-card">
               <span>Selected project</span>
@@ -1871,7 +1918,7 @@ function AdminDashboard({ token, onLogout }) {
                       {filteredProjects.map((project) => {
                         const rowSelected = selectedProjectIds.includes(project.id);
                         return (
-                          <tr className={`${project.id === selectedProject?.id ? 'selected-row' : ''} ${rowSelected ? 'checked-row' : ''}`.trim()} key={project.id} onClick={() => changeSelectedProject(project.id)}>
+                          <tr className={`${project.id === selectedProject?.id ? 'selected-row' : ''} ${rowSelected ? 'checked-row' : ''}`.trim()} key={project.id} onClick={() => openProjectWorkspace(project)}>
                             <td>
                               <input
                                 className="row-checkbox-input"
@@ -1883,7 +1930,7 @@ function AdminDashboard({ token, onLogout }) {
                               />
                             </td>
                             <td>
-                              <button className="project-name-button" onClick={(event) => { event.stopPropagation(); editProject(project); }}>
+                              <button className="project-name-button" onClick={(event) => { event.stopPropagation(); openProjectWorkspace(project); }}>
                                 {project.name}
                               </button>
                               <small>{project.slug}</small>
@@ -1917,6 +1964,337 @@ function AdminDashboard({ token, onLogout }) {
                 />
               )}
             </>
+          )}
+
+          {activeAdminSection === 'projectWorkspace' && selectedProject && (
+            <section className="project-workspace">
+              <div className="project-workspace-header">
+                <div>
+                  <button className="back-link" onClick={() => openAdminSection('projects')}>Back to projects</button>
+                  <h2>{selectedProject.name}</h2>
+                  <p>{selectedProject.description || 'No project description added yet.'}</p>
+                </div>
+                <span className={`project-status ${selectedProject.isActive ? 'deployed' : 'draft'}`}>{selectedProject.isActive ? 'deployed' : 'draft'}</span>
+              </div>
+
+              <div className="project-tabs" role="tablist" aria-label="Project workspace">
+                {[
+                  ['summary', 'Summary'],
+                  ['form', 'Form'],
+                  ['data', 'Data'],
+                  ['settings', 'Settings']
+                ].map(([tab, label]) => (
+                  <button
+                    className={projectWorkspaceTab === tab ? 'active' : ''}
+                    key={tab}
+                    onClick={() => {
+                      setProjectWorkspaceTab(tab);
+                      setEditing(null);
+                      setEditingResponse(null);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {projectWorkspaceTab === 'summary' && (
+                <div className="project-summary-grid">
+                  <div className="project-info-card">
+                    <div className="section-title">
+                      <h2>Project information</h2>
+                      <button className="secondary compact-button" onClick={() => setProjectWorkspaceTab('settings')}><Pencil size={15} /> Edit details</button>
+                    </div>
+                    <div className="project-info-row span-2">
+                      <span>Description</span>
+                      <strong>{selectedProject.description || 'No description added'}</strong>
+                    </div>
+                    <div className="project-info-row">
+                      <span>Status</span>
+                      <strong><span className={`project-status ${selectedProject.isActive ? 'deployed' : 'draft'}`}>{selectedProject.isActive ? 'deployed' : 'draft'}</span></strong>
+                    </div>
+                    <div className="project-info-row">
+                      <span>Questions</span>
+                      <strong>{selectedProjectQuestions}</strong>
+                    </div>
+                    <div className="project-info-row">
+                      <span>Owner</span>
+                      <strong>admin</strong>
+                    </div>
+                    <div className="project-info-row">
+                      <span>Last modified</span>
+                      <strong>{formatProjectDate(selectedProject.updatedAt)}</strong>
+                    </div>
+                    <div className="project-info-row">
+                      <span>Date deployed</span>
+                      <strong>{selectedProject.isActive ? formatProjectDate(selectedProject.createdAt) : '-'}</strong>
+                    </div>
+                    <div className="project-info-row">
+                      <span>Latest submission</span>
+                      <strong>{selectedProjectLatest}</strong>
+                    </div>
+                  </div>
+
+                  <div className="quick-link-stack">
+                    <h2>Quick Links</h2>
+                    <button onClick={() => window.open(selectedProject.publicUrl, '_blank')}><ClipboardList size={19} /> Collect data <ExternalLink size={17} /></button>
+                    <button onClick={copyPublicLink}><Share2 size={19} /> Copy survey link <Copy size={17} /></button>
+                    <button onClick={() => { setProjectWorkspaceTab('form'); editProject(selectedProject); }}><Pencil size={19} /> Edit form <ExternalLink size={17} /></button>
+                    <button onClick={() => window.open(selectedProject.publicUrl, '_blank')}><Eye size={19} /> Preview form <ExternalLink size={17} /></button>
+                  </div>
+
+                  <div className="summary-submissions span-2">
+                    <div className="section-title">
+                      <div>
+                        <p className="eyebrow">Submissions</p>
+                        <h2>Collection performance</h2>
+                      </div>
+                      <div className="period-pills">
+                        <span>Past 7 days</span>
+                        <span>Past 31 days</span>
+                        <span>Past 3 months</span>
+                        <span>Past 12 months</span>
+                      </div>
+                    </div>
+                    <div className="metric-grid admin-metrics">
+                      <Metric icon={<ClipboardList size={19} />} label="Total samples" value={data?.totals?.total_samples ?? 0} />
+                      <Metric icon={<CalendarClock size={19} />} label="Samples today" value={data?.totals?.samples_today ?? 0} />
+                      <Metric icon={<MapPin size={19} />} label="Locations" value={data?.byLocation?.length ?? 0} />
+                      <Metric icon={<UserRound size={19} />} label="Enumerators" value={data?.byEnumerator?.length ?? 0} />
+                    </div>
+                    <div className="chart-grid admin-chart-grid">
+                      <Breakdown title="Samples by date" rows={data?.byDate || []} labelKey="date" valueKey="samples" />
+                      <Breakdown title="Samples by location" rows={data?.byLocation || []} labelKey="location" valueKey="samples" />
+                      <Breakdown title="Samples by enumerator" rows={data?.byEnumerator || []} labelKey="enumerator_name" valueKey="samples" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {projectWorkspaceTab === 'form' && (
+                <div className="project-form-workspace">
+                  <div className="form-version-card">
+                    <div>
+                      <h2>Current version</h2>
+                      <p><strong>v1</strong> Last modified: {formatProjectDate(selectedProject.updatedAt)} · {selectedProjectQuestions} questions</p>
+                    </div>
+                    <button className="primary" onClick={() => editProject(selectedProject)}><Pencil size={18} /> Edit Form</button>
+                  </div>
+                  <div className="collect-card">
+                    <div>
+                      <h2>Collect data</h2>
+                      <p>Online and offline-enabled public survey link for field data collection.</p>
+                    </div>
+                    <div className="collect-actions">
+                      <button className="secondary" onClick={copyPublicLink}><Copy size={17} /> Copy</button>
+                      <button className="primary" onClick={() => window.open(selectedProject.publicUrl, '_blank')}><ExternalLink size={17} /> Open</button>
+                    </div>
+                  </div>
+                  <label className="check-row form-access-row">
+                    <input type="checkbox" checked readOnly />
+                    Allow submissions to this form without username and password
+                  </label>
+                  {editing && (
+                    <ProjectEditor
+                      project={editing}
+                      onChange={setEditing}
+                      onCancel={() => setEditing(null)}
+                      onSave={saveProject}
+                    />
+                  )}
+                </div>
+              )}
+
+              {projectWorkspaceTab === 'data' && (
+                <div className="project-data-layout">
+                  <aside className="project-data-nav">
+                    {[
+                      ['table', 'Table', <Table2 size={21} />],
+                      ['reports', 'Reports', <BarChart3 size={21} />],
+                      ['gallery', 'Gallery', <ImageIcon size={21} />],
+                      ['downloads', 'Downloads', <Download size={21} />],
+                      ['map', 'Map', <MapPin size={21} />]
+                    ].map(([tab, label, icon]) => (
+                      <button className={projectDataTab === tab ? 'active' : ''} key={tab} onClick={() => setProjectDataTab(tab)}>
+                        {icon}{label}
+                      </button>
+                    ))}
+                  </aside>
+
+                  <div className="project-data-content">
+                    {projectDataTab === 'table' && (
+                      <>
+                        <div className="panel filters admin-filters">
+                          <label>
+                            <span>Enumerator</span>
+                            <select value={filters.enumerator} onChange={(event) => setFilters({ ...filters, enumerator: event.target.value })}>
+                              <option value="">All enumerators</option>
+                              {filterOptions.enumerators.map((enumerator) => <option key={enumerator}>{enumerator}</option>)}
+                            </select>
+                          </label>
+                          <label>
+                            <span>Location</span>
+                            <select value={filters.location} onChange={(event) => setFilters({ ...filters, location: event.target.value })}>
+                              <option value="">All locations</option>
+                              {filterOptions.locations.map((location) => <option key={location}>{location}</option>)}
+                            </select>
+                          </label>
+                          <label>
+                            <span>Date from</span>
+                            <input type="date" value={filters.dateFrom} onChange={(event) => setFilters({ ...filters, dateFrom: event.target.value })} />
+                          </label>
+                          <label>
+                            <span>Date to</span>
+                            <input type="date" value={filters.dateTo} onChange={(event) => setFilters({ ...filters, dateTo: event.target.value })} />
+                          </label>
+                          <div className="filter-actions">
+                            <button className="primary" onClick={() => setAppliedFilters(filters)}><Search size={18} /> Search</button>
+                            <button className="icon-button" onClick={loadDashboard} aria-label="Refresh dashboard"><RefreshCw size={18} /></button>
+                          </div>
+                        </div>
+                        <RecentTable rows={data?.recent || []} loading={loading} onReview={reviewResponse} />
+                      </>
+                    )}
+
+                    {projectDataTab === 'reports' && (
+                      <div className="reports-workspace">
+                        <div className="report-warning">Automated report based on submitted data. Review and clean records before using figures for final client reports.</div>
+                        <div className="chart-grid admin-chart-grid">
+                          <Breakdown title="Samples by date" rows={data?.byDate || []} labelKey="date" valueKey="samples" />
+                          <Breakdown title="Samples by location" rows={data?.byLocation || []} labelKey="location" valueKey="samples" />
+                          <Breakdown title="Samples by enumerator" rows={data?.byEnumerator || []} labelKey="enumerator_name" valueKey="samples" />
+                        </div>
+                      </div>
+                    )}
+
+                    {projectDataTab === 'gallery' && (
+                      <div className="panel empty-state-panel">
+                        <ImageIcon size={34} />
+                        <h2>Gallery</h2>
+                        <p>Media uploads are not enabled for this Phase 1 survey. Future projects with photos or audio can review files here.</p>
+                      </div>
+                    )}
+
+                    {projectDataTab === 'downloads' && (
+                      <div className="downloads-workspace">
+                        <div className="download-builder panel">
+                          <h2>Downloads</h2>
+                          <div className="inline-grid">
+                            <label>
+                              Select export type
+                              <select defaultValue="xlsx">
+                                <option value="xlsx">Excel (.xlsx)</option>
+                                <option value="csv">CSV</option>
+                              </select>
+                            </label>
+                            <label>
+                              Value and header format
+                              <select defaultValue="labels">
+                                <option value="labels">Labels</option>
+                                <option value="raw">Raw values</option>
+                              </select>
+                            </label>
+                          </div>
+                          <div className="actions">
+                            <button className="download" onClick={() => download('csv')}><Download size={16} /> CSV</button>
+                            <button className="download" onClick={() => download('xlsx')}><Download size={16} /> Excel</button>
+                          </div>
+                        </div>
+                        <div className="panel exports-table">
+                          <div className="section-title">
+                            <h2>Exports</h2>
+                            <p>Latest export options</p>
+                          </div>
+                          <div className="table-scroll">
+                            <table>
+                              <thead>
+                                <tr><th>Type</th><th>Created</th><th>Format</th><th>Action</th></tr>
+                              </thead>
+                              <tbody>
+                                <tr><td>XLSX</td><td>On demand</td><td>Labels</td><td><button className="secondary compact-button" onClick={() => download('xlsx')}><Download size={15} /> Download</button></td></tr>
+                                <tr><td>CSV</td><td>On demand</td><td>Labels</td><td><button className="secondary compact-button" onClick={() => download('csv')}><Download size={15} /> Download</button></td></tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {projectDataTab === 'map' && (
+                      <div className="map-workspace">
+                        <div className="map-panel">
+                          <div>
+                            <MapPin size={42} />
+                            <h2>Location intelligence</h2>
+                            <p>Map-ready survey locations by sample volume. GPS layers can be enabled for future projects that capture coordinates.</p>
+                          </div>
+                          <strong>{data?.totals?.total_samples ?? 0}</strong>
+                        </div>
+                        <Breakdown title="Survey locations" rows={projectLocationRows} labelKey="label" valueKey="samples" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {projectWorkspaceTab === 'settings' && (
+                <div className="settings-layout">
+                  <aside className="settings-nav">
+                    {['general', 'media', 'sharing', 'connect', 'rest', 'activity'].map((tab) => (
+                      <button className={projectSettingsTab === tab ? 'active' : ''} key={tab} onClick={() => setProjectSettingsTab(tab)}>
+                        {tab}
+                      </button>
+                    ))}
+                  </aside>
+                  <div className="settings-content panel">
+                    {projectSettingsTab === 'general' && (
+                      <>
+                        <div className="section-title">
+                          <div>
+                            <p className="eyebrow">General</p>
+                            <h2>Project settings</h2>
+                          </div>
+                          <button className="primary" onClick={() => editProject(selectedProject)}><Save size={18} /> Edit Settings</button>
+                        </div>
+                        <div className="inline-grid">
+                          <label>
+                            Project name
+                            <input value={selectedProject.name} readOnly />
+                          </label>
+                          <label>
+                            URL slug
+                            <input value={selectedProject.slug} readOnly />
+                          </label>
+                        </div>
+                        <label>
+                          Description
+                          <textarea value={selectedProject.description || ''} readOnly />
+                        </label>
+                        <div className="actions">
+                          <button className="secondary" onClick={() => setStatus('Archive workflow is not enabled for pilot safety.')}>Archive Project</button>
+                          <button className="danger-button icon-button" onClick={() => setStatus('Delete workflow is not enabled for pilot safety.')}>Delete Project and Data</button>
+                        </div>
+                        {editing && (
+                          <ProjectEditor
+                            project={editing}
+                            onChange={setEditing}
+                            onCancel={() => setEditing(null)}
+                            onSave={saveProject}
+                          />
+                        )}
+                      </>
+                    )}
+                    {projectSettingsTab !== 'general' && (
+                      <div className="empty-state-panel">
+                        <ShieldCheck size={34} />
+                        <h2>{projectSettingsTab.charAt(0).toUpperCase() + projectSettingsTab.slice(1)} settings</h2>
+                        <p>This area is reserved for the next phase of project controls.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </section>
           )}
 
           {activeAdminSection === 'library' && (

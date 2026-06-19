@@ -2808,16 +2808,16 @@ function RecentTable({ rows, project, loading, onView, onEdit }) {
       label: question.label,
       type: question.type,
       options: question.options || [],
-      width: 220,
+      width: 190,
       value: (row) => row.answers?.[question.id] ?? ''
     }));
 
   const baseColumns = [
-    { key: 'validation', label: 'Validation', type: 'select', options: ['-'], width: 150, value: () => '-' },
-    { key: 'submitted_at', label: 'Submitted', type: 'date', width: 155, value: (row) => formatProjectDate(row.submitted_at) },
-    { key: 'enumerator_name', label: 'Enumerator', type: 'text', width: 165, value: (row) => row.enumerator_name || '-' },
-    { key: 'location', label: 'Location', type: 'text', width: 260, value: (row) => row.location || '-' },
-    { key: 'respondent_name', label: 'Respondent', type: 'text', width: 180, value: (row) => row.respondent_name || '-' }
+    { key: 'validation', label: 'Validation', type: 'select', options: ['-'], width: 130, value: () => '-' },
+    { key: 'submitted_at', label: 'Submitted', type: 'date', width: 140, value: (row) => formatProjectDate(row.submitted_at) },
+    { key: 'enumerator_name', label: 'Enumerator', type: 'text', width: 150, value: (row) => row.enumerator_name || '-' },
+    { key: 'location', label: 'Location', type: 'text', width: 230, value: (row) => row.location || '-' },
+    { key: 'respondent_name', label: 'Respondent', type: 'text', width: 160, value: (row) => row.respondent_name || '-' }
   ];
 
   const allColumns = [...baseColumns, ...questionColumns];
@@ -2899,7 +2899,7 @@ function RecentTable({ rows, project, loading, onView, onEdit }) {
       <div className="data-grid-scroll">
         <table className="response-grid-table">
           <colgroup>
-            <col style={{ width: '140px' }} />
+            <col style={{ width: '118px' }} />
             {visibleColumns.map((column) => <col key={column.key} style={{ width: `${column.width}px` }} />)}
           </colgroup>
           <thead>

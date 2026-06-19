@@ -716,14 +716,14 @@ textarea {
 
 .admin-console-shell {
   display: grid;
-  grid-template-columns: 68px 258px minmax(0, 1fr);
+  grid-template-columns: 58px 224px minmax(0, 1fr);
   min-height: calc(100vh - 78px);
   min-width: 0;
   transition: grid-template-columns 0.2s ease;
 }
 
 .admin-console-shell.menu-collapsed {
-  grid-template-columns: 68px 82px minmax(0, 1fr);
+  grid-template-columns: 58px 72px minmax(0, 1fr);
 }
 
 .admin-icon-rail {
@@ -731,10 +731,10 @@ textarea {
   background: #e8f2f4;
   border-right: 1px solid #d6deea;
   display: grid;
-  gap: 16px;
-  grid-auto-rows: 46px;
+  gap: 12px;
+  grid-auto-rows: 42px;
   justify-items: center;
-  padding-top: 24px;
+  padding-top: 18px;
 }
 
 .admin-icon-rail button {
@@ -745,7 +745,7 @@ textarea {
   color: #38537c;
   cursor: pointer;
   display: inline-flex;
-  height: 46px;
+  height: 42px;
   justify-content: center;
   width: 100%;
 }
@@ -762,10 +762,10 @@ textarea {
   border-right: 1px solid #d5e4ec;
   box-shadow: 4px 0 14px rgba(39, 49, 69, 0.08);
   display: grid;
-  gap: 12px;
-  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 10px;
+  grid-template-columns: 40px minmax(0, 1fr);
   min-width: 0;
-  padding: 24px 14px 18px;
+  padding: 18px 10px 16px;
 }
 
 .admin-collapse-button {
@@ -783,7 +783,7 @@ textarea {
   grid-row: 1;
   justify-content: center;
   justify-self: stretch;
-  min-height: 52px;
+  min-height: 44px;
   padding: 0;
 }
 
@@ -799,11 +799,11 @@ textarea {
   border-radius: 8px;
   color: #ffffff;
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 900;
   grid-column: 2;
   grid-row: 1;
-  min-height: 52px;
+  min-height: 44px;
 }
 
 .admin-sidebar-row {
@@ -814,11 +814,11 @@ textarea {
   color: #52617c;
   cursor: pointer;
   display: flex;
-  font-size: 0.98rem;
+  font-size: 0.88rem;
   font-weight: 800;
   grid-column: 1 / -1;
   justify-content: space-between;
-  min-height: 40px;
+  min-height: 34px;
   padding: 0 6px;
 }
 
@@ -826,8 +826,8 @@ textarea {
   background: #eef5f8;
   border-radius: 999px;
   color: #38537c;
-  min-width: 34px;
-  padding: 5px 8px;
+  min-width: 30px;
+  padding: 4px 7px;
   text-align: center;
 }
 
@@ -851,8 +851,8 @@ textarea {
   gap: 4px;
   grid-auto-rows: max-content;
   grid-column: 1 / -1;
-  margin-top: 8px;
-  max-height: 260px;
+  margin-top: 6px;
+  max-height: 210px;
   overflow-y: auto;
   padding-top: 10px;
 }
@@ -864,15 +864,15 @@ textarea {
   color: #5f6c85;
   cursor: pointer;
   display: -webkit-box;
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: 750;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-height: 1.35;
-  max-height: 54px;
-  min-height: 42px;
+  max-height: 46px;
+  min-height: 38px;
   overflow: hidden;
-  padding: 7px 8px;
+  padding: 6px 7px;
   text-align: left;
 }
 
@@ -915,10 +915,10 @@ textarea {
 .admin-selected-card {
   border-top: 1px solid #e3e9f1;
   display: grid;
-  gap: 8px;
+  gap: 6px;
   grid-column: 1 / -1;
-  margin-top: 10px;
-  padding-top: 16px;
+  margin-top: 8px;
+  padding-top: 12px;
 }
 
 .admin-selected-card span {
@@ -930,8 +930,12 @@ textarea {
 
 .admin-selected-card strong {
   color: #303747;
-  font-size: 0.92rem;
+  display: -webkit-box;
+  font-size: 0.84rem;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
   line-height: 1.35;
+  overflow: hidden;
 }
 
 .admin-selected-card a,
@@ -939,7 +943,7 @@ textarea {
   align-items: center;
   color: #133e98;
   display: flex;
-  font-size: 0.86rem;
+  font-size: 0.8rem;
   font-weight: 850;
   gap: 7px;
   min-width: 0;
@@ -951,10 +955,10 @@ textarea {
   align-content: start;
   background: #ffffff;
   display: grid;
-  gap: 18px;
+  gap: 12px;
   min-width: 0;
   overflow: hidden;
-  padding: 24px 22px 44px;
+  padding: 18px 16px 34px;
 }
 
 .admin-project-toolbar {
@@ -1115,26 +1119,27 @@ textarea {
 
 .project-workspace {
   display: grid;
-  gap: 18px;
+  gap: 12px;
 }
 
 .project-workspace-header {
   align-items: end;
   border-bottom: 1px solid #dce5ee;
   display: flex;
-  gap: 16px;
+  gap: 12px;
   justify-content: space-between;
-  padding-bottom: 14px;
+  padding-bottom: 10px;
 }
 
 .project-workspace-header h2 {
   color: #1f2f52;
-  font-size: 1.18rem;
+  font-size: 1.05rem;
   margin: 0 0 4px;
 }
 
 .project-workspace-header p {
   color: #65718b;
+  font-size: 0.86rem;
   margin: 0;
 }
 
@@ -1143,7 +1148,7 @@ textarea {
   background: #ffffff;
   border-bottom: 1px solid #dce5ee;
   display: flex;
-  gap: clamp(18px, 5vw, 72px);
+  gap: clamp(16px, 4vw, 58px);
   justify-content: center;
   overflow-x: auto;
 }
@@ -1154,9 +1159,9 @@ textarea {
   border-bottom: 4px solid transparent;
   color: #64708b;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 850;
-  min-height: 54px;
+  min-height: 40px;
   padding: 0 4px;
   text-transform: uppercase;
 }
@@ -1312,10 +1317,11 @@ textarea {
 
 .project-data-layout,
 .settings-layout {
+  align-items: start;
   display: grid;
   gap: 0;
-  grid-template-columns: 210px minmax(0, 1fr);
-  min-height: 560px;
+  grid-template-columns: 150px minmax(0, 1fr);
+  min-height: 0;
 }
 
 .project-data-nav,
@@ -1324,8 +1330,8 @@ textarea {
   border-right: 1px solid #dfe7ef;
   display: grid;
   align-content: start;
-  gap: 4px;
-  padding: 16px 12px;
+  gap: 2px;
+  padding: 10px 8px;
 }
 
 .project-data-nav button,
@@ -1337,11 +1343,12 @@ textarea {
   color: #5c6983;
   cursor: pointer;
   display: flex;
+  font-size: 0.84rem;
   font-weight: 850;
-  gap: 12px;
+  gap: 8px;
   justify-content: flex-start;
-  min-height: 48px;
-  padding: 0 12px;
+  min-height: 38px;
+  padding: 0 8px;
   text-align: left;
   text-transform: capitalize;
 }
@@ -1357,17 +1364,17 @@ textarea {
 .settings-content {
   background: #f4f6fa;
   min-width: 0;
-  padding: 16px;
+  padding: 10px;
 }
 
 .project-data-content .admin-filters {
   align-items: end;
   border-radius: 8px;
   display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
   margin-bottom: 2px;
-  padding: 10px;
+  padding: 8px;
 }
 
 .project-data-content .admin-filters label span {
@@ -1377,9 +1384,9 @@ textarea {
 
 .project-data-content .admin-filters input,
 .project-data-content .admin-filters select {
-  font-size: 0.88rem;
-  min-height: 40px;
-  padding: 0 10px;
+  font-size: 0.82rem;
+  min-height: 34px;
+  padding: 0 8px;
 }
 
 .project-data-content .admin-filters .filter-actions {
@@ -1387,12 +1394,12 @@ textarea {
   align-self: end;
   display: flex;
   justify-content: flex-start;
-  min-width: 150px;
+  min-width: 136px;
 }
 
 .project-data-content .admin-filters .filter-actions .primary {
-  min-height: 40px;
-  padding: 0 14px;
+  min-height: 34px;
+  padding: 0 12px;
 }
 
 .data-grid-shell {
@@ -1411,8 +1418,8 @@ textarea {
   border-bottom: 1px solid #dfe5ef;
   display: flex;
   justify-content: space-between;
-  min-height: 58px;
-  padding: 0 14px;
+  min-height: 44px;
+  padding: 0 12px;
 }
 
 .field-toggle {
@@ -1422,7 +1429,7 @@ textarea {
   color: #0e5f9d;
   cursor: pointer;
   display: inline-flex;
-  font-size: 0.95rem;
+  font-size: 0.86rem;
   font-weight: 900;
   gap: 7px;
 }
@@ -1467,9 +1474,9 @@ textarea {
   border-collapse: separate;
   border-spacing: 0;
   color: #30394d;
-  font-size: 0.86rem;
+  font-size: 0.8rem;
   line-height: 1.35;
-  min-width: 1500px;
+  min-width: 1360px;
   table-layout: fixed;
   width: max-content;
 }
@@ -1479,7 +1486,7 @@ textarea {
   border-bottom: 1px solid #dfe5ef;
   border-right: 1px solid #dfe5ef;
   overflow: hidden;
-  padding: 0 12px;
+  padding: 0 9px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1487,17 +1494,17 @@ textarea {
 .response-grid-table th {
   background: #e9ebf0;
   color: #30394d;
-  font-size: 0.84rem;
+  font-size: 0.78rem;
   font-weight: 900;
-  height: 58px;
+  height: 44px;
   text-transform: none;
   vertical-align: top;
 }
 
 .response-grid-table td {
   background: #ffffff;
-  height: 44px;
-  font-size: 0.86rem;
+  height: 38px;
+  font-size: 0.8rem;
 }
 
 .response-grid-table tbody tr:nth-child(even) td {
@@ -1525,7 +1532,7 @@ textarea {
 }
 
 .grid-counter-cell strong {
-  font-size: 0.95rem;
+  font-size: 0.84rem;
 }
 
 .grid-counter-cell span {
@@ -1533,7 +1540,7 @@ textarea {
 }
 
 .grid-heading-row th {
-  padding-top: 9px;
+  padding-top: 7px;
 }
 
 .grid-column-title {
@@ -1541,7 +1548,7 @@ textarea {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   line-height: 1.35;
-  max-height: 42px;
+  max-height: 34px;
   overflow: hidden;
   white-space: normal;
 }
@@ -1554,8 +1561,8 @@ textarea {
 }
 
 .grid-filter-row th {
-  height: 48px;
-  padding: 7px 8px;
+  height: 40px;
+  padding: 5px 7px;
   vertical-align: middle;
 }
 
@@ -1565,16 +1572,16 @@ textarea {
   border: 1px solid #d8dee8;
   border-radius: 6px;
   color: #4a556c;
-  font-size: 0.8rem;
-  min-height: 32px;
-  padding: 0 8px;
+  font-size: 0.76rem;
+  min-height: 28px;
+  padding: 0 7px;
   width: 100%;
 }
 
 .grid-actions-cell {
   align-items: center;
   display: flex;
-  gap: 8px;
+  gap: 7px;
 }
 
 .grid-actions-cell button {
@@ -1597,8 +1604,8 @@ textarea {
   display: flex;
   gap: 14px;
   justify-content: center;
-  min-height: 58px;
-  padding: 10px;
+  min-height: 46px;
+  padding: 8px;
 }
 
 .data-grid-pagination span {

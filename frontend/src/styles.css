@@ -597,12 +597,13 @@ textarea {
 .admin-console {
   background: #f4f6fa;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 .admin-login-topbar,
 .admin-console-topbar {
   align-items: center;
-  background: #333949;
+  background: #133e98;
   color: #ffffff;
   display: flex;
   gap: 22px;
@@ -614,7 +615,7 @@ textarea {
   align-items: center;
   display: flex;
   gap: 10px;
-  min-width: 260px;
+  min-width: 0;
 }
 
 .admin-brand-mark img {
@@ -630,6 +631,7 @@ textarea {
   color: #edf4fb;
   font-size: 1.18rem;
   font-weight: 900;
+  white-space: nowrap;
 }
 
 .admin-login-screen {
@@ -666,13 +668,14 @@ textarea {
 
 .admin-search {
   align-items: center;
-  background: #4b5265;
+  background: rgba(255, 255, 255, 0.16);
   color: #d8e0ee;
   display: flex;
   flex: 1;
   gap: 12px;
   max-width: 940px;
   min-height: 52px;
+  min-width: 180px;
   padding: 0 16px;
 }
 
@@ -691,7 +694,7 @@ textarea {
 
 .admin-avatar {
   align-items: center;
-  background: #2098c8;
+  background: #0aa7a4;
   border: 0;
   border-radius: 999px;
   color: #ffffff;
@@ -706,13 +709,19 @@ textarea {
 
 .admin-console-shell {
   display: grid;
-  grid-template-columns: 74px 286px minmax(0, 1fr);
+  grid-template-columns: 68px 258px minmax(0, 1fr);
   min-height: calc(100vh - 78px);
+  min-width: 0;
+  transition: grid-template-columns 0.2s ease;
+}
+
+.admin-console-shell.menu-collapsed {
+  grid-template-columns: 68px 82px minmax(0, 1fr);
 }
 
 .admin-icon-rail {
   align-items: start;
-  background: #e9edf3;
+  background: #e8f2f4;
   border-right: 1px solid #d6deea;
   display: grid;
   gap: 16px;
@@ -726,7 +735,7 @@ textarea {
   background: transparent;
   border: 0;
   border-left: 3px solid transparent;
-  color: #5f6b84;
+  color: #38537c;
   cursor: pointer;
   display: inline-flex;
   height: 46px;
@@ -735,22 +744,40 @@ textarea {
 }
 
 .admin-icon-rail button.active {
-  border-left-color: #43c2d0;
-  color: #43b7c8;
+  background: rgba(10, 167, 164, 0.12);
+  border-left-color: #0aa7a4;
+  color: #0b9a9b;
 }
 
 .admin-sidebar {
   background: #ffffff;
-  border-right: 1px solid #d9e1ea;
+  border-right: 1px solid #d5e4ec;
   box-shadow: 4px 0 14px rgba(39, 49, 69, 0.08);
   display: grid;
   gap: 12px;
   align-content: start;
-  padding: 26px 18px;
+  min-width: 0;
+  padding: 18px 14px;
+}
+
+.admin-collapse-button {
+  align-items: center;
+  background: #f3f8fb;
+  border: 1px solid #d8e6ed;
+  border-radius: 7px;
+  color: #133e98;
+  cursor: pointer;
+  display: flex;
+  font-size: 0.84rem;
+  font-weight: 900;
+  gap: 8px;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 10px;
 }
 
 .admin-new-button {
-  background: #2196eb;
+  background: #0aa7a4;
   border: 0;
   border-radius: 8px;
   color: #ffffff;
@@ -765,27 +792,63 @@ textarea {
   background: transparent;
   border: 0;
   border-radius: 8px;
-  color: #65718b;
+  color: #52617c;
   cursor: pointer;
   display: flex;
   font-size: 0.98rem;
   font-weight: 800;
   justify-content: space-between;
   min-height: 40px;
-  padding: 0 2px;
+  padding: 0 6px;
 }
 
 .admin-sidebar-row strong {
-  background: #eef1f7;
+  background: #eef5f8;
   border-radius: 999px;
-  color: #65718b;
+  color: #38537c;
   min-width: 34px;
   padding: 5px 8px;
   text-align: center;
 }
 
 .admin-sidebar-row.active span {
-  color: #1d5f91;
+  color: #133e98;
+}
+
+.admin-sidebar-row.active {
+  background: #eaf7f7;
+}
+
+.admin-sidebar-row.active strong {
+  background: #0aa7a4;
+  color: #ffffff;
+}
+
+.menu-collapsed .admin-sidebar {
+  padding: 18px 10px;
+}
+
+.menu-collapsed .admin-collapse-button span,
+.menu-collapsed .admin-sidebar-row span,
+.menu-collapsed .admin-selected-card {
+  display: none;
+}
+
+.menu-collapsed .admin-collapse-button,
+.menu-collapsed .admin-new-button,
+.menu-collapsed .admin-sidebar-row {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.menu-collapsed .admin-new-button {
+  font-size: 0.78rem;
+  min-height: 46px;
+}
+
+.menu-collapsed .admin-sidebar-row strong {
+  min-width: 38px;
 }
 
 .admin-selected-card {
@@ -812,7 +875,7 @@ textarea {
 .admin-selected-card a,
 .admin-public-link {
   align-items: center;
-  color: #0e609b;
+  color: #133e98;
   display: flex;
   font-size: 0.86rem;
   font-weight: 850;
@@ -827,7 +890,8 @@ textarea {
   display: grid;
   gap: 24px;
   min-width: 0;
-  padding: 40px 28px 48px;
+  overflow: hidden;
+  padding: 32px 22px 44px;
 }
 
 .admin-project-toolbar {
@@ -838,7 +902,7 @@ textarea {
 }
 
 .admin-project-toolbar h2 {
-  color: #303747;
+  color: #1f2f52;
   font-size: 1.55rem;
   margin: 0;
 }
@@ -860,7 +924,7 @@ textarea {
   align-items: center;
   background: transparent;
   border: 0;
-  color: #155f99;
+  color: #133e98;
   cursor: pointer;
   display: inline-flex;
   font-weight: 900;
@@ -871,24 +935,32 @@ textarea {
 
 .admin-project-table {
   border-top: 1px solid #dde4ee;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.admin-project-table .table-scroll {
+  max-width: 100%;
+  min-width: 0;
 }
 
 .admin-project-table table {
-  min-width: 1180px;
+  min-width: 880px;
 }
 
 .admin-project-table th {
   background: #ffffff;
   color: #68738a;
   font-size: 0.78rem;
-  padding: 14px 12px;
+  padding: 13px 10px;
   text-transform: none;
 }
 
 .admin-project-table td {
   color: #65718b;
   font-size: 0.95rem;
-  padding: 14px 12px;
+  padding: 13px 10px;
 }
 
 .admin-project-table tbody tr {
@@ -897,7 +969,7 @@ textarea {
 
 .admin-project-table tbody tr.selected-row,
 .admin-project-table tbody tr:hover {
-  background: #f5f9fd;
+  background: #f3fbfb;
 }
 
 .row-checkbox {
@@ -911,12 +983,12 @@ textarea {
 .project-name-button {
   background: transparent;
   border: 0;
-  color: #0e5d98;
+  color: #133e98;
   cursor: pointer;
   display: block;
   font-size: 0.96rem;
   font-weight: 900;
-  max-width: 420px;
+  max-width: min(360px, 38vw);
   overflow: hidden;
   padding: 0;
   text-align: left;
@@ -940,13 +1012,13 @@ textarea {
 }
 
 .project-status.deployed {
-  background: #e6f4ff;
-  color: #176ca8;
+  background: #e7f8f7;
+  color: #087f7f;
 }
 
 .project-status.draft {
-  background: #d9f5f0;
-  color: #21736d;
+  background: #e8eefc;
+  color: #133e98;
 }
 
 .submission-pill {
@@ -1632,6 +1704,10 @@ tbody tr:hover {
 
   .admin-console-shell {
     display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .admin-console-shell.menu-collapsed {
     grid-template-columns: 1fr;
   }
 

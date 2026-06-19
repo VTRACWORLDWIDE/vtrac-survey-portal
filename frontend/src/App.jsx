@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BarChart3,
+  BookOpen,
   CalendarClock,
   CheckCircle2,
   ClipboardList,
@@ -15,7 +16,9 @@ import {
   Send,
   ShieldCheck,
   Trash2,
-  UserRound
+  UserRound,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 
 const apiBase = import.meta.env.VITE_API_BASE || '';
@@ -1475,6 +1478,9 @@ function AdminDashboard({ token, onLogout }) {
   const [editingResponse, setEditingResponse] = useState(null);
   const [audioPreview, setAudioPreview] = useState(null);
   const [projectSearch, setProjectSearch] = useState('');
+  const [projectStatusFilter, setProjectStatusFilter] = useState('deployed');
+  const [activeAdminSection, setActiveAdminSection] = useState('projects');
+  const [menuCollapsed, setMenuCollapsed] = useState(false);
   const [filters, setFilters] = useState({ enumerator: '', location: '', dateFrom: '', dateTo: '' });
   const [appliedFilters, setAppliedFilters] = useState(filters);
   const [data, setData] = useState(null);
@@ -1484,10 +1490,16 @@ function AdminDashboard({ token, onLogout }) {
   const selectedProject = projects.find((project) => project.id === selectedId) || projects[0];
   const filteredProjects = projects.filter((project) => {
     const search = projectSearch.trim().toLowerCase();
-    if (!search) return true;
-    return `${project.name} ${project.slug}`.toLowerCase().includes(search);
+    const matchesSearch = !search || `${project.name} ${project.slug}`.toLowerCase().includes(search);
+    const matchesStatus =
+      projectStatusFilter === 'all' ||
+      (projectStatusFilter === 'deployed' && project.isActive) ||
+      (projectStatusFilter === 'draft' && !project.isActive) ||
+      projectStatusFilter === 'archived';
+    return matchesSearch && matchesStatus;
   });
   const projectCounts = {
+    all: projects.length,
     deployed: projects.filter((project) => project.isActive).length,
     draft: projects.filter((project) => !project.isActive).length,
     archived: 0
@@ -1547,6 +1559,18 @@ function AdminDashboard({ token, onLogout }) {
     setSelectedId(projectId);
     setFilters(emptyFilters);
     setAppliedFilters(emptyFilters);
+  }
+
+  function openAdminSection(section) {
+    setActiveAdminSection(section);
+    const targetId = section === 'library' ? 'response-filters' : section === 'account' ? 'client-access' : 'project-library';
+    document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function filterProjects(statusFilter) {
+    setProjectStatusFilter(statusFilter);
+    setActiveAdminSection('projects');
+    document.getElementById('project-library')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   useEffect(() => {
@@ -1744,24 +1768,32 @@ function AdminDashboard({ token, onLogout }) {
         <button className="admin-avatar" onClick={onLogout} title="Logout">A</button>
       </div>
 
-      <div className="admin-console-shell">
+      <div className={`admin-console-shell ${menuCollapsed ? 'menu-collapsed' : ''}`}>
         <aside className="admin-icon-rail">
-          <button className="active" title="Projects"><ClipboardList size={24} /></button>
-          <button title="Analytics"><BarChart3 size={24} /></button>
-          <button title="Clients"><UserRound size={24} /></button>
+          <button className={activeAdminSection === 'projects' ? 'active' : ''} onClick={() => openAdminSection('projects')} title="Projects"><ClipboardList size={24} /></button>
+          <button className={activeAdminSection === 'library' ? 'active' : ''} onClick={() => openAdminSection('library')} title="Response library"><BookOpen size={24} /></button>
+          <button className={activeAdminSection === 'account' ? 'active' : ''} onClick={() => openAdminSection('account')} title="Client accounts"><UserRound size={24} /></button>
         </aside>
 
         <aside className="admin-sidebar">
+          <button className="admin-collapse-button" onClick={() => setMenuCollapsed(!menuCollapsed)} aria-label={menuCollapsed ? 'Expand menu' : 'Collapse menu'}>
+            {menuCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            <span>{menuCollapsed ? 'Expand' : 'Collapse menu'}</span>
+          </button>
           <button className="admin-new-button" onClick={startNewProject}>NEW</button>
-          <button className={`admin-sidebar-row ${selectedProject?.isActive ? 'active' : ''}`}>
+          <button className={`admin-sidebar-row ${projectStatusFilter === 'all' ? 'active' : ''}`} onClick={() => filterProjects('all')}>
+            <span>All projects</span>
+            <strong>{projectCounts.all}</strong>
+          </button>
+          <button className={`admin-sidebar-row ${projectStatusFilter === 'deployed' ? 'active' : ''}`} onClick={() => filterProjects('deployed')}>
             <span>Deployed</span>
             <strong>{projectCounts.deployed}</strong>
           </button>
-          <button className={`admin-sidebar-row ${selectedProject && !selectedProject.isActive ? 'active' : ''}`}>
+          <button className={`admin-sidebar-row ${projectStatusFilter === 'draft' ? 'active' : ''}`} onClick={() => filterProjects('draft')}>
             <span>Draft</span>
             <strong>{projectCounts.draft}</strong>
           </button>
-          <button className="admin-sidebar-row">
+          <button className={`admin-sidebar-row ${projectStatusFilter === 'archived' ? 'active' : ''}`} onClick={() => filterProjects('archived')}>
             <span>Archived</span>
             <strong>{projectCounts.archived}</strong>
           </button>
@@ -1775,13 +1807,14 @@ function AdminDashboard({ token, onLogout }) {
         </aside>
 
         <div className="admin-main">
+          <div id="project-library" />
           <div className="admin-project-toolbar">
             <div>
               <h2>My Projects</h2>
-              <p>{filteredProjects.length} shown · {projects.length} total</p>
+              <p>{filteredProjects.length} shown · {projects.length} total · {projectStatusFilter}</p>
             </div>
             <div className="admin-toolbar-actions">
-              <button className="toolbar-link" onClick={() => document.getElementById('response-filters')?.scrollIntoView({ behavior: 'smooth' })}>
+              <button className="toolbar-link" onClick={() => openAdminSection('library')}>
                 <Search size={16} /> filter
               </button>
               <button className="toolbar-link" onClick={() => selectedProject && editProject(selectedProject)}>
@@ -1826,7 +1859,7 @@ function AdminDashboard({ token, onLogout }) {
                   ))}
                   {filteredProjects.length === 0 && (
                     <tr>
-                      <td colSpan="7"><p className="empty">No projects match this search.</p></td>
+                      <td colSpan="7"><p className="empty">No projects match this view.</p></td>
                     </tr>
                   )}
                 </tbody>
@@ -1908,16 +1941,18 @@ function AdminDashboard({ token, onLogout }) {
             <RecentTable rows={data?.recent || []} loading={loading} onReview={reviewResponse} />
           </section>
 
-          <ClientAccessManager
-            clients={clients}
-            projects={projects}
-            editingClient={editingClient}
-            onStartNew={startNewClient}
-            onEdit={editClient}
-            onChange={setEditingClient}
-            onCancel={() => setEditingClient(null)}
-            onSave={saveClient}
-          />
+          <section id="client-access">
+            <ClientAccessManager
+              clients={clients}
+              projects={projects}
+              editingClient={editingClient}
+              onStartNew={startNewClient}
+              onEdit={editClient}
+              onChange={setEditingClient}
+              onCancel={() => setEditingClient(null)}
+              onSave={saveClient}
+            />
+          </section>
 
           {editingResponse && (
             <ResponseEditor

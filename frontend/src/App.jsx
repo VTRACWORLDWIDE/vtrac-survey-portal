@@ -1823,7 +1823,9 @@ function AdminDashboard({ token, onLogout }) {
       <div className="admin-console-topbar">
         <div className="admin-brand-mark">
           <img src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
-          <span>VTRAC Survey Console</span>
+          <span title={activeAdminSection === 'projectWorkspace' ? selectedProject?.name : 'VTRAC Survey Console'}>
+            {activeAdminSection === 'projectWorkspace' && selectedProject ? selectedProject.name : 'VTRAC Survey Console'}
+          </span>
         </div>
         <label className="admin-search">
           <Search size={22} />

@@ -1323,10 +1323,9 @@ textarea {
 }
 
 .settings-layout {
-  align-items: start;
   display: grid;
-  gap: 0;
-  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -1342,12 +1341,14 @@ textarea {
 }
 
 .settings-nav {
+  align-items: center;
   background: #ffffff;
-  border-right: 1px solid #dfe7ef;
-  display: grid;
-  align-content: start;
-  gap: 2px;
-  padding: 10px 8px;
+  border: 1px solid #dfe7ef;
+  border-radius: 8px;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 8px;
 }
 
 .project-data-nav button {
@@ -1373,18 +1374,19 @@ textarea {
   align-items: center;
   background: transparent;
   border: 0;
-  border-left: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-radius: 8px;
   color: #5c6983;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
+  flex: 0 0 auto;
   font-size: 0.84rem;
   font-weight: 850;
   gap: 8px;
-  justify-content: flex-start;
+  justify-content: center;
   min-height: 38px;
-  padding: 0 8px;
-  text-align: left;
-  text-transform: capitalize;
+  padding: 0 14px;
+  text-align: center;
 }
 
 .project-data-nav button.active {
@@ -1395,7 +1397,7 @@ textarea {
 
 .settings-nav button.active {
   background: #f1fbfb;
-  border-left-color: #0aa7a4;
+  border-bottom-color: #0aa7a4;
   color: #1f2f52;
 }
 
@@ -1406,9 +1408,76 @@ textarea {
 }
 
 .settings-content {
-  background: #f4f6fa;
+  background: #ffffff;
   min-width: 0;
-  padding: 10px;
+  padding: 0;
+}
+
+.settings-general-page {
+  display: grid;
+  gap: 22px;
+  padding: 24px;
+}
+
+.settings-general-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.settings-general-toolbar .primary {
+  min-height: 44px;
+  padding: 0 18px;
+}
+
+.settings-general-form {
+  display: grid;
+  gap: 18px;
+}
+
+.settings-general-form label {
+  color: #1f2f52;
+  display: grid;
+  gap: 8px;
+  font-weight: 760;
+}
+
+.settings-general-form label span {
+  color: #52617c;
+  font-weight: 650;
+}
+
+.settings-general-form input,
+.settings-general-form select {
+  min-height: 48px;
+}
+
+.settings-two-column {
+  display: grid;
+  gap: 28px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-danger-zone {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding-top: 4px;
+}
+
+.settings-danger-zone p {
+  color: #162126;
+  margin: 0 0 10px;
+}
+
+.settings-danger-zone .secondary {
+  background: #e9f5ff;
+  border-color: #d9ecfb;
+  color: #145f9b;
+}
+
+.settings-danger-zone .danger-button {
+  min-height: 44px;
+  padding: 0 18px;
 }
 
 .project-data-content .admin-filters {
@@ -3201,24 +3270,6 @@ tbody tr:hover {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .settings-nav {
-    border-right: 0;
-    border-bottom: 1px solid #dfe7ef;
-    display: flex;
-    overflow-x: auto;
-  }
-
-  .settings-nav button {
-    border-left: 0;
-    border-bottom: 4px solid transparent;
-    flex: 0 0 auto;
-  }
-
-  .settings-nav button.active {
-    border-bottom-color: #0aa7a4;
-    border-left-color: transparent;
-  }
-
   .client-analytics-grid .span-2 {
     grid-column: auto;
   }
@@ -3342,9 +3393,16 @@ tbody tr:hover {
     grid-column: auto;
   }
 
-  .project-data-content,
-  .settings-content {
+  .project-data-content {
     padding: 12px;
+  }
+
+  .settings-content {
+    padding: 0;
+  }
+
+  .settings-two-column {
+    grid-template-columns: 1fr;
   }
 
   .project-data-nav,

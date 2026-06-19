@@ -1557,11 +1557,19 @@ function AdminDashboard({ token, onLogout }) {
   const [exportType, setExportType] = useState('xlsx');
   const [exportHeaderFormat, setExportHeaderFormat] = useState('labels');
   const [advancedExportsOpen, setAdvancedExportsOpen] = useState(false);
+  const [generalDraft, setGeneralDraft] = useState({ name: '', description: '', sector: 'Other', country: 'India' });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
 
   const selectedProject = projects.find((project) => project.id === selectedId) || projects[0];
+  const settingsSections = useMemo(() => [
+    ['general', 'General', <Settings size={19} />],
+    ['media', 'Media', <ImageIcon size={19} />],
+    ['rest', 'REST Services', <FileText size={19} />],
+    ['activity', 'Activity', <CalendarClock size={19} />]
+  ], []);
+  const visibleSettingsTabIds = useMemo(() => settingsSections.map(([tab]) => tab), [settingsSections]);
   const filteredProjects = projects.filter((project) => {
     const search = projectSearch.trim().toLowerCase();
     const matchesSearch = !search || `${project.name} ${project.slug}`.toLowerCase().includes(search);
@@ -1588,6 +1596,20 @@ function AdminDashboard({ token, onLogout }) {
   const selectedProjectLatest = data?.recent?.[0]?.submitted_at ? formatProjectDate(data.recent[0].submitted_at) : '-';
   const selectedProjectQuestions = selectedProject?.questions?.length || 0;
   const authHeaders = { Authorization: `Bearer ${token}` };
+
+  useEffect(() => {
+    if (!selectedProject) return;
+    setGeneralDraft({
+      name: selectedProject.name || '',
+      description: selectedProject.description || '',
+      sector: selectedProject.settings?.sector || 'Other',
+      country: selectedProject.settings?.country || 'India'
+    });
+  }, [selectedProject?.id, selectedProject?.name, selectedProject?.description, selectedProject?.settings?.sector, selectedProject?.settings?.country]);
+
+  useEffect(() => {
+    if (!visibleSettingsTabIds.includes(projectSettingsTab)) setProjectSettingsTab('general');
+  }, [projectSettingsTab, visibleSettingsTabIds]);
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -1785,6 +1807,20 @@ function AdminDashboard({ token, onLogout }) {
     setEditing(null);
     await loadProjects();
     setSelectedId(payload.project.id);
+  }
+
+  async function saveGeneralSettings() {
+    if (!selectedProject) return;
+    await saveProject({
+      ...selectedProject,
+      name: generalDraft.name,
+      description: generalDraft.description,
+      settings: {
+        ...(selectedProject.settings || {}),
+        sector: generalDraft.sector,
+        country: generalDraft.country
+      }
+    });
   }
 
   function startNewClient() {
@@ -2336,55 +2372,62 @@ function AdminDashboard({ token, onLogout }) {
 
               {projectWorkspaceTab === 'settings' && (
                 <div className="settings-layout">
-                  <aside className="settings-nav">
-                    {['general', 'media', 'sharing', 'connect', 'rest', 'activity'].map((tab) => (
+                  <nav className="settings-nav" aria-label="Project settings sections">
+                    {settingsSections.map(([tab, label, icon]) => (
                       <button className={projectSettingsTab === tab ? 'active' : ''} key={tab} onClick={() => setProjectSettingsTab(tab)}>
-                        {tab}
+                        {icon}{label}
                       </button>
                     ))}
-                  </aside>
+                  </nav>
                   <div className="settings-content panel">
                     {projectSettingsTab === 'general' && (
-                      <>
-                        <div className="section-title">
-                          <div>
-                            <p className="eyebrow">General</p>
-                            <h2>Project settings</h2>
+                      <div className="settings-general-page">
+                        <div className="settings-general-toolbar">
+                          <button className="primary" onClick={saveGeneralSettings}><Save size={18} /> Save Changes</button>
+                        </div>
+
+                        <div className="settings-general-form">
+                          <label>
+                            Project Name <span>(required)</span>
+                            <input value={generalDraft.name} onChange={(event) => setGeneralDraft({ ...generalDraft, name: event.target.value })} />
+                          </label>
+                          <label>
+                            Description
+                            <input value={generalDraft.description} onChange={(event) => setGeneralDraft({ ...generalDraft, description: event.target.value })} />
+                          </label>
+                          <div className="settings-two-column">
+                            <label>
+                              Sector <span>(required)</span>
+                              <select value={generalDraft.sector} onChange={(event) => setGeneralDraft({ ...generalDraft, sector: event.target.value })}>
+                                <option>Other</option>
+                                <option>Transport</option>
+                                <option>Infrastructure</option>
+                                <option>Airport / Aviation</option>
+                                <option>Urban Mobility</option>
+                                <option>Research</option>
+                              </select>
+                            </label>
+                            <label>
+                              Country <span>(required)</span>
+                              <select value={generalDraft.country} onChange={(event) => setGeneralDraft({ ...generalDraft, country: event.target.value })}>
+                                <option>India</option>
+                                <option>Other</option>
+                              </select>
+                            </label>
                           </div>
-                          <button className="primary" onClick={() => editProject(selectedProject)}><Save size={18} /> Edit Settings</button>
                         </div>
-                        <div className="inline-grid">
-                          <label>
-                            Project name
-                            <input value={selectedProject.name} readOnly />
-                          </label>
-                          <label>
-                            URL slug
-                            <input value={selectedProject.slug} readOnly />
-                          </label>
-                        </div>
-                        <label>
-                          Description
-                          <textarea value={selectedProject.description || ''} readOnly />
-                        </label>
-                        <div className="actions">
+
+                        <div className="settings-danger-zone">
                           <button className="secondary" onClick={() => setStatus('Archive workflow is not enabled for pilot safety.')}>Archive Project</button>
-                          <button className="danger-button icon-button" onClick={() => setStatus('Delete workflow is not enabled for pilot safety.')}>Delete Project and Data</button>
+                          <p>Archive project to stop accepting submissions.</p>
+                          <button className="danger-button" onClick={() => setStatus('Delete workflow is not enabled for pilot safety.')}>Delete Project and Data</button>
                         </div>
-                        {editing && (
-                          <ProjectEditor
-                            project={editing}
-                            onChange={setEditing}
-                            onCancel={() => setEditing(null)}
-                            onSave={saveProject}
-                          />
-                        )}
-                      </>
+                      </div>
                     )}
                     {projectSettingsTab !== 'general' && (
                       <div className="empty-state-panel">
                         <ShieldCheck size={34} />
-                        <h2>{projectSettingsTab.charAt(0).toUpperCase() + projectSettingsTab.slice(1)} settings</h2>
+                        <h2>{settingsSections.find(([tab]) => tab === projectSettingsTab)?.[1] || 'Project'} settings</h2>
                         <p>This area is reserved for the next phase of project controls.</p>
                       </div>
                     )}

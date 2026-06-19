@@ -1389,7 +1389,9 @@ function normalizeProjectSettings(settings = {}, slug = '') {
     captureGps: Boolean(parsed.captureGps),
     captureAudio: Boolean(parsed.captureAudio),
     showRespondentPhone: parsed.showRespondentPhone !== false,
-    showHouseholdId: Boolean(parsed.showHouseholdId)
+    showHouseholdId: Boolean(parsed.showHouseholdId),
+    sector: parsed.sector?.trim?.() || 'Other',
+    country: parsed.country?.trim?.() || 'India'
   };
 }
 

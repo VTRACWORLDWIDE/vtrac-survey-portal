@@ -3558,6 +3558,24 @@ textarea {
   grid-column: 1 / -1;
 }
 
+.client-modern-grid .summary-mix-card {
+  align-content: start;
+}
+
+.client-modern-grid .summary-mix-card .donut-chart-wrap {
+  gap: 22px;
+  grid-template-columns: minmax(132px, 148px) minmax(170px, 260px);
+  justify-content: start;
+}
+
+.client-modern-grid .summary-mix-card .donut-legend {
+  width: min(260px, 100%);
+}
+
+.client-modern-grid .summary-mix-card .donut-legend-row {
+  grid-template-columns: 10px minmax(0, 1fr) minmax(34px, auto);
+}
+
 .client-empty-state {
   justify-items: start;
   margin: 42px auto;

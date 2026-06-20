@@ -3325,8 +3325,63 @@ textarea {
   background: #ffffff;
   border: 1px solid #dfe9e6;
   border-radius: 8px;
+  cursor: pointer;
   min-width: 0;
   padding: 12px;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.component-toggle:hover {
+  border-color: #9fd8d3;
+  box-shadow: 0 8px 18px rgba(8, 127, 127, 0.08);
+}
+
+.component-toggle:has(input:checked) {
+  background: #eefaf8;
+  border-color: #10aaa4;
+  box-shadow: inset 3px 0 0 #10aaa4, 0 10px 22px rgba(8, 127, 127, 0.1);
+}
+
+.component-toggle input[type='checkbox'] {
+  appearance: none;
+  background: #ffffff;
+  border: 2px solid #cdddda;
+  border-radius: 7px;
+  display: inline-grid;
+  flex: 0 0 28px;
+  height: 28px;
+  margin-top: 1px;
+  min-height: 28px;
+  place-content: center;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  width: 28px;
+}
+
+.component-toggle input[type='checkbox']::before {
+  color: #ffffff;
+  content: "✓";
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.component-toggle input[type='checkbox']:checked {
+  background: #10aaa4;
+  border-color: #10aaa4;
+  box-shadow: 0 0 0 4px rgba(16, 170, 164, 0.15);
+}
+
+.component-toggle input[type='checkbox']:checked::before {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.component-toggle input[type='checkbox']:focus-visible {
+  outline: 3px solid rgba(19, 62, 152, 0.22);
+  outline-offset: 2px;
 }
 
 .component-toggle span {

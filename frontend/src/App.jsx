@@ -1347,6 +1347,19 @@ function formatProjectDate(value) {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+function formatProjectDateTime(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
 function isArchivedProject(project) {
   return project?.settings?.status === 'archived' || Boolean(project?.settings?.archivedAt);
 }
@@ -1599,6 +1612,10 @@ function AdminDashboard({ token, onLogout }) {
   const [exportHeaderFormat, setExportHeaderFormat] = useState('labels');
   const [advancedExportsOpen, setAdvancedExportsOpen] = useState(false);
   const [generalDraft, setGeneralDraft] = useState({ name: '', description: '', sector: 'Other', country: 'India' });
+  const [clearDataModalOpen, setClearDataModalOpen] = useState(false);
+  const [clearDataConfirmation, setClearDataConfirmation] = useState('');
+  const [clearDataBackups, setClearDataBackups] = useState([]);
+  const [clearDataWorking, setClearDataWorking] = useState(false);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
@@ -1771,6 +1788,12 @@ function AdminDashboard({ token, onLogout }) {
   useEffect(() => {
     loadFilterOptions();
   }, [isPortfolioSection, selectedProject?.id]);
+
+  useEffect(() => {
+    if (activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'data' && projectDataTab === 'cleanup' && selectedProject?.id) {
+      loadClearDataBackups(selectedProject.id);
+    }
+  }, [activeAdminSection, projectWorkspaceTab, projectDataTab, selectedProject?.id]);
 
   useEffect(() => {
     let objectUrl = '';
@@ -1984,6 +2007,53 @@ function AdminDashboard({ token, onLogout }) {
 
   function handleExportSubmit() {
     download(exportType);
+  }
+
+  async function loadClearDataBackups(projectId = selectedProject?.id) {
+    if (!projectId) return;
+    const response = await fetch(`${apiBase}/api/projects/${projectId}/response-backups`, { headers: authHeaders });
+    if (response.status === 401) return onLogout();
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setStatus(payload.error || 'Unable to load cleanup backup history.');
+      return;
+    }
+    setClearDataBackups(payload.backups || []);
+  }
+
+  async function openClearDataModal() {
+    if (!selectedProject) return;
+    setStatus('');
+    setClearDataConfirmation('');
+    setClearDataModalOpen(true);
+    await loadClearDataBackups(selectedProject.id);
+  }
+
+  async function clearProjectResponses() {
+    if (!selectedProject || clearDataConfirmation.trim() !== 'CLEAR DATA') return;
+    setClearDataWorking(true);
+    setStatus('');
+    try {
+      const response = await fetch(`${apiBase}/api/projects/${selectedProject.id}/responses`, {
+        method: 'DELETE',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmation: clearDataConfirmation.trim() })
+      });
+      if (response.status === 401) return onLogout();
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setStatus(payload.error || 'Unable to clear submitted data.');
+        return;
+      }
+      const backupNote = payload.backup?.expiresAt ? ` Backup retained until ${formatProjectDateTime(payload.backup.expiresAt)}.` : '';
+      setStatus(`${payload.deletedCount || 0} submitted responses cleared.${backupNote}`);
+      setClearDataConfirmation('');
+      await loadProjects();
+      await loadDashboard();
+      await loadClearDataBackups(selectedProject.id);
+    } finally {
+      setClearDataWorking(false);
+    }
   }
 
   return (
@@ -2266,6 +2336,7 @@ function AdminDashboard({ token, onLogout }) {
                       ['reports', 'Reports', <BarChart3 size={21} />],
                       ['gallery', 'Gallery', <ImageIcon size={21} />],
                       ['downloads', 'Downloads', <Download size={21} />],
+                      ['cleanup', 'Cleanup', <Trash2 size={21} />],
                       ['map', 'Map', <MapPin size={21} />]
                     ].map(([tab, label, icon]) => (
                       <button className={projectDataTab === tab ? 'active' : ''} key={tab} onClick={() => setProjectDataTab(tab)}>
@@ -2403,6 +2474,62 @@ function AdminDashboard({ token, onLogout }) {
                       </div>
                     )}
 
+                    {projectDataTab === 'cleanup' && (
+                      <div className="cleanup-workspace">
+                        <div className="panel cleanup-panel">
+                          <div className="cleanup-copy">
+                            <p className="eyebrow">Pilot cleanup</p>
+                            <h2>Clear submitted data</h2>
+                            <p>
+                              Use this only when pilot or test submissions need to be removed before live fieldwork.
+                              The system keeps a private server backup for 7 days before it expires.
+                            </p>
+                          </div>
+                          <div className="cleanup-stats">
+                            <div>
+                              <span>Current samples</span>
+                              <strong>{formatStatNumber(data?.totals?.total_samples || selectedProject.responseCount || 0)}</strong>
+                            </div>
+                            <div>
+                              <span>Backup retention</span>
+                              <strong>7 days</strong>
+                            </div>
+                          </div>
+                          <button className="danger-button cleanup-danger-button" onClick={openClearDataModal}>
+                            <Trash2 size={17} /> Clear submitted data
+                          </button>
+                        </div>
+
+                        <div className="panel cleanup-backups-panel">
+                          <div className="section-title">
+                            <h2>Recent cleanup backups</h2>
+                            <button className="secondary compact-button" onClick={() => loadClearDataBackups()}><RefreshCw size={15} /> Refresh</button>
+                          </div>
+                          {clearDataBackups.length > 0 ? (
+                            <div className="table-scroll">
+                              <table>
+                                <thead>
+                                  <tr><th>Backup ID</th><th>Responses</th><th>Created</th><th>Expires</th></tr>
+                                </thead>
+                                <tbody>
+                                  {clearDataBackups.map((backup) => (
+                                    <tr key={backup.id}>
+                                      <td>#{backup.id}</td>
+                                      <td>{formatStatNumber(backup.responseCount || 0)}</td>
+                                      <td>{formatProjectDateTime(backup.createdAt)}</td>
+                                      <td>{formatProjectDateTime(backup.expiresAt)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <p className="empty">No cleanup backups for this project yet.</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {projectDataTab === 'map' && (
                       <div className="map-workspace">
                         <SurveyCoordinateMap rows={data?.mapRows || []} totalSamples={data?.totals?.total_samples ?? 0} />
@@ -2524,6 +2651,48 @@ function AdminDashboard({ token, onLogout }) {
               onDownloadAudio={downloadAudio}
               audioPreview={audioPreview}
             />
+          )}
+          {clearDataModalOpen && selectedProject && (
+            <div className="modal-backdrop cleanup-modal-backdrop" role="presentation">
+              <div className="cleanup-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="clear-data-title">
+                <div className="cleanup-confirm-head">
+                  <div>
+                    <p className="eyebrow">Confirm cleanup</p>
+                    <h2 id="clear-data-title">Clear submitted data?</h2>
+                  </div>
+                  <button className="icon-button" onClick={() => setClearDataModalOpen(false)} aria-label="Close cleanup confirmation">
+                    <X size={18} />
+                  </button>
+                </div>
+                <p>
+                  This will remove all submitted responses for <strong>{selectedProject.name}</strong>.
+                  A server backup will be retained for 7 days for recovery if this was done by mistake.
+                </p>
+                <div className="cleanup-confirm-summary">
+                  <span>Responses to clear</span>
+                  <strong>{formatStatNumber(data?.totals?.total_samples || selectedProject.responseCount || 0)}</strong>
+                </div>
+                <label className="field-label">
+                  Type CLEAR DATA to confirm
+                  <input
+                    autoFocus
+                    value={clearDataConfirmation}
+                    onChange={(event) => setClearDataConfirmation(event.target.value)}
+                    placeholder="CLEAR DATA"
+                  />
+                </label>
+                <div className="modal-actions">
+                  <button className="secondary" onClick={() => setClearDataModalOpen(false)}>Cancel</button>
+                  <button
+                    className="danger-button"
+                    disabled={clearDataConfirmation.trim() !== 'CLEAR DATA' || clearDataWorking}
+                    onClick={clearProjectResponses}
+                  >
+                    <Trash2 size={16} /> {clearDataWorking ? 'Clearing...' : 'Clear data'}
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
           {status && <p className="status success">{status}</p>}
         </div>

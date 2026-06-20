@@ -471,6 +471,12 @@ textarea {
   opacity: 0.7;
 }
 
+.danger-button:disabled,
+.secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .status {
   background: #fff6e5;
   border: 1px solid #f1d296;
@@ -2509,6 +2515,143 @@ textarea {
   padding: 18px;
 }
 
+.cleanup-workspace {
+  display: grid;
+  gap: 14px;
+}
+
+.cleanup-panel {
+  align-items: start;
+  border-color: #f0c2c2;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.cleanup-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.cleanup-copy h2 {
+  margin: 0;
+}
+
+.cleanup-copy p:last-child {
+  color: #64737a;
+  line-height: 1.45;
+  margin: 0;
+  max-width: 760px;
+}
+
+.cleanup-stats {
+  display: flex;
+  gap: 10px;
+}
+
+.cleanup-stats div {
+  background: #f8fbfa;
+  border: 1px solid #dfe9e6;
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  min-width: 132px;
+  padding: 12px;
+}
+
+.cleanup-stats span {
+  color: #687783;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.cleanup-stats strong {
+  color: #18242a;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.cleanup-danger-button {
+  align-self: center;
+  min-height: 42px;
+}
+
+.cleanup-backups-panel {
+  overflow: hidden;
+}
+
+.cleanup-backups-panel .section-title {
+  margin-bottom: 10px;
+}
+
+.modal-backdrop {
+  align-items: center;
+  background: rgba(15, 27, 35, 0.48);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 22px;
+  position: fixed;
+  z-index: 80;
+}
+
+.cleanup-confirm-modal {
+  background: #ffffff;
+  border: 1px solid #d7e3e0;
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(12, 32, 38, 0.28);
+  display: grid;
+  gap: 16px;
+  max-width: 560px;
+  padding: 22px;
+  width: min(100%, 560px);
+}
+
+.cleanup-confirm-head {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.cleanup-confirm-head h2 {
+  margin: 0;
+}
+
+.cleanup-confirm-modal p {
+  color: #62737a;
+  line-height: 1.48;
+  margin: 0;
+}
+
+.cleanup-confirm-summary {
+  align-items: center;
+  background: #fff7f7;
+  border: 1px solid #efc8c8;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 14px;
+}
+
+.cleanup-confirm-summary span {
+  color: #6c4a4a;
+  font-weight: 800;
+}
+
+.cleanup-confirm-summary strong {
+  color: #9d2424;
+  font-size: 1.45rem;
+}
+
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .map-workspace {
   display: grid;
   gap: 18px;
@@ -3739,8 +3882,14 @@ tbody tr:hover {
   .project-info-card,
   .metric-grid,
   .component-grid,
+  .cleanup-panel,
   .numeric-stat-grid,
   .tile-chart {
+    grid-template-columns: 1fr;
+  }
+
+  .cleanup-stats {
+    display: grid;
     grid-template-columns: 1fr;
   }
 

@@ -5,7 +5,7 @@ import express from 'express';
 import helmet from 'helmet';
 import ExcelJS from 'exceljs';
 import { stringify } from 'csv-stringify/sync';
-import { query } from './db.js';
+import { pool, query } from './db.js';
 
 const app = express();
 const port = Number(process.env.PORT || 8081);
@@ -127,6 +127,112 @@ app.put('/api/projects/:id', requireAdmin, async (req, res, next) => {
     res.json({ project });
   } catch (error) {
     next(error);
+  }
+});
+
+app.get('/api/projects/:id/response-backups', requireAdmin, async (req, res, next) => {
+  try {
+    await query(`DELETE FROM response_clear_backups WHERE expires_at < NOW()`);
+    const result = await query(
+      `SELECT id, project_id, project_name, response_count, created_by, created_at, expires_at
+      FROM response_clear_backups
+      WHERE project_id = $1
+      ORDER BY created_at DESC
+      LIMIT 10`,
+      [req.params.id]
+    );
+    res.json({
+      backups: result.rows.map((row) => ({
+        id: String(row.id),
+        projectId: row.project_id ? String(row.project_id) : null,
+        projectName: row.project_name,
+        responseCount: row.response_count,
+        createdBy: row.created_by,
+        createdAt: row.created_at,
+        expiresAt: row.expires_at
+      }))
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/api/projects/:id/responses', requireAdmin, async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const confirmation = String(req.body?.confirmation || '').trim();
+    if (confirmation !== 'CLEAR DATA') {
+      return res.status(400).json({ error: 'Type CLEAR DATA to confirm clearing submitted responses.' });
+    }
+
+    await client.query('BEGIN');
+    await client.query(`DELETE FROM response_clear_backups WHERE expires_at < NOW()`);
+
+    const projectResult = await client.query(
+      `SELECT id, name
+      FROM survey_projects
+      WHERE id = $1
+      LIMIT 1`,
+      [req.params.id]
+    );
+    const project = projectResult.rows[0];
+    if (!project) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Survey project not found.' });
+    }
+
+    const backupResult = await client.query(
+      `SELECT
+        COUNT(*)::int AS response_count,
+        COALESCE(jsonb_agg(to_jsonb(sr) ORDER BY sr.id), '[]'::jsonb) AS backup_data
+      FROM survey_responses sr
+      WHERE sr.project_id = $1`,
+      [project.id]
+    );
+    const responseCount = backupResult.rows[0]?.response_count || 0;
+    const backupData = backupResult.rows[0]?.backup_data || [];
+
+    let backup = null;
+    if (responseCount > 0) {
+      const inserted = await client.query(
+        `INSERT INTO response_clear_backups (
+          project_id,
+          project_name,
+          response_count,
+          backup_data,
+          created_by,
+          expires_at
+        )
+        VALUES ($1, $2, $3, $4, $5, NOW() + INTERVAL '7 days')
+        RETURNING id, created_at, expires_at`,
+        [project.id, project.name, responseCount, JSON.stringify(backupData), req.admin.username || 'admin']
+      );
+      backup = inserted.rows[0];
+
+      await client.query(
+        `DELETE FROM survey_responses
+        WHERE project_id = $1`,
+        [project.id]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({
+      deletedCount: responseCount,
+      backup: backup
+        ? {
+          id: String(backup.id),
+          responseCount,
+          createdAt: backup.created_at,
+          expiresAt: backup.expires_at
+        }
+        : null
+    });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(error);
+  } finally {
+    client.release();
   }
 });
 
@@ -769,6 +875,17 @@ async function ensureDatabase() {
       PRIMARY KEY (client_id, project_id)
     );
 
+    CREATE TABLE IF NOT EXISTS response_clear_backups (
+      id BIGSERIAL PRIMARY KEY,
+      project_id BIGINT REFERENCES survey_projects(id) ON DELETE SET NULL,
+      project_name TEXT NOT NULL,
+      response_count INT NOT NULL DEFAULT 0,
+      backup_data JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_by TEXT NOT NULL DEFAULT 'admin',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '7 days')
+    );
+
     ALTER TABLE survey_projects ADD COLUMN IF NOT EXISTS settings JSONB NOT NULL DEFAULT '{}'::jsonb;
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS project_id BIGINT REFERENCES survey_projects(id);
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS audio_data TEXT;
@@ -786,6 +903,8 @@ async function ensureDatabase() {
     CREATE INDEX IF NOT EXISTS idx_survey_responses_answers ON survey_responses USING GIN (answers);
     CREATE INDEX IF NOT EXISTS idx_client_project_access_client ON client_project_access (client_id);
     CREATE INDEX IF NOT EXISTS idx_client_project_access_project ON client_project_access (project_id);
+    CREATE INDEX IF NOT EXISTS idx_response_clear_backups_project ON response_clear_backups (project_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_response_clear_backups_expires ON response_clear_backups (expires_at);
   `);
 
   const existing = await query(`SELECT id FROM survey_projects WHERE slug = 'pilot-survey' LIMIT 1`);

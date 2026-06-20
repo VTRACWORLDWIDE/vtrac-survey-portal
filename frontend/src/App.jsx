@@ -1792,10 +1792,20 @@ function AdminLogin({ onLogin }) {
         </section>
 
         <form className="admin-login-card" onSubmit={submit}>
-          <div className="login-mark"><ShieldCheck size={24} /></div>
-          <p className="eyebrow">Administrator</p>
-          <h2>Sign in to manage field projects</h2>
-          <p className="login-support-text">Use your VTRAC admin credentials to access projects, dashboards, clients, and exports.</p>
+          <div className="admin-login-card-head">
+            <div className="admin-login-logo-chip">
+              <img src="/vtrac-logo.jpg" alt="VTRAC" />
+            </div>
+            <div>
+              <p className="eyebrow">Administrator</p>
+              <h2>Sign in to manage field projects</h2>
+            </div>
+          </div>
+          <p className="login-support-text">Secure access for survey setup, live monitoring, response review, and client-ready exports.</p>
+          <div className="admin-access-strip">
+            <span><ShieldCheck size={15} /> Protected console</span>
+            <span><CheckCircle2 size={15} /> Cloud synced</span>
+          </div>
           <label>
             Username
             <input value={username} onChange={(event) => setUsername(event.target.value)} required />
@@ -1806,6 +1816,11 @@ function AdminLogin({ onLogin }) {
           </label>
           <button className="primary">Login</button>
           {status && <p className="status">{status}</p>}
+          <div className="admin-login-assurance">
+            <span><ClipboardList size={16} /> Projects</span>
+            <span><BarChart3 size={16} /> Analytics</span>
+            <span><Download size={16} /> Exports</span>
+          </div>
         </form>
       </div>
     </section>

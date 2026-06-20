@@ -1076,6 +1076,11 @@ textarea {
   color: #133e98;
 }
 
+.project-status.archived {
+  background: #f1f3f7;
+  color: #596477;
+}
+
 .submission-pill {
   background: #edf0f6;
   border-radius: 999px;

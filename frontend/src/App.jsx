@@ -1347,6 +1347,15 @@ function formatProjectDate(value) {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+function isArchivedProject(project) {
+  return project?.settings?.status === 'archived' || Boolean(project?.settings?.archivedAt);
+}
+
+function getProjectStatus(project) {
+  if (isArchivedProject(project)) return 'archived';
+  return project?.isActive ? 'deployed' : 'draft';
+}
+
 function makeSafeFilename(value) {
   return String(value || 'vtrac-graph')
     .toLowerCase()
@@ -1604,19 +1613,18 @@ function AdminDashboard({ token, onLogout }) {
   const visibleSettingsTabIds = useMemo(() => settingsSections.map(([tab]) => tab), [settingsSections]);
   const filteredProjects = projects.filter((project) => {
     const search = projectSearch.trim().toLowerCase();
+    const status = getProjectStatus(project);
     const matchesSearch = !search || `${project.name} ${project.slug}`.toLowerCase().includes(search);
     const matchesStatus =
       projectStatusFilter === 'all' ||
-      (projectStatusFilter === 'deployed' && project.isActive) ||
-      (projectStatusFilter === 'draft' && !project.isActive) ||
-      projectStatusFilter === 'archived';
+      projectStatusFilter === status;
     return matchesSearch && matchesStatus;
   });
   const projectCounts = {
     all: projects.length,
-    deployed: projects.filter((project) => project.isActive).length,
-    draft: projects.filter((project) => !project.isActive).length,
-    archived: 0
+    deployed: projects.filter((project) => getProjectStatus(project) === 'deployed').length,
+    draft: projects.filter((project) => getProjectStatus(project) === 'draft').length,
+    archived: projects.filter((project) => getProjectStatus(project) === 'archived').length
   };
   const selectedVisibleProjects = filteredProjects.filter((project) => selectedProjectIds.includes(project.id));
   const allVisibleProjectsSelected = filteredProjects.length > 0 && selectedVisibleProjects.length === filteredProjects.length;
@@ -1628,6 +1636,7 @@ function AdminDashboard({ token, onLogout }) {
   }));
   const selectedProjectLatest = data?.recent?.[0]?.submitted_at ? formatProjectDate(data.recent[0].submitted_at) : '-';
   const selectedProjectQuestions = selectedProject?.questions?.length || 0;
+  const selectedProjectStatus = getProjectStatus(selectedProject);
   const authHeaders = { Authorization: `Bearer ${token}` };
 
   useEffect(() => {
@@ -1858,6 +1867,25 @@ function AdminDashboard({ token, onLogout }) {
     });
   }
 
+  async function archiveSelectedProject() {
+    if (!selectedProject) return;
+    const confirmed = window.confirm(`Archive "${selectedProject.name}"? This will stop the public survey link from accepting new submissions.`);
+    if (!confirmed) return;
+
+    await saveProject({
+      ...selectedProject,
+      isActive: false,
+      settings: {
+        ...(selectedProject.settings || {}),
+        status: 'archived',
+        archivedAt: new Date().toISOString()
+      }
+    });
+    setProjectStatusFilter('archived');
+    setProjectWorkspaceTab('settings');
+    setStatus('Project archived. Public submissions are now disabled for this project.');
+  }
+
   function startNewClient() {
     setEditingClient({
       username: '',
@@ -2063,6 +2091,7 @@ function AdminDashboard({ token, onLogout }) {
                     <tbody>
                       {filteredProjects.map((project) => {
                         const rowSelected = selectedProjectIds.includes(project.id);
+                        const status = getProjectStatus(project);
                         return (
                           <tr className={`${project.id === selectedProject?.id ? 'selected-row' : ''} ${rowSelected ? 'checked-row' : ''}`.trim()} key={project.id} onClick={() => openProjectWorkspace(project)}>
                             <td>
@@ -2081,7 +2110,7 @@ function AdminDashboard({ token, onLogout }) {
                               </button>
                               <small>{project.slug}</small>
                             </td>
-                            <td><span className={`project-status ${project.isActive ? 'deployed' : 'draft'}`}>{project.isActive ? 'deployed' : 'draft'}</span></td>
+                            <td><span className={`project-status ${status}`}>{status}</span></td>
                             <td>admin</td>
                             <td>{formatProjectDate(project.updatedAt)}</td>
                             <td>{project.isActive ? formatProjectDate(project.createdAt) : '-'}</td>
@@ -2120,7 +2149,7 @@ function AdminDashboard({ token, onLogout }) {
                   <h2>{selectedProject.name}</h2>
                   <p>{selectedProject.description || 'No project description added yet.'}</p>
                 </div>
-                <span className={`project-status ${selectedProject.isActive ? 'deployed' : 'draft'}`}>{selectedProject.isActive ? 'deployed' : 'draft'}</span>
+                <span className={`project-status ${selectedProjectStatus}`}>{selectedProjectStatus}</span>
               </div>
 
               <div className="project-tabs" role="tablist" aria-label="Project workspace">
@@ -2157,7 +2186,7 @@ function AdminDashboard({ token, onLogout }) {
                     </div>
                     <div className="project-info-row">
                       <span>Status</span>
-                      <strong><span className={`project-status ${selectedProject.isActive ? 'deployed' : 'draft'}`}>{selectedProject.isActive ? 'deployed' : 'draft'}</span></strong>
+                      <strong><span className={`project-status ${selectedProjectStatus}`}>{selectedProjectStatus}</span></strong>
                     </div>
                     <div className="project-info-row">
                       <span>Questions</span>
@@ -2431,7 +2460,9 @@ function AdminDashboard({ token, onLogout }) {
                         </div>
 
                         <div className="settings-danger-zone">
-                          <button className="secondary" onClick={() => setStatus('Archive workflow is not enabled for pilot safety.')}>Archive Project</button>
+                          <button className="secondary" disabled={selectedProjectStatus === 'archived'} onClick={archiveSelectedProject}>
+                            {selectedProjectStatus === 'archived' ? 'Project Archived' : 'Archive Project'}
+                          </button>
                           <p>Archive project to stop accepting submissions.</p>
                           <button className="danger-button" onClick={() => setStatus('Delete workflow is not enabled for pilot safety.')}>Delete Project and Data</button>
                         </div>
@@ -3403,8 +3434,9 @@ function PortfolioDashboard({
     : portfolioProjects.map((project) => ({ project: project.name, samples: Number(project.responseCount || 0) }));
   const portfolioCounts = {
     all: portfolioProjects.length,
-    deployed: portfolioProjects.filter((project) => project.isActive).length,
-    draft: portfolioProjects.filter((project) => !project.isActive).length
+    deployed: portfolioProjects.filter((project) => getProjectStatus(project) === 'deployed').length,
+    draft: portfolioProjects.filter((project) => getProjectStatus(project) === 'draft').length,
+    archived: portfolioProjects.filter((project) => getProjectStatus(project) === 'archived').length
   };
   const totalSamples = Number(data?.totals?.total_samples ?? totalProjectSubmissions ?? 0);
   const topProject = leadingRow(projectRowsSource, 'project');
@@ -3416,8 +3448,9 @@ function PortfolioDashboard({
   const clientAccessRows = toReportChartRows(clientProjectRows || [], 'label', 'samples', 8);
   const statusRows = toReportChartRows([
     { status: 'Deployed', samples: portfolioCounts.deployed },
-    { status: 'Draft', samples: portfolioCounts.draft }
-  ], 'status', 'samples', 2);
+    { status: 'Draft', samples: portfolioCounts.draft },
+    { status: 'Archived', samples: portfolioCounts.archived }
+  ], 'status', 'samples', 3);
 
   return (
     <section id="portfolio-dashboard" className="admin-section admin-dashboard-section portfolio-dashboard-section">
@@ -3434,7 +3467,7 @@ function PortfolioDashboard({
       </div>
 
       <div className="summary-kpi-grid portfolio-kpi-grid">
-        <SummaryKpiCard icon={<ClipboardList size={18} />} label="Portfolio projects" value={formatStatNumber(portfolioCounts.all)} detail={`${portfolioCounts.deployed} deployed, ${portfolioCounts.draft} draft`} accent="teal" />
+        <SummaryKpiCard icon={<ClipboardList size={18} />} label="Portfolio projects" value={formatStatNumber(portfolioCounts.all)} detail={`${portfolioCounts.deployed} deployed, ${portfolioCounts.draft} draft, ${portfolioCounts.archived} archived`} accent="teal" />
         <SummaryKpiCard icon={<BarChart3 size={18} />} label="Filtered samples" value={formatStatNumber(totalSamples)} detail={topProject ? `${truncateText(topProject.label, 30)} leads` : 'No samples yet'} accent="blue" />
         <SummaryKpiCard icon={<MapPin size={18} />} label="Field locations" value={formatStatNumber(data?.byLocation?.length || 0)} detail={topLocation ? `${truncateText(topLocation.label, 28)} leads` : 'No locations yet'} accent="sky" />
         <SummaryKpiCard icon={<UserRound size={18} />} label="Enumerators" value={formatStatNumber(data?.byEnumerator?.length || 0)} detail={topEnumerator ? `${truncateText(topEnumerator.label, 24)} leads` : 'No enumerators yet'} accent="amber" />

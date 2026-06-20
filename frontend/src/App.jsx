@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import html2canvas from 'html2canvas';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -1354,60 +1355,16 @@ function makeSafeFilename(value) {
     .slice(0, 80) || 'vtrac-graph';
 }
 
-function inlineExportStyles(source, clone) {
-  if (!(source instanceof Element) || !(clone instanceof Element)) return;
-  const computed = window.getComputedStyle(source);
-  clone.setAttribute('style', Array.from(computed)
-    .map((property) => `${property}:${computed.getPropertyValue(property)};`)
-    .join(''));
-
-  Array.from(source.children).forEach((child, index) => {
-    inlineExportStyles(child, clone.children[index]);
-  });
-}
-
-function loadImage(src) {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = reject;
-    image.src = src;
-  });
-}
-
 async function exportElementAsImage(element, filename, format = 'png') {
   if (!element) throw new Error('No graph selected for export.');
-  const rect = element.getBoundingClientRect();
-  const width = Math.max(Math.ceil(rect.width), 320);
-  const height = Math.max(Math.ceil(rect.height), 220);
-  const clone = element.cloneNode(true);
-  inlineExportStyles(element, clone);
-  clone.querySelectorAll('[data-export-ignore]').forEach((node) => node.remove());
-  clone.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
-  clone.style.width = `${width}px`;
-  clone.style.height = `${height}px`;
-  clone.style.boxSizing = 'border-box';
-  clone.style.background = '#ffffff';
-
-  const serialized = new XMLSerializer().serializeToString(clone);
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-      <foreignObject width="100%" height="100%">${serialized}</foreignObject>
-    </svg>
-  `;
-  const svgUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
-  const image = await loadImage(svgUrl);
-  URL.revokeObjectURL(svgUrl);
-
-  const scale = 2;
-  const canvas = document.createElement('canvas');
-  canvas.width = width * scale;
-  canvas.height = height * scale;
-  const context = canvas.getContext('2d');
-  context.scale(scale, scale);
-  context.fillStyle = '#ffffff';
-  context.fillRect(0, 0, width, height);
-  context.drawImage(image, 0, 0, width, height);
+  if (document.fonts?.ready) await document.fonts.ready;
+  const canvas = await html2canvas(element, {
+    backgroundColor: '#ffffff',
+    ignoreElements: (node) => node instanceof Element && node.hasAttribute('data-export-ignore'),
+    logging: false,
+    scale: Math.min(window.devicePixelRatio || 2, 2),
+    useCORS: true
+  });
 
   const isJpeg = format === 'jpeg' || format === 'jpg';
   const blob = await new Promise((resolve, reject) => {

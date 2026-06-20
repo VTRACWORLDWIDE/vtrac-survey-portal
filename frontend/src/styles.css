@@ -653,21 +653,26 @@ textarea {
 .admin-login-screen {
   display: grid;
   grid-template-rows: auto 1fr;
+  height: 100svh;
+  min-height: 100vh;
+  overflow: hidden;
 }
 
 .admin-login-layout {
   align-items: center;
   display: grid;
-  gap: clamp(18px, 4vw, 42px);
+  gap: clamp(18px, 3vw, 36px);
   grid-template-columns: minmax(0, 1.22fr) minmax(340px, 420px);
+  height: calc(100svh - 78px);
   margin: 0 auto;
   max-width: 1240px;
-  min-height: calc(100vh - 78px);
-  padding: clamp(22px, 4vw, 48px);
+  min-height: 0;
+  padding: clamp(14px, 2.6vh, 32px) clamp(18px, 3vw, 44px);
   width: 100%;
 }
 
 .admin-login-visual {
+  align-self: center;
   background:
     linear-gradient(135deg, rgba(19, 62, 152, 0.96), rgba(10, 167, 164, 0.9)),
     linear-gradient(45deg, rgba(224, 161, 47, 0.18), rgba(255, 255, 255, 0));
@@ -677,7 +682,8 @@ textarea {
   color: #ffffff;
   display: grid;
   gap: 22px;
-  min-height: 560px;
+  height: min(640px, 100%);
+  min-height: 0;
   overflow: hidden;
   padding: clamp(22px, 4vw, 40px);
   position: relative;
@@ -755,7 +761,7 @@ textarea {
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 8px;
   box-shadow: inset 0 0 0 1px rgba(19, 62, 152, 0.06), 0 18px 36px rgba(10, 32, 72, 0.18);
-  min-height: 270px;
+  min-height: clamp(210px, 28vh, 270px);
   overflow: hidden;
   position: relative;
 }
@@ -959,7 +965,8 @@ textarea {
   gap: 15px;
   justify-self: stretch;
   max-width: 420px;
-  min-height: 560px;
+  height: min(560px, 100%);
+  min-height: 0;
   overflow: hidden;
   padding: 28px;
   position: relative;
@@ -4428,6 +4435,61 @@ tbody tr:hover {
   background: #f7faf9;
 }
 
+@media (min-width: 1081px) and (max-height: 850px) {
+  .admin-login-layout {
+    gap: 24px;
+    padding-bottom: 18px;
+    padding-top: 18px;
+  }
+
+  .admin-login-visual {
+    gap: 16px;
+    padding: 24px 28px;
+  }
+
+  .admin-visual-kicker {
+    margin-bottom: 10px;
+    padding: 7px 11px;
+  }
+
+  .admin-visual-copy h1 {
+    font-size: clamp(2rem, 3.1vw, 2.8rem);
+    margin-bottom: 10px;
+  }
+
+  .admin-visual-copy p {
+    font-size: 0.94rem;
+    line-height: 1.45;
+  }
+
+  .mobility-map-panel {
+    min-height: 210px;
+  }
+
+  .admin-capability-row span {
+    min-height: 42px;
+    padding: 8px 10px;
+  }
+
+  .admin-login-card {
+    gap: 12px;
+    padding: 24px;
+  }
+
+  .admin-login-logo-chip {
+    height: 58px;
+    width: 64px;
+  }
+
+  .admin-login-card input {
+    min-height: 44px;
+  }
+
+  .admin-login-card .primary {
+    min-height: 48px;
+  }
+}
+
 @media (max-width: 1080px) {
   .admin-console-shell {
     grid-template-columns: 64px minmax(210px, 250px) minmax(0, 1fr);
@@ -4480,7 +4542,19 @@ tbody tr:hover {
 
   .admin-login-layout {
     align-items: start;
+    height: auto;
     min-height: auto;
+  }
+
+  .admin-login-screen {
+    height: auto;
+    overflow: visible;
+  }
+
+  .admin-login-visual,
+  .admin-login-card {
+    height: auto;
+    max-height: none;
   }
 
   .admin-login-card {

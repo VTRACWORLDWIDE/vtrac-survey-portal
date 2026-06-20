@@ -1510,9 +1510,7 @@ function AdminLogin({ onLogin }) {
       <div className="admin-login-topbar">
         <div className="admin-brand-mark">
           <img src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
-          <span title={activeAdminSection === 'projectWorkspace' ? selectedProject?.name : 'VTRAC Survey Console'}>
-            {activeAdminSection === 'projectWorkspace' && selectedProject ? selectedProject.name : 'VTRAC Survey Console'}
-          </span>
+          <span title="VTRAC Survey Console">VTRAC Survey Console</span>
         </div>
       </div>
       <form className="admin-login-card" onSubmit={submit}>

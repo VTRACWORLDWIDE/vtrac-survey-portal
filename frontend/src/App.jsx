@@ -1733,21 +1733,81 @@ function AdminLogin({ onLogin }) {
           <span title="VTRAC Survey Console">VTRAC Survey Console</span>
         </div>
       </div>
-      <form className="admin-login-card" onSubmit={submit}>
-        <div className="login-mark"><ShieldCheck size={24} /></div>
-        <p className="eyebrow">Administrator</p>
-        <h2>Sign in to manage field projects</h2>
-        <label>
-          Username
-          <input value={username} onChange={(event) => setUsername(event.target.value)} required />
-        </label>
-        <label>
-          Password
-          <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-        </label>
-        <button className="primary">Login</button>
-        {status && <p className="status">{status}</p>}
-      </form>
+      <div className="admin-login-layout">
+        <section className="admin-login-visual" aria-label="VTRAC survey operations overview">
+          <div className="admin-visual-copy">
+            <span className="admin-visual-kicker"><ShieldCheck size={16} /> Secure admin workspace</span>
+            <h1>Field research, mobility studies, and survey data in one command view.</h1>
+            <p>Plan projects, monitor live collection, review responses, and prepare exports for client reporting.</p>
+          </div>
+
+          <div className="admin-visual-grid">
+            <div className="mobility-map-panel">
+              <div className="map-grid-lines" />
+              <div className="route-line route-line-a" />
+              <div className="route-line route-line-b" />
+              <span className="map-node node-one"><MapPin size={15} /></span>
+              <span className="map-node node-two"><MapPin size={15} /></span>
+              <span className="map-node node-three"><MapPin size={15} /></span>
+              <div className="map-callout callout-one">
+                <strong>KIA Terminal</strong>
+                <span>Passenger intercepts</span>
+              </div>
+              <div className="map-callout callout-two">
+                <strong>City origins</strong>
+                <span>Zone-mapped responses</span>
+              </div>
+              <div className="map-mini-chart">
+                <span />
+                <span />
+                <span />
+                <span />
+              </div>
+            </div>
+
+            <div className="admin-insight-stack">
+              <div className="admin-insight-card">
+                <ClipboardList size={19} />
+                <span>Live samples</span>
+                <strong>448</strong>
+              </div>
+              <div className="admin-insight-card">
+                <TrendingUp size={19} />
+                <span>Daily run-rate</span>
+                <strong>149</strong>
+              </div>
+              <div className="admin-insight-card">
+                <BarChart3 size={19} />
+                <span>QC ready</span>
+                <strong>94%</strong>
+              </div>
+            </div>
+          </div>
+
+          <div className="admin-capability-row">
+            <span><Table2 size={16} /> Response review</span>
+            <span><MapPin size={16} /> GIS-ready data</span>
+            <span><Download size={16} /> XLSX / CSV export</span>
+          </div>
+        </section>
+
+        <form className="admin-login-card" onSubmit={submit}>
+          <div className="login-mark"><ShieldCheck size={24} /></div>
+          <p className="eyebrow">Administrator</p>
+          <h2>Sign in to manage field projects</h2>
+          <p className="login-support-text">Use your VTRAC admin credentials to access projects, dashboards, clients, and exports.</p>
+          <label>
+            Username
+            <input value={username} onChange={(event) => setUsername(event.target.value)} required />
+          </label>
+          <label>
+            Password
+            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+          </label>
+          <button className="primary">Login</button>
+          {status && <p className="status">{status}</p>}
+        </form>
+      </div>
     </section>
   );
 }

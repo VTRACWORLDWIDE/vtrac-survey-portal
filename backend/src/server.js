@@ -23,6 +23,19 @@ const defaultProjectSettings = {
   showRespondentPhone: true,
   showHouseholdId: false
 };
+const transportModeOptions = [
+  'Private car',
+  'App cab / taxi',
+  'Airport taxi',
+  'Bus',
+  'Metro',
+  'Train',
+  'Two-wheeler',
+  'Auto-rickshaw',
+  'Company cab',
+  'Drop by family/friend',
+  'Other'
+];
 
 const defaultLocations = ['Kadiri', 'Anantapur', 'Hindupur', 'Dharmavaram', 'Gorantla', 'Other'];
 const defaultQuestions = [
@@ -134,7 +147,7 @@ app.get('/api/projects/:id/response-backups', requireAdmin, async (req, res, nex
   try {
     await query(`DELETE FROM response_clear_backups WHERE expires_at < NOW()`);
     const result = await query(
-      `SELECT id, project_id, project_name, response_count, created_by, created_at, expires_at
+      `SELECT id, project_id, project_name, response_count, created_by, created_at, expires_at, restored_at, restored_by, restored_count
       FROM response_clear_backups
       WHERE project_id = $1
       ORDER BY created_at DESC
@@ -149,11 +162,125 @@ app.get('/api/projects/:id/response-backups', requireAdmin, async (req, res, nex
         responseCount: row.response_count,
         createdBy: row.created_by,
         createdAt: row.created_at,
-        expiresAt: row.expires_at
+        expiresAt: row.expires_at,
+        restoredAt: row.restored_at,
+        restoredBy: row.restored_by,
+        restoredCount: row.restored_count
       }))
     });
   } catch (error) {
     next(error);
+  }
+});
+
+app.post('/api/projects/:id/response-backups/:backupId/restore', requireAdmin, async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const confirmation = String(req.body?.confirmation || '').trim();
+    if (confirmation !== 'RESTORE DATA') {
+      return res.status(400).json({ error: 'Type RESTORE DATA to confirm restoring the backup.' });
+    }
+
+    await client.query('BEGIN');
+    await client.query(`DELETE FROM response_clear_backups WHERE expires_at < NOW() AND restored_at IS NULL`);
+
+    const backupResult = await client.query(
+      `SELECT *
+      FROM response_clear_backups
+      WHERE id = $1
+        AND project_id = $2
+      LIMIT 1`,
+      [req.params.backupId, req.params.id]
+    );
+    const backup = backupResult.rows[0];
+    if (!backup) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Backup not found or expired.' });
+    }
+    if (backup.restored_at) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'This backup has already been restored.' });
+    }
+    if (new Date(backup.expires_at).getTime() < Date.now()) {
+      await client.query('ROLLBACK');
+      return res.status(410).json({ error: 'This backup has expired.' });
+    }
+
+    let restoredCount = 0;
+    const rows = Array.isArray(backup.backup_data) ? backup.backup_data : [];
+    for (const row of rows) {
+      const inserted = await client.query(
+        `INSERT INTO survey_responses (
+          project_id,
+          enumerator_name,
+          location,
+          respondent_name,
+          respondent_phone,
+          household_id,
+          answers,
+          latitude,
+          longitude,
+          gps_accuracy,
+          audio_data,
+          audio_mime_type,
+          audio_size,
+          survey_started_at,
+          survey_ended_at,
+          survey_duration_seconds,
+          client_submission_id,
+          submitted_at,
+          created_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+        ON CONFLICT (client_submission_id) DO NOTHING
+        RETURNING id`,
+        [
+          req.params.id,
+          row.enumerator_name,
+          row.location,
+          row.respondent_name || null,
+          row.respondent_phone || null,
+          row.household_id || null,
+          JSON.stringify(row.answers || {}),
+          row.latitude ?? null,
+          row.longitude ?? null,
+          row.gps_accuracy ?? null,
+          row.audio_data || null,
+          row.audio_mime_type || null,
+          row.audio_size ?? null,
+          row.survey_started_at || null,
+          row.survey_ended_at || null,
+          row.survey_duration_seconds ?? null,
+          row.client_submission_id || null,
+          row.submitted_at || null,
+          row.created_at || null
+        ]
+      );
+      restoredCount += inserted.rowCount;
+    }
+
+    await client.query(
+      `UPDATE response_clear_backups
+      SET restored_at = NOW(),
+        restored_by = $1,
+        restored_count = $2
+      WHERE id = $3`,
+      [req.admin.username || 'admin', restoredCount, backup.id]
+    );
+
+    await client.query('COMMIT');
+    res.json({
+      restoredCount,
+      backup: {
+        id: String(backup.id),
+        responseCount: backup.response_count
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(error);
+  } finally {
+    client.release();
   }
 });
 
@@ -883,7 +1010,10 @@ async function ensureDatabase() {
       backup_data JSONB NOT NULL DEFAULT '[]'::jsonb,
       created_by TEXT NOT NULL DEFAULT 'admin',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '7 days')
+      expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '7 days'),
+      restored_at TIMESTAMPTZ,
+      restored_by TEXT,
+      restored_count INT
     );
 
     ALTER TABLE survey_projects ADD COLUMN IF NOT EXISTS settings JSONB NOT NULL DEFAULT '{}'::jsonb;
@@ -895,6 +1025,9 @@ async function ensureDatabase() {
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS survey_ended_at TIMESTAMPTZ;
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS survey_duration_seconds INT;
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS client_submission_id TEXT UNIQUE;
+    ALTER TABLE response_clear_backups ADD COLUMN IF NOT EXISTS restored_at TIMESTAMPTZ;
+    ALTER TABLE response_clear_backups ADD COLUMN IF NOT EXISTS restored_by TEXT;
+    ALTER TABLE response_clear_backups ADD COLUMN IF NOT EXISTS restored_count INT;
 
     CREATE INDEX IF NOT EXISTS idx_survey_responses_project ON survey_responses (project_id);
     CREATE INDEX IF NOT EXISTS idx_survey_responses_submitted_at ON survey_responses (submitted_at DESC);
@@ -932,7 +1065,71 @@ async function ensureDatabase() {
   }
 
   await query(`UPDATE survey_responses SET project_id = $1 WHERE project_id IS NULL`, [projectId]);
+  await ensureBengaluruTransportQuestions();
   await ensureDefaultClientAccount();
+}
+
+async function ensureBengaluruTransportQuestions() {
+  const projectResult = await query(`SELECT id FROM survey_projects WHERE slug = $1 LIMIT 1`, [defaultProjectSlug]);
+  const projectId = projectResult.rows[0]?.id;
+  if (!projectId) return;
+
+  await ensureQuestionAfter(projectId, 'travel_purpose', {
+    id: 'departure_transport_mode_to_airport',
+    label: 'Mode of transport used to reach the airport',
+    type: 'select',
+    options: transportModeOptions,
+    required: true
+  });
+
+  await ensureQuestionAfter(projectId, 'departure_transport_mode_to_airport', {
+    id: 'arrival_transport_mode_from_airport',
+    label: 'Mode of transport willing to take from the airport',
+    type: 'select',
+    options: transportModeOptions,
+    required: true
+  });
+}
+
+async function ensureQuestionAfter(projectId, afterQuestionKey, question) {
+  const existing = await query(
+    `SELECT id
+    FROM survey_questions
+    WHERE project_id = $1
+      AND question_key = $2
+    LIMIT 1`,
+    [projectId, question.id]
+  );
+  if (existing.rows[0]) return;
+
+  const anchor = await query(
+    `SELECT sort_order
+    FROM survey_questions
+    WHERE project_id = $1
+      AND question_key = $2
+    LIMIT 1`,
+    [projectId, afterQuestionKey]
+  );
+  const maxOrder = await query(
+    `SELECT COALESCE(MAX(sort_order), 0)::int AS max_order
+    FROM survey_questions
+    WHERE project_id = $1`,
+    [projectId]
+  );
+  const anchorOrder = Number(anchor.rows[0]?.sort_order ?? maxOrder.rows[0]?.max_order ?? 0);
+
+  await query(
+    `UPDATE survey_questions
+    SET sort_order = sort_order + 1
+    WHERE project_id = $1
+      AND sort_order > $2`,
+    [projectId, anchorOrder]
+  );
+  await query(
+    `INSERT INTO survey_questions (project_id, question_key, label, type, options, required, sort_order)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [projectId, question.id, question.label, question.type, JSON.stringify(question.options), question.required, anchorOrder + 1]
+  );
 }
 
 async function loadProjects() {
@@ -1420,6 +1617,7 @@ function questionAppliesToLocation(questionId, location = '') {
     'destination_mapped_area',
     'destination_division',
     'coming_from_city_name',
+    'arrival_transport_mode_from_airport',
     'time_to_reach_final_destination_hours',
     'time_to_reach_final_destination_minutes',
     'final_destination_time_total_minutes',
@@ -1434,6 +1632,7 @@ function questionAppliesToLocation(questionId, location = '') {
     'origin_mapped_area',
     'origin_division',
     'travelling_to_city_name',
+    'departure_transport_mode_to_airport',
     'time_taken_to_reach_airport_hours',
     'time_taken_to_reach_airport_minutes',
     'travel_time_total_minutes',

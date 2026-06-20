@@ -1017,6 +1017,7 @@ function questionAppliesToLocation(questionId, location = '') {
     'destination_mapped_area',
     'destination_division',
     'coming_from_city_name',
+    'arrival_transport_mode_from_airport',
     'time_to_reach_final_destination_hours',
     'time_to_reach_final_destination_minutes',
     'final_destination_time_total_minutes',
@@ -1030,6 +1031,7 @@ function questionAppliesToLocation(questionId, location = '') {
     'origin_mapped_area',
     'origin_division',
     'travelling_to_city_name',
+    'departure_transport_mode_to_airport',
     'time_taken_to_reach_airport_hours',
     'time_taken_to_reach_airport_minutes',
     'travel_time_total_minutes',
@@ -1616,6 +1618,9 @@ function AdminDashboard({ token, onLogout }) {
   const [clearDataConfirmation, setClearDataConfirmation] = useState('');
   const [clearDataBackups, setClearDataBackups] = useState([]);
   const [clearDataWorking, setClearDataWorking] = useState(false);
+  const [restoreBackupTarget, setRestoreBackupTarget] = useState(null);
+  const [restoreDataConfirmation, setRestoreDataConfirmation] = useState('');
+  const [restoreDataWorking, setRestoreDataWorking] = useState(false);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
@@ -2053,6 +2058,39 @@ function AdminDashboard({ token, onLogout }) {
       await loadClearDataBackups(selectedProject.id);
     } finally {
       setClearDataWorking(false);
+    }
+  }
+
+  function openRestoreBackupModal(backup) {
+    setStatus('');
+    setRestoreBackupTarget(backup);
+    setRestoreDataConfirmation('');
+  }
+
+  async function restoreBackupResponses() {
+    if (!selectedProject || !restoreBackupTarget || restoreDataConfirmation.trim() !== 'RESTORE DATA') return;
+    setRestoreDataWorking(true);
+    setStatus('');
+    try {
+      const response = await fetch(`${apiBase}/api/projects/${selectedProject.id}/response-backups/${restoreBackupTarget.id}/restore`, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmation: restoreDataConfirmation.trim() })
+      });
+      if (response.status === 401) return onLogout();
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setStatus(payload.error || 'Unable to restore backup.');
+        return;
+      }
+      setStatus(`${payload.restoredCount || 0} responses restored from backup #${restoreBackupTarget.id}.`);
+      setRestoreBackupTarget(null);
+      setRestoreDataConfirmation('');
+      await loadProjects();
+      await loadDashboard();
+      await loadClearDataBackups(selectedProject.id);
+    } finally {
+      setRestoreDataWorking(false);
     }
   }
 
@@ -2509,7 +2547,7 @@ function AdminDashboard({ token, onLogout }) {
                             <div className="table-scroll">
                               <table>
                                 <thead>
-                                  <tr><th>Backup ID</th><th>Responses</th><th>Created</th><th>Expires</th></tr>
+                                  <tr><th>Backup ID</th><th>Responses</th><th>Created</th><th>Status</th><th>Action</th></tr>
                                 </thead>
                                 <tbody>
                                   {clearDataBackups.map((backup) => (
@@ -2517,7 +2555,20 @@ function AdminDashboard({ token, onLogout }) {
                                       <td>#{backup.id}</td>
                                       <td>{formatStatNumber(backup.responseCount || 0)}</td>
                                       <td>{formatProjectDateTime(backup.createdAt)}</td>
-                                      <td>{formatProjectDateTime(backup.expiresAt)}</td>
+                                      <td>
+                                        {backup.restoredAt
+                                          ? `Restored ${formatProjectDateTime(backup.restoredAt)}`
+                                          : `Expires ${formatProjectDateTime(backup.expiresAt)}`}
+                                      </td>
+                                      <td>
+                                        <button
+                                          className="secondary compact-button"
+                                          disabled={Boolean(backup.restoredAt)}
+                                          onClick={() => openRestoreBackupModal(backup)}
+                                        >
+                                          <RefreshCw size={15} /> Restore
+                                        </button>
+                                      </td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -2689,6 +2740,48 @@ function AdminDashboard({ token, onLogout }) {
                     onClick={clearProjectResponses}
                   >
                     <Trash2 size={16} /> {clearDataWorking ? 'Clearing...' : 'Clear data'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {restoreBackupTarget && selectedProject && (
+            <div className="modal-backdrop cleanup-modal-backdrop" role="presentation">
+              <div className="cleanup-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="restore-data-title">
+                <div className="cleanup-confirm-head">
+                  <div>
+                    <p className="eyebrow">Confirm restore</p>
+                    <h2 id="restore-data-title">Restore backup #{restoreBackupTarget.id}?</h2>
+                  </div>
+                  <button className="icon-button" onClick={() => setRestoreBackupTarget(null)} aria-label="Close restore confirmation">
+                    <X size={18} />
+                  </button>
+                </div>
+                <p>
+                  This will add the backed-up responses back into <strong>{selectedProject.name}</strong>.
+                  A backup can be restored only once to prevent accidental duplicates.
+                </p>
+                <div className="cleanup-confirm-summary restore-summary">
+                  <span>Responses in backup</span>
+                  <strong>{formatStatNumber(restoreBackupTarget.responseCount || 0)}</strong>
+                </div>
+                <label className="field-label">
+                  Type RESTORE DATA to confirm
+                  <input
+                    autoFocus
+                    value={restoreDataConfirmation}
+                    onChange={(event) => setRestoreDataConfirmation(event.target.value)}
+                    placeholder="RESTORE DATA"
+                  />
+                </label>
+                <div className="modal-actions">
+                  <button className="secondary" onClick={() => setRestoreBackupTarget(null)}>Cancel</button>
+                  <button
+                    className="primary"
+                    disabled={restoreDataConfirmation.trim() !== 'RESTORE DATA' || restoreDataWorking}
+                    onClick={restoreBackupResponses}
+                  >
+                    <RefreshCw size={16} /> {restoreDataWorking ? 'Restoring...' : 'Restore backup'}
                   </button>
                 </div>
               </div>

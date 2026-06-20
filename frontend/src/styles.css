@@ -2645,6 +2645,19 @@ textarea {
   font-size: 1.45rem;
 }
 
+.cleanup-confirm-summary.restore-summary {
+  background: #eefaf8;
+  border-color: #b9e7e3;
+}
+
+.cleanup-confirm-summary.restore-summary span {
+  color: #235b5c;
+}
+
+.cleanup-confirm-summary.restore-summary strong {
+  color: #087f7f;
+}
+
 .modal-actions {
   display: flex;
   flex-wrap: wrap;

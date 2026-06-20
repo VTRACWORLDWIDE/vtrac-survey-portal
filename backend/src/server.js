@@ -21,7 +21,9 @@ const defaultProjectSettings = {
   captureGps: false,
   captureAudio: false,
   showRespondentPhone: true,
-  showHouseholdId: false
+  showHouseholdId: false,
+  status: 'deployed',
+  archivedAt: ''
 };
 const transportModeOptions = [
   'Private car',
@@ -1764,6 +1766,7 @@ function normalizeProject(project) {
 
 function normalizeProjectSettings(settings = {}, slug = '') {
   const parsed = typeof settings === 'string' ? safeJsonParse(settings, {}) : settings || {};
+  const status = parsed.status === 'archived' ? 'archived' : (parsed.status === 'draft' ? 'draft' : 'deployed');
   return {
     ...defaultProjectSettings,
     airportLocationMode: parsed.airportLocationMode === undefined ? slug === defaultProjectSlug : Boolean(parsed.airportLocationMode),
@@ -1772,7 +1775,9 @@ function normalizeProjectSettings(settings = {}, slug = '') {
     showRespondentPhone: parsed.showRespondentPhone !== false,
     showHouseholdId: Boolean(parsed.showHouseholdId),
     sector: parsed.sector?.trim?.() || 'Other',
-    country: parsed.country?.trim?.() || 'India'
+    country: parsed.country?.trim?.() || 'India',
+    status,
+    archivedAt: status === 'archived' ? String(parsed.archivedAt || '') : ''
   };
 }
 

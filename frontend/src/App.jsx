@@ -2023,7 +2023,7 @@ function AdminDashboard({ token, onLogout }) {
     });
   }
 
-  async function saveProject(project) {
+  async function saveProject(project, successMessage = 'Project saved.') {
     setStatus('');
     const method = project.id ? 'PUT' : 'POST';
     const url = project.id ? `${apiBase}/api/projects/${project.id}` : `${apiBase}/api/projects`;
@@ -2035,12 +2035,13 @@ function AdminDashboard({ token, onLogout }) {
     const payload = await response.json();
     if (!response.ok) {
       setStatus(payload.error || 'Unable to save project.');
-      return;
+      return null;
     }
-    setStatus('Project saved.');
+    setStatus(successMessage);
     setEditing(null);
     await loadProjects();
     setSelectedId(payload.project.id);
+    return payload.project;
   }
 
   async function saveGeneralSettings() {
@@ -2062,7 +2063,7 @@ function AdminDashboard({ token, onLogout }) {
     const confirmed = window.confirm(`Archive "${selectedProject.name}"? This will stop the public survey link from accepting new submissions.`);
     if (!confirmed) return;
 
-    await saveProject({
+    const archivedProject = await saveProject({
       ...selectedProject,
       isActive: false,
       settings: {
@@ -2070,9 +2071,10 @@ function AdminDashboard({ token, onLogout }) {
         status: 'archived',
         archivedAt: new Date().toISOString()
       }
-    });
+    }, 'Project archived. Public submissions are now disabled for this project.');
+    if (!archivedProject) return;
     setProjectStatusFilter('archived');
-    setProjectWorkspaceTab('settings');
+    setActiveAdminSection('projects');
     setStatus('Project archived. Public submissions are now disabled for this project.');
   }
 

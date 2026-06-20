@@ -248,11 +248,12 @@ export default function App() {
 
   const isPublicSurvey = route.startsWith('/p/');
   const isAdminRoute = route.startsWith('/admin');
+  const isClientRoute = route.startsWith('/client') || route === '/';
   const publicSlug = isPublicSurvey ? route.replace('/p/', '') : defaultProjectSlug;
 
   return (
     <main>
-      {!isPublicSurvey && !isAdminRoute && <header className="topbar">
+      {!isPublicSurvey && !isAdminRoute && !isClientRoute && <header className="topbar">
         <div className="brand-block">
           <img className="brand-logo" src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
           <div>
@@ -1291,39 +1292,68 @@ function ClientLogin({ onLogin }) {
   const [username, setUsername] = useState('client');
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState('');
+  const [loading, setLoading] = useState(false);
 
   async function submit(event) {
     event.preventDefault();
     setStatus('');
-    const response = await fetch(`${apiBase}/api/client/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
-    const payload = await response.json();
-    if (!response.ok) return setStatus(payload.error || 'Unable to login.');
-    onLogin(payload.token);
+    setLoading(true);
+    try {
+      const response = await fetch(`${apiBase}/api/client/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const payload = await response.json();
+      if (!response.ok) return setStatus(payload.error || 'Unable to login.');
+      onLogin(payload.token);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <section className="login-wrap">
-      <form className="panel login-panel" onSubmit={submit}>
-        <div className="login-mark"><BarChart3 size={24} /></div>
-        <div>
-          <p className="eyebrow">VTRAC Client</p>
-          <h2>Sign in to view collection progress</h2>
+    <section className="client-login-screen">
+      <header className="client-login-topbar">
+        <div className="client-login-brand">
+          <img src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
+          <span>VTRAC Client Portal</span>
         </div>
-        <label>
-          Username
-          <input value={username} onChange={(event) => setUsername(event.target.value)} required />
-        </label>
-        <label>
-          Password
-          <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-        </label>
-        <button className="primary">Login</button>
-        {status && <p className="status">{status}</p>}
-      </form>
+      </header>
+
+      <div className="client-login-layout">
+        <div className="client-login-copy">
+          <p className="eyebrow">Client Analytics</p>
+          <h1>Fieldwork progress, simplified for project review.</h1>
+          <p>
+            Monitor assigned survey projects with live collection totals, terminal splits,
+            movement mix, and location summaries.
+          </p>
+          <div className="client-login-feature-grid">
+            <span><ShieldCheck size={18} /> Project-scoped access</span>
+            <span><TrendingUp size={18} /> Live collection trends</span>
+            <span><PieChart size={18} /> Terminal and movement mix</span>
+          </div>
+        </div>
+
+        <form className="client-login-card" onSubmit={submit}>
+          <div className="login-mark"><BarChart3 size={24} /></div>
+          <div>
+            <p className="eyebrow">Secure Client Login</p>
+            <h2>View assigned survey dashboards</h2>
+          </div>
+          <label>
+            Username
+            <input value={username} onChange={(event) => setUsername(event.target.value)} required />
+          </label>
+          <label>
+            Password
+            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+          </label>
+          <button className="primary" disabled={loading}>{loading ? 'Signing in...' : 'Login'}</button>
+          {status && <p className="status">{status}</p>}
+        </form>
+      </div>
     </section>
   );
 }
@@ -1431,12 +1461,13 @@ async function exportElementAsImage(element, filename, format = 'png') {
 
 function ClientDashboard({ token, onLogout }) {
   const [projects, setProjects] = useState([]);
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState('');
   const [filters, setFilters] = useState({ dateFrom: '', dateTo: '' });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const authHeaders = { Authorization: `Bearer ${token}` };
-  const selectedProject = projects.find((project) => project.id === selectedId) || projects[0];
+  const selectedProject = projects.find((project) => String(project.id) === String(selectedId)) || projects[0];
   const totalSamples = Number(data?.totals?.total_samples || 0);
   const todaySamples = Number(data?.totals?.samples_today || 0);
   const terminalRows = data?.byTerminal || [];
@@ -1448,8 +1479,15 @@ function ClientDashboard({ token, onLogout }) {
   const leadingTerminal = leadingRow(coveredTerminalRows, 'terminal');
   const leadingMovement = leadingRow(movementRows, 'movement');
   const leadingPoint = leadingRow(surveyPointRows, 'survey_point');
+  const topLocation = leadingRow(locationRows, 'location');
   const latestDate = dateRows[0];
+  const activeDays = dateRows.length;
+  const averagePerDay = activeDays ? Math.round(totalSamples / activeDays) : 0;
   const dateScope = formatDateScope(filters.dateFrom, filters.dateTo);
+  const terminalChartRows = toReportChartRows(coveredTerminalRows.length ? coveredTerminalRows : terminalRows, 'terminal', 'samples', 4);
+  const movementChartRows = toReportChartRows(movementRows, 'movement', 'samples', 4);
+  const surveyPointChartRows = toReportChartRows(surveyPointRows, 'survey_point', 'samples', 7);
+  const locationChartRows = toReportChartRows(locationRows, 'location', 'samples', 8);
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -1463,11 +1501,16 @@ function ClientDashboard({ token, onLogout }) {
   }, [filters, selectedProject?.id]);
 
   async function loadProjects() {
-    const response = await fetch(`${apiBase}/api/client/projects`, { headers: authHeaders });
-    if (response.status === 401) return onLogout();
-    const payload = await response.json();
-    setProjects(payload.projects || []);
-    setSelectedId((current) => current || payload.projects?.[0]?.id || '');
+    try {
+      const response = await fetch(`${apiBase}/api/client/projects`, { headers: authHeaders });
+      if (response.status === 401) return onLogout();
+      const payload = await response.json();
+      const nextProjects = payload.projects || [];
+      setProjects(nextProjects);
+      setSelectedId((current) => current || String(nextProjects?.[0]?.id || ''));
+    } finally {
+      setProjectsLoaded(true);
+    }
   }
 
   async function loadDashboard() {
@@ -1490,65 +1533,159 @@ function ClientDashboard({ token, onLogout }) {
     loadDashboard();
   }, [queryString]);
 
+  function clearDateFilters() {
+    setFilters({ dateFrom: '', dateTo: '' });
+  }
+
+  if (!projectsLoaded) {
+    return (
+      <section className="client-portal">
+        <header className="client-portal-topbar">
+          <div className="client-login-brand">
+            <img src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
+            <span>VTRAC Client Portal</span>
+          </div>
+          <button className="secondary client-logout-button" onClick={onLogout}><LogOut size={17} /> Logout</button>
+        </header>
+        <main className="client-portal-main">
+          <div className="panel client-empty-state">
+            <BarChart3 size={28} />
+            <h2>Loading client dashboard</h2>
+            <p>Fetching assigned projects and current collection metrics.</p>
+          </div>
+        </main>
+      </section>
+    );
+  }
+
+  if (projectsLoaded && projects.length === 0) {
+    return (
+      <section className="client-portal">
+        <header className="client-portal-topbar">
+          <div className="client-login-brand">
+            <img src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
+            <span>VTRAC Client Portal</span>
+          </div>
+          <button className="secondary client-logout-button" onClick={onLogout}><LogOut size={17} /> Logout</button>
+        </header>
+        <main className="client-portal-main">
+          <div className="panel client-empty-state">
+            <ShieldCheck size={28} />
+            <h2>No projects assigned yet</h2>
+            <p>Your client login is active, but no survey projects have been enabled for this account.</p>
+          </div>
+        </main>
+      </section>
+    );
+  }
+
   return (
-    <section className="dashboard client-dashboard client-analytics">
-      <div className="client-hero">
-        <div className="client-hero-copy">
-          <p className="eyebrow">VTRAC Client View</p>
-          <h2>Collection Analytics Dashboard</h2>
-          <p>{selectedProject ? selectedProject.name : 'Survey progress'}</p>
-          <div className="client-chip-row">
-            <span className="client-chip"><CalendarClock size={15} /> {dateScope}</span>
-            <span className="client-chip"><ClipboardList size={15} /> {totalSamples} samples</span>
-            <span className="client-chip"><MapPin size={15} /> {coveredTerminalRows.length || 0} terminals covered</span>
+    <section className="client-portal">
+      <header className="client-portal-topbar">
+        <div className="client-login-brand">
+          <img src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
+          <span>VTRAC Client Portal</span>
+        </div>
+        <button className="secondary client-logout-button" onClick={onLogout}><LogOut size={17} /> Logout</button>
+      </header>
+
+      <main className="client-portal-main">
+        <section className="client-overview-hero">
+          <div>
+            <p className="eyebrow">Client Dashboard</p>
+            <h2>{selectedProject?.name || 'Survey analytics'}</h2>
+            <p>
+              Read-only progress view for approved client users. Figures update from submitted field responses.
+            </p>
+            <div className="client-chip-row">
+              <span className="client-chip"><CalendarClock size={15} /> {dateScope}</span>
+              <span className="client-chip"><ClipboardList size={15} /> {formatStatNumber(totalSamples)} samples</span>
+              <span className="client-chip"><ShieldCheck size={15} /> {projects.length} assigned project{projects.length === 1 ? '' : 's'}</span>
+            </div>
+          </div>
+          <div className="client-live-card">
+            <span>Collection Status</span>
+            <strong>{totalSamples > 0 ? 'Live' : 'Awaiting data'}</strong>
+            <p>{latestDate ? `Latest: ${formatProjectDate(latestDate.date)}` : 'No submissions yet'}</p>
+          </div>
+        </section>
+
+        <div className="panel client-control-panel">
+          <label className="client-project-field">
+            Project
+            <select value={selectedProject?.id || ''} onChange={(event) => setSelectedId(event.target.value)}>
+              {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+            </select>
+          </label>
+          <label>
+            Date from
+            <input type="date" value={filters.dateFrom} onChange={(event) => setFilters({ ...filters, dateFrom: event.target.value })} />
+          </label>
+          <label>
+            Date to
+            <input type="date" value={filters.dateTo} onChange={(event) => setFilters({ ...filters, dateTo: event.target.value })} />
+          </label>
+          <div className="client-control-actions">
+            <button className="secondary" onClick={clearDateFilters} disabled={!filters.dateFrom && !filters.dateTo}>Clear dates</button>
+            <button className="primary compact-refresh" onClick={loadDashboard} disabled={loading}><RefreshCw size={17} /> {loading ? 'Refreshing' : 'Refresh'}</button>
           </div>
         </div>
-        <div className="client-hero-actions">
-          <button className="secondary" onClick={onLogout}>Logout</button>
+
+        {loading && <p className="status client-loading">Refreshing client dashboard...</p>}
+
+        <div className="summary-kpi-grid client-summary-kpi-grid">
+          <SummaryKpiCard icon={<ClipboardList size={18} />} label="Total samples" value={formatStatNumber(totalSamples)} detail={`${formatStatNumber(averagePerDay)} avg/day`} accent="teal" />
+          <SummaryKpiCard icon={<CalendarClock size={18} />} label="Samples today" value={formatStatNumber(todaySamples)} detail={`${formatPercent(todaySamples, totalSamples)} of filtered total`} accent="blue" />
+          <SummaryKpiCard icon={<MapPin size={18} />} label="Field locations" value={formatStatNumber(locationRows.length)} detail={topLocation ? `${truncateText(topLocation.label, 32)} leads` : 'No locations yet'} accent="sky" />
+          <SummaryKpiCard icon={<PieChart size={18} />} label="Airport split" value={formatStatNumber(coveredTerminalRows.length || terminalRows.length)} detail={leadingMovement ? `${leadingMovement.label} leads` : 'No movement split yet'} accent="amber" />
         </div>
-      </div>
 
-      <div className="panel client-command-bar">
-        <label>
-          Project
-          <select value={selectedProject?.id || ''} onChange={(event) => setSelectedId(event.target.value)}>
-            {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-          </select>
-        </label>
-        <label>
-          From
-          <input type="date" value={filters.dateFrom} onChange={(event) => setFilters({ ...filters, dateFrom: event.target.value })} />
-        </label>
-        <label>
-          To
-          <input type="date" value={filters.dateTo} onChange={(event) => setFilters({ ...filters, dateTo: event.target.value })} />
-        </label>
-        <button className="primary compact-refresh" onClick={loadDashboard}><RefreshCw size={17} /> Refresh</button>
-      </div>
+        <div className="summary-dashboard-grid client-modern-grid">
+          <div className="panel summary-card summary-trend-card" data-export-graph data-export-title="client-daily-sample-trend">
+            <div className="summary-card-head">
+              <div>
+                <span>Trend</span>
+                <h3><TrendingUp size={17} /> Daily sample trend</h3>
+              </div>
+              <div className="summary-card-actions">
+                <strong>{formatStatNumber(totalSamples)} total</strong>
+                <GraphDownloadButtons filename="vtrac-client-daily-sample-trend" />
+              </div>
+            </div>
+            <TrendLineChart rows={dateRows} labelKey="date" valueKey="samples" />
+            <div className="summary-date-strip">
+              {dateRows.slice(0, 4).map((row) => (
+                <span key={row.date}><strong>{formatStatNumber(row.samples)}</strong>{formatProjectDate(row.date)}</span>
+              ))}
+            </div>
+          </div>
 
-      <div className="client-kpi-grid">
-        <ClientMetric icon={<ClipboardList size={19} />} label="Total samples" value={totalSamples} detail="All project submissions" />
-        <ClientMetric icon={<CalendarClock size={19} />} label="Today" value={todaySamples} detail={todaySamples === 1 ? 'Sample collected today' : 'Samples collected today'} />
-        <ClientMetric icon={<MapPin size={19} />} label="Terminals covered" value={coveredTerminalRows.length} detail={leadingTerminal ? `Lead: ${leadingTerminal.label}` : 'Awaiting field data'} />
-        <ClientMetric icon={<BarChart3 size={19} />} label="Survey points" value={surveyPointRows.length} detail={leadingPoint ? `Top point: ${leadingPoint.label}` : 'Awaiting field data'} />
-      </div>
+          <div className="panel summary-card summary-mix-card" data-export-graph data-export-title="client-terminal-coverage">
+            <div className="summary-card-head">
+              <div>
+                <span>Split</span>
+                <h3><PieChart size={17} /> Terminal coverage</h3>
+              </div>
+              <GraphDownloadButtons filename="vtrac-client-terminal-coverage" />
+            </div>
+            {terminalChartRows.length ? <DonutQuestionChart rows={terminalChartRows} /> : <p className="empty">No terminal split yet.</p>}
+          </div>
 
-      <div className="client-insight-grid">
-        <ClientInsight title="Primary terminal" value={leadingTerminal?.label || 'No data yet'} meta={leadingTerminal ? `${leadingTerminal.samples} samples` : 'Field collection not started'} />
-        <ClientInsight title="Movement mix" value={leadingMovement?.label || 'No data yet'} meta={leadingMovement ? `${leadingMovement.samples} samples currently leading` : 'Departures and arrivals will appear here'} />
-        <ClientInsight title="Active survey point" value={leadingPoint?.label || 'No data yet'} meta={leadingPoint ? `${leadingPoint.samples} samples` : 'No survey point submissions yet'} />
-        <ClientInsight title="Latest collection day" value={latestDate?.date || 'No data yet'} meta={latestDate ? `${latestDate.samples} samples submitted` : 'Date trend will update automatically'} />
-      </div>
+          <div className="panel summary-card summary-mix-card" data-export-graph data-export-title="client-movement-mix">
+            <div className="summary-card-head">
+              <div>
+                <span>Flow</span>
+                <h3><PieChart size={17} /> Movement mix</h3>
+              </div>
+              <GraphDownloadButtons filename="vtrac-client-movement-mix" />
+            </div>
+            {movementChartRows.length ? <DonutQuestionChart rows={movementChartRows} /> : <p className="empty">No movement split yet.</p>}
+          </div>
 
-      <div className="client-analytics-grid">
-        <Breakdown className="span-2" title="Daily sample trend" rows={dateRows} labelKey="date" valueKey="samples" />
-        <Breakdown title="Terminal coverage" rows={terminalRows} labelKey="terminal" valueKey="samples" />
-        <Breakdown title="Departures vs arrivals" rows={movementRows} labelKey="movement" valueKey="samples" />
-        <Breakdown title="Survey point performance" rows={surveyPointRows} labelKey="survey_point" valueKey="samples" />
-        <Breakdown title="Top locations" rows={locationRows} labelKey="location" valueKey="samples" />
-      </div>
-
-      {loading && <p className="status client-loading">Refreshing dashboard...</p>}
+          <SummaryRankCard title="Survey point performance" rows={surveyPointChartRows} icon={<BarChart3 size={17} />} />
+          <SummaryRankCard title="Top survey locations" rows={locationChartRows} icon={<MapPin size={17} />} />
+        </div>
+      </main>
     </section>
   );
 }

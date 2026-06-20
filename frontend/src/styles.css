@@ -3315,6 +3315,266 @@ textarea {
   justify-self: start;
 }
 
+.client-login-screen,
+.client-portal {
+  background: #f4f7fa;
+  color: #1f2f52;
+  min-height: 100vh;
+}
+
+.client-login-topbar,
+.client-portal-topbar {
+  align-items: center;
+  background: #133e98;
+  color: #ffffff;
+  display: flex;
+  justify-content: space-between;
+  min-height: 78px;
+  padding: 0 clamp(16px, 3vw, 34px);
+}
+
+.client-login-brand {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.client-login-brand img {
+  background: #ffffff;
+  border-radius: 6px;
+  height: 44px;
+  object-fit: contain;
+  padding: 3px;
+  width: 56px;
+}
+
+.client-login-brand span {
+  color: #f2f7ff;
+  font-size: 1.08rem;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.client-login-layout {
+  align-items: stretch;
+  display: grid;
+  gap: clamp(18px, 4vw, 44px);
+  grid-template-columns: minmax(0, 1.2fr) minmax(360px, 440px);
+  margin: 0 auto;
+  max-width: 1180px;
+  padding: clamp(28px, 6vw, 76px) clamp(16px, 4vw, 40px);
+}
+
+.client-login-copy {
+  align-content: center;
+  background:
+    linear-gradient(135deg, rgba(19, 62, 152, 0.94), rgba(10, 167, 164, 0.82)),
+    linear-gradient(90deg, rgba(217, 162, 61, 0.16), rgba(255, 255, 255, 0));
+  border-radius: 8px;
+  box-shadow: 0 22px 52px rgba(31, 47, 82, 0.18);
+  color: #ffffff;
+  display: grid;
+  min-height: 420px;
+  overflow: hidden;
+  padding: clamp(24px, 4vw, 42px);
+  position: relative;
+}
+
+.client-login-copy::after {
+  background: rgba(255, 255, 255, 0.12);
+  content: "";
+  height: 180px;
+  position: absolute;
+  right: -60px;
+  top: -40px;
+  transform: rotate(18deg);
+  width: 220px;
+}
+
+.client-login-copy .eyebrow {
+  color: #f0c873;
+}
+
+.client-login-copy h1 {
+  color: #ffffff;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  line-height: 1.04;
+  margin: 0 0 14px;
+  max-width: 780px;
+}
+
+.client-login-copy p {
+  color: #e8f5f5;
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 22px;
+  max-width: 700px;
+}
+
+.client-login-feature-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  position: relative;
+  z-index: 1;
+}
+
+.client-login-feature-grid span {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  color: #f7fbff;
+  display: flex;
+  font-size: 0.85rem;
+  font-weight: 850;
+  gap: 8px;
+  min-height: 54px;
+  padding: 10px;
+}
+
+.client-login-card {
+  align-self: center;
+  background: #ffffff;
+  border: 1px solid #dce6ef;
+  border-radius: 8px;
+  box-shadow: 0 18px 42px rgba(31, 47, 82, 0.12);
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+}
+
+.client-login-card h2 {
+  color: #1f2f52;
+  font-size: 1.45rem;
+  margin: 0;
+}
+
+.client-login-card .eyebrow {
+  color: #0a7777;
+}
+
+.client-portal-main {
+  display: grid;
+  gap: 14px;
+  margin: 0 auto;
+  max-width: 1360px;
+  padding: 18px clamp(12px, 3vw, 28px) 40px;
+}
+
+.client-logout-button {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+}
+
+.client-overview-hero {
+  align-items: stretch;
+  background: #ffffff;
+  border: 1px solid #dfe7ef;
+  border-left: 4px solid #0aa7a4;
+  border-radius: 8px;
+  box-shadow: 0 14px 32px rgba(31, 47, 82, 0.07);
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  padding: 18px;
+}
+
+.client-overview-hero h2 {
+  color: #1f2f52;
+  font-size: clamp(1.35rem, 2.2vw, 2rem);
+  line-height: 1.15;
+  margin: 0 0 6px;
+}
+
+.client-overview-hero p {
+  color: #687893;
+  margin-bottom: 12px;
+}
+
+.client-live-card {
+  align-content: center;
+  background: #eefaf8;
+  border: 1px solid #ccebe6;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+}
+
+.client-live-card span {
+  color: #0a7777;
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.client-live-card strong {
+  color: #133e98;
+  font-size: 1.65rem;
+  line-height: 1;
+}
+
+.client-live-card p {
+  color: #617086;
+  font-size: 0.86rem;
+  font-weight: 750;
+  margin: 0;
+}
+
+.client-control-panel {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(280px, 1.7fr) repeat(2, minmax(150px, 0.75fr)) auto;
+  padding: 12px;
+}
+
+.client-control-actions {
+  align-items: end;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.client-summary-kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.client-modern-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.client-modern-grid .summary-rank-card {
+  grid-column: auto;
+}
+
+.client-modern-grid .summary-trend-card {
+  grid-column: 1 / -1;
+}
+
+.client-empty-state {
+  justify-items: start;
+  margin: 42px auto;
+  max-width: 560px;
+  padding: 28px;
+}
+
+.client-empty-state h2 {
+  color: #1f2f52;
+  margin: 8px 0 6px;
+}
+
+.client-empty-state p {
+  color: #687893;
+  margin: 0;
+}
+
 .project-bar label {
   min-width: min(260px, 100%);
 }
@@ -3773,9 +4033,17 @@ tbody tr:hover {
 
   .client-filter-bar,
   .client-command-bar,
+  .client-control-panel,
   .client-chart-grid,
-  .client-analytics-grid {
+  .client-analytics-grid,
+  .client-modern-grid,
+  .client-login-layout,
+  .client-overview-hero {
     grid-template-columns: 1fr;
+  }
+
+  .client-login-feature-grid {
+    grid-template-columns: 1fr 1fr;
   }
 
   .metric-grid,
@@ -3820,7 +4088,9 @@ tbody tr:hover {
   }
 
   .admin-login-topbar,
-  .admin-console-topbar {
+  .admin-console-topbar,
+  .client-login-topbar,
+  .client-portal-topbar {
     align-items: stretch;
     display: grid;
     gap: 10px;
@@ -4039,6 +4309,35 @@ tbody tr:hover {
     padding: 12px;
   }
 
+  .client-login-layout,
+  .client-portal-main {
+    padding: 12px 10px calc(90px + env(safe-area-inset-bottom));
+  }
+
+  .client-login-copy {
+    min-height: auto;
+    padding: 20px;
+  }
+
+  .client-login-copy h1 {
+    font-size: 1.65rem;
+  }
+
+  .client-login-feature-grid,
+  .client-control-panel,
+  .client-control-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .client-login-card {
+    padding: 18px;
+  }
+
+  .client-overview-hero {
+    padding: 14px;
+  }
+
   .client-chip {
     width: 100%;
   }
@@ -4107,7 +4406,8 @@ tbody tr:hover {
   }
 
   .compact-refresh,
-  .client-hero-actions .secondary {
+  .client-hero-actions .secondary,
+  .client-logout-button {
     width: 100%;
   }
 

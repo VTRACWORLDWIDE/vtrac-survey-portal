@@ -1346,6 +1346,94 @@ function formatProjectDate(value) {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+function makeSafeFilename(value) {
+  return String(value || 'vtrac-graph')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'vtrac-graph';
+}
+
+function inlineExportStyles(source, clone) {
+  if (!(source instanceof Element) || !(clone instanceof Element)) return;
+  const computed = window.getComputedStyle(source);
+  clone.setAttribute('style', Array.from(computed)
+    .map((property) => `${property}:${computed.getPropertyValue(property)};`)
+    .join(''));
+
+  Array.from(source.children).forEach((child, index) => {
+    inlineExportStyles(child, clone.children[index]);
+  });
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
+  });
+}
+
+async function exportElementAsImage(element, filename, format = 'png') {
+  if (!element) throw new Error('No graph selected for export.');
+  const rect = element.getBoundingClientRect();
+  const width = Math.max(Math.ceil(rect.width), 320);
+  const height = Math.max(Math.ceil(rect.height), 220);
+  const clone = element.cloneNode(true);
+  inlineExportStyles(element, clone);
+  clone.querySelectorAll('[data-export-ignore]').forEach((node) => node.remove());
+  clone.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+  clone.style.width = `${width}px`;
+  clone.style.height = `${height}px`;
+  clone.style.boxSizing = 'border-box';
+  clone.style.background = '#ffffff';
+
+  const serialized = new XMLSerializer().serializeToString(clone);
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <foreignObject width="100%" height="100%">${serialized}</foreignObject>
+    </svg>
+  `;
+  const svgUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+  const image = await loadImage(svgUrl);
+  URL.revokeObjectURL(svgUrl);
+
+  const scale = 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const context = canvas.getContext('2d');
+  context.scale(scale, scale);
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, width, height);
+  context.drawImage(image, 0, 0, width, height);
+
+  const isJpeg = format === 'jpeg' || format === 'jpg';
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob((file) => (file ? resolve(file) : reject(new Error('Unable to create image file.'))), isJpeg ? 'image/jpeg' : 'image/png', 0.92);
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${makeSafeFilename(filename)}.${isJpeg ? 'jpg' : 'png'}`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function exportGraphImages(container, baseName, format = 'png') {
+  const graphNodes = Array.from(container?.querySelectorAll('[data-export-graph]') || []);
+  if (graphNodes.length === 0) throw new Error('No graph cards found to export.');
+  for (const [index, node] of graphNodes.entries()) {
+    const title = node.getAttribute('data-export-title') || `graph-${index + 1}`;
+    await exportElementAsImage(node, `${baseName}-${index + 1}-${title}`, format);
+    await new Promise((resolve) => setTimeout(resolve, 180));
+  }
+  return graphNodes.length;
+}
+
 function ClientDashboard({ token, onLogout }) {
   const [projects, setProjects] = useState([]);
   const [selectedId, setSelectedId] = useState('');
@@ -3403,6 +3491,8 @@ function ClientInsight({ title, value, meta }) {
 }
 
 function SummaryPerformance({ data }) {
+  const summaryRef = useRef(null);
+  const [imageExportStatus, setImageExportStatus] = useState('');
   const totalSamples = Number(data?.totals?.total_samples || 0);
   const samplesToday = Number(data?.totals?.samples_today || 0);
   const locations = data?.byLocation || [];
@@ -3418,21 +3508,35 @@ function SummaryPerformance({ data }) {
   const locationRows = toReportChartRows(locations, 'location', 'samples', 8);
   const enumeratorRows = toReportChartRows(enumerators, 'enumerator_name', 'samples', 9);
 
+  async function downloadSummaryImages(format) {
+    try {
+      setImageExportStatus(`Preparing ${format.toUpperCase()} graphs...`);
+      const count = await exportGraphImages(summaryRef.current, 'vtrac-summary-graph', format);
+      setImageExportStatus(`${count} graph images downloaded.`);
+    } catch (error) {
+      setImageExportStatus(error.message || 'Unable to download graphs.');
+    }
+  }
+
   return (
-    <div className="summary-performance">
+    <div className="summary-performance" ref={summaryRef}>
       <div className="summary-performance-head">
         <div>
           <p className="eyebrow">Submissions</p>
           <h2>Collection performance</h2>
           <p>Live fieldwork snapshot across submissions, teams, locations, and GPS coverage.</p>
         </div>
-        <div className="summary-period-pills">
-          <span>7D</span>
-          <span>31D</span>
-          <span>3M</span>
-          <span>12M</span>
+        <div className="summary-head-actions" data-export-ignore="true">
+          <div className="summary-period-pills">
+            <span>7D</span>
+            <span>31D</span>
+            <span>3M</span>
+            <span>12M</span>
+          </div>
+          <GraphExportActions onPng={() => downloadSummaryImages('png')} onJpeg={() => downloadSummaryImages('jpeg')} />
         </div>
       </div>
+      {imageExportStatus && <p className="graph-export-status" data-export-ignore="true">{imageExportStatus}</p>}
 
       <div className="summary-kpi-grid">
         <SummaryKpiCard
@@ -3473,7 +3577,7 @@ function SummaryPerformance({ data }) {
       </div>
 
       <div className="summary-dashboard-grid">
-        <div className="panel summary-card summary-trend-card">
+        <div className="panel summary-card summary-trend-card" data-export-graph data-export-title="daily-sample-run-rate">
           <div className="summary-card-head">
             <div>
               <span>Trend</span>
@@ -3489,7 +3593,7 @@ function SummaryPerformance({ data }) {
           </div>
         </div>
 
-        <div className="panel summary-card summary-mix-card">
+        <div className="panel summary-card summary-mix-card" data-export-graph data-export-title="terminal-coverage">
           <div className="summary-card-head">
             <div>
               <span>Split</span>
@@ -3499,7 +3603,7 @@ function SummaryPerformance({ data }) {
           {terminalRows.length ? <DonutQuestionChart rows={terminalRows} /> : <p className="empty">No terminal split yet.</p>}
         </div>
 
-        <div className="panel summary-card summary-mix-card">
+        <div className="panel summary-card summary-mix-card" data-export-graph data-export-title="movement-mix">
           <div className="summary-card-head">
             <div>
               <span>Flow</span>
@@ -3512,6 +3616,16 @@ function SummaryPerformance({ data }) {
         <SummaryRankCard title="Top survey locations" rows={locationRows} icon={<MapPin size={17} />} />
         <SummaryRankCard title="Enumerator contribution" rows={enumeratorRows} icon={<UserRound size={17} />} />
       </div>
+    </div>
+  );
+}
+
+function GraphExportActions({ onPng, onJpeg }) {
+  return (
+    <div className="graph-export-actions">
+      <span><ImageIcon size={15} /> Download graphs</span>
+      <button type="button" className="secondary compact-button" onClick={onPng}>PNG</button>
+      <button type="button" className="secondary compact-button" onClick={onJpeg}>JPEG</button>
     </div>
   );
 }
@@ -3532,7 +3646,7 @@ function SummaryRankCard({ title, rows, icon }) {
   const total = rows.reduce((sum, row) => sum + row.frequency, 0);
   const max = Math.max(...rows.map((row) => row.frequency), 1);
   return (
-    <div className="panel summary-card summary-rank-card">
+    <div className="panel summary-card summary-rank-card" data-export-graph data-export-title={title}>
       <div className="summary-card-head">
         <div>
           <span>Ranking</span>
@@ -3556,6 +3670,8 @@ function SummaryRankCard({ title, rows, icon }) {
 }
 
 function ProjectReport({ project, data }) {
+  const reportRef = useRef(null);
+  const [imageExportStatus, setImageExportStatus] = useState('');
   const reportRows = data?.reportRows || data?.recent || [];
   const questionReports = useMemo(
     () => buildQuestionReports(project?.questions || [], reportRows),
@@ -3567,9 +3683,20 @@ function ProjectReport({ project, data }) {
     ? Math.round(questionReports.reduce((sum, report) => sum + report.answerRate, 0) / questionReports.length)
     : 0;
   const strongestSignal = questionReports.find((report) => report.topValue);
+  const reportBaseName = `vtrac-${project?.slug || project?.name || 'project'}-report`;
+
+  async function downloadReportImages(format) {
+    try {
+      setImageExportStatus(`Preparing ${format.toUpperCase()} report graphs...`);
+      const count = await exportGraphImages(reportRef.current, reportBaseName, format);
+      setImageExportStatus(`${count} graph images downloaded.`);
+    } catch (error) {
+      setImageExportStatus(error.message || 'Unable to download report graphs.');
+    }
+  }
 
   return (
-    <div className="auto-report">
+    <div className="auto-report" ref={reportRef}>
       <div className="report-warning">
         Automated report based on submitted survey data. Review and clean records before using final client figures.
       </div>
@@ -3583,13 +3710,19 @@ function ProjectReport({ project, data }) {
             response coverage, and numeric statistics.
           </p>
         </div>
-        <div className="report-kpi-strip">
-          <ReportKpi label="Responses analyzed" value={totalResponses} />
-          <ReportKpi label="Questions" value={totalQuestions} />
-          <ReportKpi label="Avg. answered" value={`${averageCompletion}%`} />
-          <ReportKpi label="Top signal" value={strongestSignal?.topValue || '-'} compact />
+        <div className="report-hero-side">
+          <div className="report-kpi-strip">
+            <ReportKpi label="Responses analyzed" value={totalResponses} />
+            <ReportKpi label="Questions" value={totalQuestions} />
+            <ReportKpi label="Avg. answered" value={`${averageCompletion}%`} />
+            <ReportKpi label="Top signal" value={strongestSignal?.topValue || '-'} compact />
+          </div>
+          <div data-export-ignore="true">
+            <GraphExportActions onPng={() => downloadReportImages('png')} onJpeg={() => downloadReportImages('jpeg')} />
+          </div>
         </div>
       </div>
+      {imageExportStatus && <p className="graph-export-status" data-export-ignore="true">{imageExportStatus}</p>}
 
       <div className="report-dashboard-grid mixed-report-grid">
         <TrendChartPanel title="Submission trend" rows={data?.byDate || []} labelKey="date" valueKey="samples" />
@@ -3626,7 +3759,7 @@ const reportChartPalette = ['#0aa7a4', '#133e98', '#2f80ed', '#7c5cff', '#f59e0b
 
 function TrendChartPanel({ title, rows, labelKey, valueKey }) {
   return (
-    <div className="panel report-chart-card trend-card">
+    <div className="panel report-chart-card trend-card" data-export-graph data-export-title={title}>
       <h2><TrendingUp size={17} /> {title}</h2>
       <TrendLineChart rows={rows} labelKey={labelKey} valueKey={valueKey} />
     </div>
@@ -3636,7 +3769,7 @@ function TrendChartPanel({ title, rows, labelKey, valueKey }) {
 function DonutBreakdownPanel({ title, rows, labelKey, valueKey }) {
   const chartRows = toReportChartRows(rows, labelKey, valueKey, 5);
   return (
-    <div className="panel report-chart-card">
+    <div className="panel report-chart-card" data-export-graph data-export-title={title}>
       <h2><PieChart size={17} /> {title}</h2>
       {chartRows.length === 0 ? <p className="empty">No samples yet.</p> : <DonutQuestionChart rows={chartRows} />}
     </div>
@@ -3646,7 +3779,7 @@ function DonutBreakdownPanel({ title, rows, labelKey, valueKey }) {
 function RankedBreakdownPanel({ title, rows, labelKey, valueKey }) {
   const chartRows = toReportChartRows(rows, labelKey, valueKey, 7);
   return (
-    <div className="panel report-chart-card">
+    <div className="panel report-chart-card" data-export-graph data-export-title={title}>
       <h2><BarChart3 size={17} /> {title}</h2>
       {chartRows.length === 0 ? <p className="empty">No samples yet.</p> : <RankQuestionChart rows={chartRows} />}
     </div>
@@ -3764,7 +3897,7 @@ function TrendLineChart({ rows, labelKey, valueKey, compact = false }) {
 
 function QuestionReportCard({ report, index }) {
   return (
-    <div className="question-report-card">
+    <div className="question-report-card" data-export-graph data-export-title={`${index + 1}-${report.label}`}>
       <div className="question-report-head">
         <div>
           <span>{index + 1}. {report.typeLabel}</span>

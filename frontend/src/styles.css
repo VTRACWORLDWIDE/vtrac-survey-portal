@@ -681,7 +681,8 @@ textarea {
   box-shadow: 0 22px 52px rgba(22, 33, 38, 0.18);
   color: #ffffff;
   display: grid;
-  gap: 22px;
+  gap: clamp(14px, 2vh, 22px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   height: min(640px, 100%);
   min-height: 0;
   overflow: hidden;
@@ -713,6 +714,7 @@ textarea {
 .admin-visual-copy,
 .admin-visual-grid,
 .admin-capability-row {
+  min-height: 0;
   position: relative;
   z-index: 1;
 }
@@ -733,17 +735,17 @@ textarea {
 
 .admin-visual-copy h1 {
   color: #ffffff;
-  font-size: clamp(2rem, 4vw, 3.55rem);
+  font-size: clamp(1.9rem, 3.4vw, 3.1rem);
   font-weight: 900;
   line-height: 1.04;
-  margin: 0 0 14px;
+  margin: 0 0 clamp(8px, 1.4vh, 14px);
   max-width: 760px;
 }
 
 .admin-visual-copy p {
   color: #e8f5f5;
-  font-size: 1rem;
-  line-height: 1.55;
+  font-size: clamp(0.9rem, 1.1vw, 1rem);
+  line-height: 1.45;
   margin: 0;
   max-width: 660px;
 }
@@ -751,8 +753,9 @@ textarea {
 .admin-visual-grid {
   align-items: stretch;
   display: grid;
-  gap: 16px;
-  grid-template-columns: minmax(0, 1fr) minmax(176px, 0.34fr);
+  gap: clamp(10px, 1.8vh, 16px);
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.31fr);
+  min-height: 0;
 }
 
 .mobility-map-panel {
@@ -761,7 +764,8 @@ textarea {
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 8px;
   box-shadow: inset 0 0 0 1px rgba(19, 62, 152, 0.06), 0 18px 36px rgba(10, 32, 72, 0.18);
-  min-height: clamp(210px, 28vh, 270px);
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   position: relative;
 }
@@ -806,10 +810,10 @@ textarea {
   box-shadow: 0 12px 24px rgba(19, 62, 152, 0.2);
   color: #133e98;
   display: flex;
-  height: 42px;
+  height: clamp(34px, 5.4vh, 42px);
   justify-content: center;
   position: absolute;
-  width: 42px;
+  width: clamp(34px, 5.4vh, 42px);
 }
 
 .node-one {
@@ -836,7 +840,7 @@ textarea {
   display: grid;
   gap: 2px;
   max-width: 190px;
-  padding: 10px 12px;
+  padding: clamp(8px, 1.3vh, 10px) 12px;
   position: absolute;
 }
 
@@ -866,14 +870,14 @@ textarea {
   background: rgba(19, 62, 152, 0.08);
   border: 1px solid rgba(19, 62, 152, 0.08);
   border-radius: 8px;
-  bottom: 16px;
+  bottom: clamp(10px, 1.8vh, 16px);
   display: flex;
   gap: 6px;
-  height: 70px;
-  padding: 10px;
+  height: clamp(54px, 9vh, 70px);
+  padding: clamp(8px, 1.3vh, 10px);
   position: absolute;
-  right: 16px;
-  width: 92px;
+  right: clamp(10px, 1.8vh, 16px);
+  width: clamp(76px, 10vw, 92px);
 }
 
 .map-mini-chart span {
@@ -903,7 +907,9 @@ textarea {
 
 .admin-insight-stack {
   display: grid;
-  gap: 10px;
+  gap: clamp(8px, 1.4vh, 10px);
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  min-height: 0;
 }
 
 .admin-insight-card {
@@ -912,9 +918,9 @@ textarea {
   border-radius: 8px;
   color: #ffffff;
   display: grid;
-  gap: 6px;
-  min-height: 78px;
-  padding: 14px;
+  gap: 5px;
+  min-height: 0;
+  padding: clamp(10px, 1.8vh, 14px);
 }
 
 .admin-insight-card svg {
@@ -929,7 +935,7 @@ textarea {
 
 .admin-insight-card strong {
   color: #ffffff;
-  font-size: 1.55rem;
+  font-size: clamp(1.24rem, 2.5vh, 1.55rem);
   line-height: 1;
 }
 
@@ -949,8 +955,8 @@ textarea {
   font-size: 0.82rem;
   font-weight: 850;
   gap: 8px;
-  min-height: 48px;
-  padding: 10px;
+  min-height: clamp(40px, 5.6vh, 48px);
+  padding: 8px 10px;
 }
 
 .admin-login-card {
@@ -4444,6 +4450,7 @@ tbody tr:hover {
 
   .admin-login-visual {
     gap: 16px;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     padding: 24px 28px;
   }
 
@@ -4453,7 +4460,7 @@ tbody tr:hover {
   }
 
   .admin-visual-copy h1 {
-    font-size: clamp(2rem, 3.1vw, 2.8rem);
+    font-size: clamp(1.75rem, 2.8vw, 2.35rem);
     margin-bottom: 10px;
   }
 
@@ -4463,7 +4470,15 @@ tbody tr:hover {
   }
 
   .mobility-map-panel {
-    min-height: 210px;
+    min-height: 0;
+  }
+
+  .map-callout strong {
+    font-size: 0.78rem;
+  }
+
+  .map-callout span {
+    font-size: 0.68rem;
   }
 
   .admin-capability-row span {

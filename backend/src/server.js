@@ -517,7 +517,7 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
     const mapWhere = filters.where
       ? `${filters.where} AND latitude IS NOT NULL AND longitude IS NOT NULL`
       : 'WHERE latitude IS NOT NULL AND longitude IS NOT NULL';
-    const [totals, byDate, byEnumerator, byLocation, byProject, recent, reportRows, mapRows] = await Promise.all([
+    const [totals, byDate, byEnumerator, byLocation, byTerminal, byMovement, bySurveyPoint, byProject, recent, reportRows, mapRows] = await Promise.all([
       query(
         `SELECT
           COUNT(*)::int AS total_samples,
@@ -550,6 +550,51 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
         ${filters.where}
         GROUP BY location
         ORDER BY samples DESC, location ASC`,
+        filters.params
+      ),
+      query(
+        `SELECT
+          CASE
+            WHEN location ILIKE '%Terminal 1%' THEN 'Terminal 1'
+            WHEN location ILIKE '%Terminal 2%' THEN 'Terminal 2'
+            ELSE 'Unassigned'
+          END AS terminal,
+          COUNT(*)::int AS samples
+        FROM survey_responses
+        ${filters.where}
+        GROUP BY terminal
+        ORDER BY samples DESC, terminal ASC`,
+        filters.params
+      ),
+      query(
+        `SELECT
+          CASE
+            WHEN location ILIKE '%Departures%' THEN 'Departures'
+            WHEN location ILIKE '%Arrivals%' THEN 'Arrivals'
+            ELSE 'Unassigned'
+          END AS movement,
+          COUNT(*)::int AS samples
+        FROM survey_responses
+        ${filters.where}
+        GROUP BY movement
+        ORDER BY samples DESC, movement ASC`,
+        filters.params
+      ),
+      query(
+        `SELECT
+          CASE
+            WHEN location ILIKE '%Arrival gate%' THEN 'Arrival gate'
+            WHEN location ILIKE '%Departure gate%' THEN 'Departure gates'
+            WHEN location ILIKE '%Cab/Taxi point%' THEN 'Cab/Taxi points'
+            WHEN location ILIKE '%Bus point%' OR location ILIKE '%Bus station%' THEN 'Bus station'
+            WHEN location ILIKE '%Other%' THEN 'Other'
+            ELSE 'Unassigned'
+          END AS survey_point,
+          COUNT(*)::int AS samples
+        FROM survey_responses
+        ${filters.where}
+        GROUP BY survey_point
+        ORDER BY samples DESC, survey_point ASC`,
         filters.params
       ),
       query(
@@ -593,6 +638,9 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
       byDate: byDate.rows,
       byEnumerator: byEnumerator.rows,
       byLocation: byLocation.rows,
+      byTerminal: byTerminal.rows,
+      byMovement: byMovement.rows,
+      bySurveyPoint: bySurveyPoint.rows,
       byProject: byProject.rows,
       recent: recent.rows,
       reportRows: reportRows.rows,
@@ -783,10 +831,10 @@ app.get('/api/client/dashboard', requireClient, async (req, res, next) => {
       query(
         `SELECT
           CASE
-            WHEN location ILIKE '%Arrival gate%' THEN 'Arrival gates'
+            WHEN location ILIKE '%Arrival gate%' THEN 'Arrival gate'
             WHEN location ILIKE '%Departure gate%' THEN 'Departure gates'
-            WHEN location ILIKE '%Cab/Taxi point%' THEN 'Cab/Taxi point'
-            WHEN location ILIKE '%Bus point%' OR location ILIKE '%Bus station%' THEN 'Bus point'
+            WHEN location ILIKE '%Cab/Taxi point%' THEN 'Cab/Taxi points'
+            WHEN location ILIKE '%Bus point%' OR location ILIKE '%Bus station%' THEN 'Bus station'
             WHEN location ILIKE '%Other%' THEN 'Other'
             ELSE 'Unassigned'
           END AS survey_point,

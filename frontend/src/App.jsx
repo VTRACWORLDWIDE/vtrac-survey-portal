@@ -1330,9 +1330,19 @@ function leadingRow(rows, labelKey) {
   const row = sorted[0];
   if (!row) return null;
   return {
-    label: row[labelKey] || 'Not specified',
+    label: formatDashboardLabel(row[labelKey], labelKey),
     samples: Number(row.samples || 0)
   };
+}
+
+function formatDashboardLabel(value, labelKey = '') {
+  const text = String(value || 'Not specified');
+  return labelKey === 'location' ? simplifyAirportLocationLabel(text) : text;
+}
+
+function simplifyAirportLocationLabel(value) {
+  const text = String(value || '');
+  return text.startsWith(airportPrefix) ? text.slice(airportPrefix.length) : text;
 }
 
 function formatDateScope(dateFrom, dateTo) {
@@ -4301,7 +4311,7 @@ function getQuestionChartType(question, rowsForQuestion) {
 function toReportChartRows(rows, labelKey, valueKey, limit = 5) {
   const normalized = rows
     .map((row) => ({
-      value: String(row[labelKey] || '-'),
+      value: formatDashboardLabel(row[labelKey] || '-', labelKey),
       frequency: Number(row[valueKey]) || 0
     }))
     .filter((row) => row.frequency > 0)
@@ -4425,7 +4435,7 @@ function Breakdown({ title, rows, labelKey, valueKey, className = '' }) {
       {rows.length === 0 && <p className="empty">No samples yet.</p>}
       {rows.map((row) => (
         <div className="bar-row" key={row[labelKey]}>
-          <span>{String(row[labelKey]).slice(0, 28)}</span>
+          <span>{formatDashboardLabel(row[labelKey], labelKey).slice(0, 28)}</span>
           <div><i style={{ width: `${(Number(row[valueKey]) / max) * 100}%` }} /></div>
           <strong>{row[valueKey]}</strong>
         </div>

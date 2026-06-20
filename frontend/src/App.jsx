@@ -97,8 +97,8 @@ const defaultProjectSettings = {
 const airportTerminals = ['Terminal 1', 'Terminal 2'];
 const airportMovements = ['Departures', 'Arrivals'];
 const airportSurveyPoints = {
-  Departures: ['Departure gates', 'Cab/Taxi point', 'Bus point', 'Other'],
-  Arrivals: ['Arrival gates', 'Cab/Taxi point', 'Bus point', 'Other']
+  Departures: ['Departure gates', 'Cab/Taxi points', 'Bus station', 'Other'],
+  Arrivals: ['Arrival gate', 'Cab/Taxi points', 'Bus station', 'Other']
 };
 const hiddenQuestionIds = new Set([
   'google_coordinates',
@@ -1171,14 +1171,15 @@ function parseAirportLocation(location = '') {
   const [terminal, movement, ...pointParts] = body.split(' - ');
   const rawPoint = pointParts.join(' - ');
   if (!terminal || !movement || !rawPoint) return null;
-  const knownPoint = airportSurveyPoints[movement]?.find((item) => item === rawPoint);
+  const normalizedPoint = normalizeAirportPointLabel(rawPoint);
+  const knownPoint = airportSurveyPoints[movement]?.find((item) => item === normalizedPoint);
   if (knownPoint) {
     return { location, terminal, movement, point: knownPoint, otherText: '' };
   }
-  if (rawPoint.startsWith('Other - ')) {
-    return { location, terminal, movement, point: 'Other', otherText: rawPoint.replace('Other - ', '') };
+  if (normalizedPoint.startsWith('Other - ')) {
+    return { location, terminal, movement, point: 'Other', otherText: normalizedPoint.replace('Other - ', '') };
   }
-  return { location, terminal, movement, point: 'Other', otherText: rawPoint };
+  return { location, terminal, movement, point: 'Other', otherText: normalizedPoint };
 }
 
 function QuestionInput({ question, index, value, onChange, disabled = false }) {
@@ -1340,9 +1341,21 @@ function formatDashboardLabel(value, labelKey = '') {
   return labelKey === 'location' ? simplifyAirportLocationLabel(text) : text;
 }
 
+function normalizeAirportPointLabel(value) {
+  const text = String(value || '').trim();
+  if (text === 'Arrival gates') return 'Arrival gate';
+  if (text === 'Cab/Taxi point') return 'Cab/Taxi points';
+  if (text === 'Bus point') return 'Bus station';
+  return text;
+}
+
 function simplifyAirportLocationLabel(value) {
-  const text = String(value || '');
-  return text.startsWith(airportPrefix) ? text.slice(airportPrefix.length) : text;
+  const raw = String(value || '');
+  const text = raw.startsWith(airportPrefix) ? raw.slice(airportPrefix.length) : raw;
+  const [terminal, movement, ...pointParts] = text.split(' - ');
+  if (!terminal || !movement || pointParts.length === 0) return text;
+  const point = normalizeAirportPointLabel(pointParts.join(' - '));
+  return `${terminal} - ${movement} - ${point}`;
 }
 
 function formatDateScope(dateFrom, dateTo) {

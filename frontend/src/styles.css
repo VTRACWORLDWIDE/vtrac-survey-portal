@@ -2892,12 +2892,21 @@ textarea {
   grid-template-columns: repeat(4, minmax(140px, 1fr)) minmax(210px, auto);
 }
 
-.portfolio-chart-grid {
+.portfolio-modern-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.portfolio-chart-grid .breakdown:first-child {
-  grid-column: 1 / -1;
+.portfolio-modern-grid .summary-trend-card,
+.portfolio-modern-grid .summary-rank-card {
+  grid-column: auto;
+}
+
+.portfolio-modern-grid .summary-trend-card {
+  min-height: 260px;
+}
+
+.portfolio-modern-grid .summary-rank-card {
+  min-height: 250px;
 }
 
 .admin-filters,

@@ -1078,6 +1078,10 @@ function buildFilters(queryParams) {
     conditions.push(`project_id = $${params.length}`);
   }
 
+  if (queryParams.excludePilot === '1') {
+    conditions.push(`project_id NOT IN (SELECT id FROM survey_projects WHERE slug = 'pilot-survey')`);
+  }
+
   if (queryParams.location) {
     params.push(queryParams.location);
     conditions.push(`location = $${params.length}`);

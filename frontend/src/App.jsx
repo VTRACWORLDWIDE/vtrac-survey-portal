@@ -1622,9 +1622,6 @@ function AdminDashboard({ token, onLogout }) {
   const allVisibleProjectsSelected = filteredProjects.length > 0 && selectedVisibleProjects.length === filteredProjects.length;
   const totalProjectSubmissions = projects.reduce((sum, project) => sum + Number(project.responseCount || 0), 0);
   const isPortfolioSection = activeAdminSection === 'library';
-  const portfolioProjectRows = data?.byProject?.length
-    ? data.byProject
-    : projects.map((project) => ({ project: project.name, samples: Number(project.responseCount || 0) }));
   const clientProjectRows = clients.map((client) => ({
     label: client.displayName || client.username,
     samples: client.projectIds?.length || 0
@@ -1649,6 +1646,7 @@ function AdminDashboard({ token, onLogout }) {
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
+    if (isPortfolioSection) params.set('excludePilot', '1');
     if (!isPortfolioSection && selectedProject?.id) params.set('projectId', selectedProject.id);
     Object.entries(appliedFilters).forEach(([key, value]) => {
       if (value) params.set(key, value);
@@ -2453,67 +2451,20 @@ function AdminDashboard({ token, onLogout }) {
           )}
 
           {activeAdminSection === 'library' && (
-            <section id="portfolio-dashboard" className="admin-section admin-dashboard-section portfolio-dashboard-section">
-              <div className="section-title">
-                <div>
-                  <p className="eyebrow">Portfolio Dashboard</p>
-                  <h2>All projects overview</h2>
-                  <p>Cross-project collection performance, access, locations, and team activity.</p>
-                </div>
-                <div className="actions">
-                  <button className="download" onClick={() => download('csv')}><Download size={16} /> CSV</button>
-                  <button className="download" onClick={() => download('xlsx')}><Download size={16} /> Excel</button>
-                </div>
-              </div>
-
-              <div className="metric-grid admin-metrics portfolio-kpi-grid">
-                <Metric icon={<ClipboardList size={19} />} label="Total projects" value={projectCounts.all} />
-                <Metric icon={<CheckCircle2 size={19} />} label="Deployed" value={projectCounts.deployed} />
-                <Metric icon={<FileText size={19} />} label="Draft" value={projectCounts.draft} />
-                <Metric icon={<BarChart3 size={19} />} label="Filtered samples" value={data?.totals?.total_samples ?? totalProjectSubmissions} />
-                <Metric icon={<UserRound size={19} />} label="Enumerators" value={data?.byEnumerator?.length ?? 0} />
-                <Metric icon={<ShieldCheck size={19} />} label="Client logins" value={clients.length} />
-              </div>
-
-              <div className="panel filters admin-filters portfolio-filters">
-                <label>
-                  <span>Enumerator</span>
-                  <select value={filters.enumerator} onChange={(event) => setFilters({ ...filters, enumerator: event.target.value })}>
-                    <option value="">All enumerators</option>
-                    {filterOptions.enumerators.map((enumerator) => <option key={enumerator}>{enumerator}</option>)}
-                  </select>
-                </label>
-                <label>
-                  <span>Location</span>
-                  <select value={filters.location} onChange={(event) => setFilters({ ...filters, location: event.target.value })}>
-                    <option value="">All locations</option>
-                    {filterOptions.locations.map((location) => <option key={location}>{location}</option>)}
-                  </select>
-                </label>
-                <label>
-                  <span>Date from</span>
-                  <input type="date" value={filters.dateFrom} onChange={(event) => setFilters({ ...filters, dateFrom: event.target.value })} />
-                </label>
-                <label>
-                  <span>Date to</span>
-                  <input type="date" value={filters.dateTo} onChange={(event) => setFilters({ ...filters, dateTo: event.target.value })} />
-                </label>
-                <div className="filter-actions">
-                  <button className="primary" onClick={() => setAppliedFilters(filters)}><Search size={18} /> Search</button>
-                  <button className="icon-button" onClick={loadDashboard} aria-label="Refresh dashboard"><RefreshCw size={18} /></button>
-                </div>
-              </div>
-
-              {loading && <p className="status">Refreshing portfolio dashboard...</p>}
-
-              <div className="chart-grid admin-chart-grid portfolio-chart-grid">
-                <Breakdown title="Samples by project" rows={portfolioProjectRows} labelKey="project" valueKey="samples" />
-                <Breakdown title="Samples by date" rows={data?.byDate || []} labelKey="date" valueKey="samples" />
-                <Breakdown title="Samples by location" rows={data?.byLocation || []} labelKey="location" valueKey="samples" />
-                <Breakdown title="Samples by enumerator" rows={data?.byEnumerator || []} labelKey="enumerator_name" valueKey="samples" />
-                <Breakdown title="Projects by client access" rows={clientProjectRows} labelKey="label" valueKey="samples" />
-              </div>
-            </section>
+            <PortfolioDashboard
+              clients={clients}
+              clientProjectRows={clientProjectRows}
+              data={data}
+              download={download}
+              filterOptions={filterOptions}
+              filters={filters}
+              loading={loading}
+              loadDashboard={loadDashboard}
+              projects={projects}
+              setAppliedFilters={setAppliedFilters}
+              setFilters={setFilters}
+              totalProjectSubmissions={totalProjectSubmissions}
+            />
           )}
 
           {activeAdminSection === 'account' && (
@@ -3429,6 +3380,130 @@ function ClientInsight({ title, value, meta }) {
       <strong title={value}>{value}</strong>
       <p>{meta}</p>
     </div>
+  );
+}
+
+function PortfolioDashboard({
+  clients,
+  clientProjectRows,
+  data,
+  download,
+  filterOptions,
+  filters,
+  loading,
+  loadDashboard,
+  projects,
+  setAppliedFilters,
+  setFilters,
+  totalProjectSubmissions
+}) {
+  const portfolioProjects = projects.filter((project) => project.slug !== 'pilot-survey');
+  const projectRowsSource = data?.byProject?.length
+    ? data.byProject.filter((row) => row.slug !== 'pilot-survey')
+    : portfolioProjects.map((project) => ({ project: project.name, samples: Number(project.responseCount || 0) }));
+  const portfolioCounts = {
+    all: portfolioProjects.length,
+    deployed: portfolioProjects.filter((project) => project.isActive).length,
+    draft: portfolioProjects.filter((project) => !project.isActive).length
+  };
+  const totalSamples = Number(data?.totals?.total_samples ?? totalProjectSubmissions ?? 0);
+  const topProject = leadingRow(projectRowsSource, 'project');
+  const topLocation = leadingRow(data?.byLocation || [], 'location');
+  const topEnumerator = leadingRow(data?.byEnumerator || [], 'enumerator_name');
+  const projectRows = toReportChartRows(projectRowsSource, 'project', 'samples', 8);
+  const locationRows = toReportChartRows(data?.byLocation || [], 'location', 'samples', 8);
+  const enumeratorRows = toReportChartRows(data?.byEnumerator || [], 'enumerator_name', 'samples', 8);
+  const clientAccessRows = toReportChartRows(clientProjectRows || [], 'label', 'samples', 8);
+  const statusRows = toReportChartRows([
+    { status: 'Deployed', samples: portfolioCounts.deployed },
+    { status: 'Draft', samples: portfolioCounts.draft }
+  ], 'status', 'samples', 2);
+
+  return (
+    <section id="portfolio-dashboard" className="admin-section admin-dashboard-section portfolio-dashboard-section">
+      <div className="section-title">
+        <div>
+          <p className="eyebrow">Portfolio Dashboard</p>
+          <h2>All projects overview</h2>
+          <p>Cross-project collection performance, access, locations, and team activity.</p>
+        </div>
+        <div className="actions">
+          <button className="download" onClick={() => download('csv')}><Download size={16} /> CSV</button>
+          <button className="download" onClick={() => download('xlsx')}><Download size={16} /> Excel</button>
+        </div>
+      </div>
+
+      <div className="summary-kpi-grid portfolio-kpi-grid">
+        <SummaryKpiCard icon={<ClipboardList size={18} />} label="Portfolio projects" value={formatStatNumber(portfolioCounts.all)} detail={`${portfolioCounts.deployed} deployed, ${portfolioCounts.draft} draft`} accent="teal" />
+        <SummaryKpiCard icon={<BarChart3 size={18} />} label="Filtered samples" value={formatStatNumber(totalSamples)} detail={topProject ? `${truncateText(topProject.label, 30)} leads` : 'No samples yet'} accent="blue" />
+        <SummaryKpiCard icon={<MapPin size={18} />} label="Field locations" value={formatStatNumber(data?.byLocation?.length || 0)} detail={topLocation ? `${truncateText(topLocation.label, 28)} leads` : 'No locations yet'} accent="sky" />
+        <SummaryKpiCard icon={<UserRound size={18} />} label="Enumerators" value={formatStatNumber(data?.byEnumerator?.length || 0)} detail={topEnumerator ? `${truncateText(topEnumerator.label, 24)} leads` : 'No enumerators yet'} accent="amber" />
+        <SummaryKpiCard icon={<ShieldCheck size={18} />} label="Client logins" value={formatStatNumber(clients.length)} detail={`${clientAccessRows.length} with assigned projects`} accent="pink" />
+      </div>
+
+      <div className="panel filters admin-filters portfolio-filters">
+        <label>
+          <span>Enumerator</span>
+          <select value={filters.enumerator} onChange={(event) => setFilters({ ...filters, enumerator: event.target.value })}>
+            <option value="">All enumerators</option>
+            {filterOptions.enumerators.map((enumerator) => <option key={enumerator}>{enumerator}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Location</span>
+          <select value={filters.location} onChange={(event) => setFilters({ ...filters, location: event.target.value })}>
+            <option value="">All locations</option>
+            {filterOptions.locations.map((location) => <option key={location}>{location}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Date from</span>
+          <input type="date" value={filters.dateFrom} onChange={(event) => setFilters({ ...filters, dateFrom: event.target.value })} />
+        </label>
+        <label>
+          <span>Date to</span>
+          <input type="date" value={filters.dateTo} onChange={(event) => setFilters({ ...filters, dateTo: event.target.value })} />
+        </label>
+        <div className="filter-actions">
+          <button className="primary" onClick={() => setAppliedFilters(filters)}><Search size={18} /> Search</button>
+          <button className="icon-button" onClick={loadDashboard} aria-label="Refresh dashboard"><RefreshCw size={18} /></button>
+        </div>
+      </div>
+
+      {loading && <p className="status">Refreshing portfolio dashboard...</p>}
+
+      <div className="summary-dashboard-grid portfolio-modern-grid">
+        <div className="panel summary-card summary-trend-card" data-export-graph data-export-title="portfolio-sample-trend">
+          <div className="summary-card-head">
+            <div>
+              <span>Trend</span>
+              <h3><TrendingUp size={17} /> Portfolio sample trend</h3>
+            </div>
+            <div className="summary-card-actions">
+              <strong>{formatStatNumber(totalSamples)} total</strong>
+              <GraphDownloadButtons filename="vtrac-portfolio-sample-trend" />
+            </div>
+          </div>
+          <TrendLineChart rows={data?.byDate || []} labelKey="date" valueKey="samples" />
+        </div>
+
+        <div className="panel summary-card summary-mix-card" data-export-graph data-export-title="portfolio-project-status">
+          <div className="summary-card-head">
+            <div>
+              <span>Status</span>
+              <h3><PieChart size={17} /> Project status mix</h3>
+            </div>
+            <GraphDownloadButtons filename="vtrac-portfolio-project-status" />
+          </div>
+          {statusRows.length ? <DonutQuestionChart rows={statusRows} /> : <p className="empty">No project status data yet.</p>}
+        </div>
+
+        <SummaryRankCard title="Samples by project" rows={projectRows} icon={<ClipboardList size={17} />} />
+        <SummaryRankCard title="Top survey locations" rows={locationRows} icon={<MapPin size={17} />} />
+        <SummaryRankCard title="Enumerator contribution" rows={enumeratorRows} icon={<UserRound size={17} />} />
+        <SummaryRankCard title="Client project access" rows={clientAccessRows} icon={<ShieldCheck size={17} />} />
+      </div>
+    </section>
   );
 }
 

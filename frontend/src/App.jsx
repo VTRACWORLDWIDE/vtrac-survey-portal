@@ -3,6 +3,8 @@ import html2canvas from 'html2canvas';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
+  ArrowDown,
+  ArrowUp,
   BarChart3,
   CalendarClock,
   CheckCircle2,
@@ -3122,6 +3124,14 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
     onChange({ ...project, questions: project.questions.filter((_, currentIndex) => currentIndex !== index) });
   }
 
+  function moveQuestion(index, direction) {
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= project.questions.length) return;
+    const questions = [...project.questions];
+    [questions[index], questions[nextIndex]] = [questions[nextIndex], questions[index]];
+    onChange({ ...project, questions });
+  }
+
   return (
     <div className="editor-panel">
       <div className="section-title">
@@ -3197,10 +3207,30 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
 
       <div className="question-list">
         {project.questions.map((question, index) => (
-          <div className="question-card" key={index}>
+          <div className="question-card" key={`${question.id || 'question'}-${index}`}>
             <div className="question-header">
               <strong><ClipboardList size={16} /> Question {index + 1}</strong>
-              <button className="icon-button" onClick={() => removeQuestion(index)} aria-label="Remove question"><Trash2 size={16} /></button>
+              <div className="question-actions">
+                <button
+                  className="icon-button"
+                  onClick={() => moveQuestion(index, -1)}
+                  disabled={index === 0}
+                  aria-label={`Move question ${index + 1} up`}
+                  title="Move question up"
+                >
+                  <ArrowUp size={16} />
+                </button>
+                <button
+                  className="icon-button"
+                  onClick={() => moveQuestion(index, 1)}
+                  disabled={index === project.questions.length - 1}
+                  aria-label={`Move question ${index + 1} down`}
+                  title="Move question down"
+                >
+                  <ArrowDown size={16} />
+                </button>
+                <button className="icon-button" onClick={() => removeQuestion(index)} aria-label="Remove question" title="Remove question"><Trash2 size={16} /></button>
+              </div>
             </div>
             <div className="inline-grid">
               <label>

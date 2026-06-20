@@ -439,6 +439,11 @@ textarea {
   min-width: 44px;
 }
 
+.icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
 .primary {
   background: #20756a;
   box-shadow: 0 10px 22px rgba(32, 117, 106, 0.22);
@@ -3570,6 +3575,14 @@ textarea {
   align-items: center;
   display: flex;
   gap: 8px;
+}
+
+.question-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .check-row {

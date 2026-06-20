@@ -284,7 +284,7 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
     const mapWhere = filters.where
       ? `${filters.where} AND latitude IS NOT NULL AND longitude IS NOT NULL`
       : 'WHERE latitude IS NOT NULL AND longitude IS NOT NULL';
-    const [totals, byDate, byEnumerator, byLocation, recent, reportRows, mapRows] = await Promise.all([
+    const [totals, byDate, byEnumerator, byLocation, byProject, recent, reportRows, mapRows] = await Promise.all([
       query(
         `SELECT
           COUNT(*)::int AS total_samples,
@@ -320,6 +320,16 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
         filters.params
       ),
       query(
+        `SELECT p.name AS project, p.slug, COUNT(r.id)::int AS samples
+        FROM survey_projects p
+        LEFT JOIN survey_responses r ON r.project_id = p.id
+        ${filters.where}
+        GROUP BY p.id, p.name, p.slug
+        ORDER BY samples DESC, p.name ASC
+        LIMIT 50`,
+        filters.params
+      ),
+      query(
         `SELECT id, enumerator_name, location, respondent_name, audio_mime_type, submitted_at, answers
         FROM survey_responses
         ${filters.where}
@@ -350,6 +360,7 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
       byDate: byDate.rows,
       byEnumerator: byEnumerator.rows,
       byLocation: byLocation.rows,
+      byProject: byProject.rows,
       recent: recent.rows,
       reportRows: reportRows.rows,
       mapRows: mapRows.rows

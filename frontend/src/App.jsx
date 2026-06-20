@@ -1621,6 +1621,10 @@ function AdminDashboard({ token, onLogout }) {
   const selectedVisibleProjects = filteredProjects.filter((project) => selectedProjectIds.includes(project.id));
   const allVisibleProjectsSelected = filteredProjects.length > 0 && selectedVisibleProjects.length === filteredProjects.length;
   const totalProjectSubmissions = projects.reduce((sum, project) => sum + Number(project.responseCount || 0), 0);
+  const isPortfolioSection = activeAdminSection === 'library';
+  const portfolioProjectRows = data?.byProject?.length
+    ? data.byProject
+    : projects.map((project) => ({ project: project.name, samples: Number(project.responseCount || 0) }));
   const clientProjectRows = clients.map((client) => ({
     label: client.displayName || client.username,
     samples: client.projectIds?.length || 0
@@ -1645,12 +1649,12 @@ function AdminDashboard({ token, onLogout }) {
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
-    if (selectedProject?.id) params.set('projectId', selectedProject.id);
+    if (!isPortfolioSection && selectedProject?.id) params.set('projectId', selectedProject.id);
     Object.entries(appliedFilters).forEach(([key, value]) => {
       if (value) params.set(key, value);
     });
     return params.toString();
-  }, [appliedFilters, selectedProject?.id]);
+  }, [appliedFilters, isPortfolioSection, selectedProject?.id]);
 
   async function loadProjects() {
     const response = await fetch(`${apiBase}/api/projects`, { headers: authHeaders });
@@ -1668,8 +1672,9 @@ function AdminDashboard({ token, onLogout }) {
   }
 
   async function loadFilterOptions() {
-    if (!selectedProject) return;
-    const params = new URLSearchParams({ projectId: selectedProject.id });
+    if (!isPortfolioSection && !selectedProject) return;
+    const params = new URLSearchParams();
+    if (!isPortfolioSection && selectedProject?.id) params.set('projectId', selectedProject.id);
     const response = await fetch(`${apiBase}/api/dashboard/options?${params.toString()}`, { headers: authHeaders });
     if (response.status === 401) return onLogout();
     const payload = await response.json();
@@ -1680,7 +1685,7 @@ function AdminDashboard({ token, onLogout }) {
   }
 
   async function loadDashboard() {
-    if (!selectedProject) return;
+    if (!isPortfolioSection && !selectedProject) return;
     setLoading(true);
     try {
       const response = await fetch(`${apiBase}/api/dashboard?${queryString}`, { headers: authHeaders });
@@ -1758,7 +1763,7 @@ function AdminDashboard({ token, onLogout }) {
 
   useEffect(() => {
     loadFilterOptions();
-  }, [selectedProject?.id]);
+  }, [isPortfolioSection, selectedProject?.id]);
 
   useEffect(() => {
     let objectUrl = '';
@@ -1946,7 +1951,7 @@ function AdminDashboard({ token, onLogout }) {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `vtrac-${selectedProject.slug}-responses.${type}`;
+    anchor.download = `vtrac-${isPortfolioSection ? 'portfolio' : selectedProject.slug}-responses.${type}`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -2448,75 +2453,66 @@ function AdminDashboard({ token, onLogout }) {
           )}
 
           {activeAdminSection === 'library' && (
-            <section id="response-filters" className="admin-section admin-dashboard-section">
-            <div className="section-title">
-              <div>
-                <p className="eyebrow">Project Dashboard</p>
-                <h2>{selectedProject?.name || 'Project analytics'}</h2>
+            <section id="portfolio-dashboard" className="admin-section admin-dashboard-section portfolio-dashboard-section">
+              <div className="section-title">
+                <div>
+                  <p className="eyebrow">Portfolio Dashboard</p>
+                  <h2>All projects overview</h2>
+                  <p>Cross-project collection performance, access, locations, and team activity.</p>
+                </div>
+                <div className="actions">
+                  <button className="download" onClick={() => download('csv')}><Download size={16} /> CSV</button>
+                  <button className="download" onClick={() => download('xlsx')}><Download size={16} /> Excel</button>
+                </div>
               </div>
-              <div className="actions">
-                <button className="download" onClick={() => download('csv')}><Download size={16} /> CSV</button>
-                <button className="download" onClick={() => download('xlsx')}><Download size={16} /> Excel</button>
+
+              <div className="metric-grid admin-metrics portfolio-kpi-grid">
+                <Metric icon={<ClipboardList size={19} />} label="Total projects" value={projectCounts.all} />
+                <Metric icon={<CheckCircle2 size={19} />} label="Deployed" value={projectCounts.deployed} />
+                <Metric icon={<FileText size={19} />} label="Draft" value={projectCounts.draft} />
+                <Metric icon={<BarChart3 size={19} />} label="Filtered samples" value={data?.totals?.total_samples ?? totalProjectSubmissions} />
+                <Metric icon={<UserRound size={19} />} label="Enumerators" value={data?.byEnumerator?.length ?? 0} />
+                <Metric icon={<ShieldCheck size={19} />} label="Client logins" value={clients.length} />
               </div>
-            </div>
 
-            <div className="metric-grid admin-metrics project-kpi-grid">
-              <Metric icon={<ClipboardList size={19} />} label="Total projects" value={projectCounts.all} />
-              <Metric icon={<CheckCircle2 size={19} />} label="Deployed" value={projectCounts.deployed} />
-              <Metric icon={<BarChart3 size={19} />} label="All samples" value={totalProjectSubmissions} />
-              <Metric icon={<UserRound size={19} />} label="Client logins" value={clients.length} />
-            </div>
-
-            <div className="panel filters admin-filters">
-              <label className="filter-project">
-                <span>Project</span>
-                <select value={selectedProject?.id || ''} onChange={(event) => changeSelectedProject(event.target.value)}>
-                  {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-                </select>
-              </label>
-              <label>
-                <span>Enumerator</span>
-                <select value={filters.enumerator} onChange={(event) => setFilters({ ...filters, enumerator: event.target.value })}>
-                  <option value="">All enumerators</option>
-                  {filterOptions.enumerators.map((enumerator) => <option key={enumerator}>{enumerator}</option>)}
-                </select>
-              </label>
-              <label>
-                <span>Location</span>
-                <select value={filters.location} onChange={(event) => setFilters({ ...filters, location: event.target.value })}>
-                  <option value="">All locations</option>
-                  {filterOptions.locations.map((location) => <option key={location}>{location}</option>)}
-                </select>
-              </label>
-              <label>
-                <span>Date from</span>
-                <input type="date" value={filters.dateFrom} onChange={(event) => setFilters({ ...filters, dateFrom: event.target.value })} />
-              </label>
-              <label>
-                <span>Date to</span>
-                <input type="date" value={filters.dateTo} onChange={(event) => setFilters({ ...filters, dateTo: event.target.value })} />
-              </label>
-              <div className="filter-actions">
-                <button className="primary" onClick={() => setAppliedFilters(filters)}><Search size={18} /> Search</button>
-                <button className="icon-button" onClick={loadDashboard} aria-label="Refresh dashboard"><RefreshCw size={18} /></button>
+              <div className="panel filters admin-filters portfolio-filters">
+                <label>
+                  <span>Enumerator</span>
+                  <select value={filters.enumerator} onChange={(event) => setFilters({ ...filters, enumerator: event.target.value })}>
+                    <option value="">All enumerators</option>
+                    {filterOptions.enumerators.map((enumerator) => <option key={enumerator}>{enumerator}</option>)}
+                  </select>
+                </label>
+                <label>
+                  <span>Location</span>
+                  <select value={filters.location} onChange={(event) => setFilters({ ...filters, location: event.target.value })}>
+                    <option value="">All locations</option>
+                    {filterOptions.locations.map((location) => <option key={location}>{location}</option>)}
+                  </select>
+                </label>
+                <label>
+                  <span>Date from</span>
+                  <input type="date" value={filters.dateFrom} onChange={(event) => setFilters({ ...filters, dateFrom: event.target.value })} />
+                </label>
+                <label>
+                  <span>Date to</span>
+                  <input type="date" value={filters.dateTo} onChange={(event) => setFilters({ ...filters, dateTo: event.target.value })} />
+                </label>
+                <div className="filter-actions">
+                  <button className="primary" onClick={() => setAppliedFilters(filters)}><Search size={18} /> Search</button>
+                  <button className="icon-button" onClick={loadDashboard} aria-label="Refresh dashboard"><RefreshCw size={18} /></button>
+                </div>
               </div>
-            </div>
 
-            <div className="metric-grid admin-metrics">
-              <Metric icon={<ClipboardList size={19} />} label="Total samples" value={data?.totals?.total_samples ?? 0} />
-              <Metric icon={<CalendarClock size={19} />} label="Samples today" value={data?.totals?.samples_today ?? 0} />
-              <Metric icon={<UserRound size={19} />} label="Enumerators" value={data?.byEnumerator?.length ?? 0} />
-              <Metric icon={<MapPin size={19} />} label="Locations" value={data?.byLocation?.length ?? 0} />
-            </div>
+              {loading && <p className="status">Refreshing portfolio dashboard...</p>}
 
-            <div className="chart-grid admin-chart-grid">
-              <Breakdown title="Projects by client access" rows={clientProjectRows} labelKey="label" valueKey="samples" />
-              <Breakdown title="Samples by date" rows={data?.byDate || []} labelKey="date" valueKey="samples" />
-              <Breakdown title="Samples by location" rows={data?.byLocation || []} labelKey="location" valueKey="samples" />
-              <Breakdown title="Samples by enumerator" rows={data?.byEnumerator || []} labelKey="enumerator_name" valueKey="samples" />
-            </div>
-
-            <RecentTable rows={data?.recent || []} project={selectedProject} loading={loading} onView={(responseId) => openResponse(responseId, 'view')} onEdit={(responseId) => openResponse(responseId, 'edit')} />
+              <div className="chart-grid admin-chart-grid portfolio-chart-grid">
+                <Breakdown title="Samples by project" rows={portfolioProjectRows} labelKey="project" valueKey="samples" />
+                <Breakdown title="Samples by date" rows={data?.byDate || []} labelKey="date" valueKey="samples" />
+                <Breakdown title="Samples by location" rows={data?.byLocation || []} labelKey="location" valueKey="samples" />
+                <Breakdown title="Samples by enumerator" rows={data?.byEnumerator || []} labelKey="enumerator_name" valueKey="samples" />
+                <Breakdown title="Projects by client access" rows={clientProjectRows} labelKey="label" valueKey="samples" />
+              </div>
             </section>
           )}
 

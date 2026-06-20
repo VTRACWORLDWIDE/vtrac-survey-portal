@@ -2874,6 +2874,32 @@ textarea {
   border-top: 4px solid #d89b38;
 }
 
+.portfolio-dashboard-section {
+  display: grid;
+  gap: 14px;
+}
+
+.portfolio-dashboard-section .section-title p:not(.eyebrow) {
+  color: #65718b;
+  margin: 4px 0 0;
+}
+
+.portfolio-kpi-grid {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.portfolio-filters {
+  grid-template-columns: repeat(4, minmax(140px, 1fr)) minmax(210px, auto);
+}
+
+.portfolio-chart-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.portfolio-chart-grid .breakdown:first-child {
+  grid-column: 1 / -1;
+}
+
 .admin-filters,
 .admin-metrics,
 .admin-chart-grid {

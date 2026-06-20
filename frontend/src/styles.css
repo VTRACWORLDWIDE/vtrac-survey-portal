@@ -1270,8 +1270,8 @@ textarea {
 
 .summary-performance {
   display: grid;
-  gap: 16px;
-  padding: 18px;
+  gap: 14px;
+  padding: 16px;
 }
 
 .summary-performance-head {
@@ -1288,11 +1288,13 @@ textarea {
 
 .summary-performance-head h2 {
   color: #17243f;
-  font-size: 1.15rem;
+  font-size: 1.08rem;
+  line-height: 1.15;
 }
 
 .summary-performance-head > div > p:last-child {
   color: #65718b;
+  font-size: 0.86rem;
   margin-top: 4px;
 }
 
@@ -1308,27 +1310,27 @@ textarea {
   background: #e9f8f7;
   border-radius: 7px;
   color: #0a7777;
-  font-size: 0.84rem;
+  font-size: 0.78rem;
   font-weight: 850;
-  padding: 8px 10px;
+  padding: 7px 9px;
 }
 
 .summary-kpi-grid {
   display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 9px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 }
 
 .summary-kpi-card {
   background: #ffffff;
   border: 1px solid #dfe7ef;
-  border-top: 4px solid #0aa7a4;
+  border-top: 3px solid #0aa7a4;
   border-radius: 8px;
   box-shadow: 0 12px 28px rgba(31, 47, 82, 0.06);
   display: grid;
-  gap: 12px;
-  min-height: 126px;
-  padding: 14px;
+  gap: 8px;
+  min-height: 106px;
+  padding: 12px 13px;
 }
 
 .summary-kpi-card.blue {
@@ -1351,32 +1353,37 @@ textarea {
   align-items: center;
   color: #65718b;
   display: flex;
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: 850;
   gap: 8px;
 }
 
 .summary-kpi-card strong {
-  color: #162126;
+  color: #17243f;
   display: block;
-  font-size: clamp(1.9rem, 3.4vw, 3rem);
+  font-size: clamp(1.7rem, 2.5vw, 2.28rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 850;
   letter-spacing: 0;
-  line-height: 0.95;
-  margin-top: 12px;
+  line-height: 1;
+  margin-top: 8px;
 }
 
 .summary-kpi-card p {
   color: #65718b;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 750;
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .summary-dashboard-grid {
   align-items: stretch;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.95fr) minmax(0, 0.95fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .summary-card {
@@ -1386,15 +1393,17 @@ textarea {
 }
 
 .summary-trend-card {
-  min-height: 300px;
+  grid-column: 1 / -1;
+  min-height: 270px;
 }
 
 .summary-rank-card {
-  min-height: 360px;
+  grid-column: 1 / -1;
+  min-height: 0;
 }
 
 .summary-rank-card:nth-last-child(2) {
-  grid-column: span 2;
+  grid-column: 1 / -1;
 }
 
 .summary-card-head {
@@ -1416,7 +1425,7 @@ textarea {
   align-items: center;
   color: #1f2f52;
   display: flex;
-  font-size: 0.98rem;
+  font-size: 0.92rem;
   gap: 8px;
   margin: 4px 0 0;
 }
@@ -1449,7 +1458,7 @@ textarea {
 
 .summary-date-strip strong {
   color: #1f2f52;
-  font-size: 1rem;
+  font-size: 0.94rem;
 }
 
 .summary-mix-card .donut-chart-wrap {

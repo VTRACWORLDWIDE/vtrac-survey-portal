@@ -2155,29 +2155,7 @@ function AdminDashboard({ token, onLogout }) {
                   </div>
 
                   <div className="summary-submissions span-2">
-                    <div className="section-title">
-                      <div>
-                        <p className="eyebrow">Submissions</p>
-                        <h2>Collection performance</h2>
-                      </div>
-                      <div className="period-pills">
-                        <span>Past 7 days</span>
-                        <span>Past 31 days</span>
-                        <span>Past 3 months</span>
-                        <span>Past 12 months</span>
-                      </div>
-                    </div>
-                    <div className="metric-grid admin-metrics">
-                      <Metric icon={<ClipboardList size={19} />} label="Total samples" value={data?.totals?.total_samples ?? 0} />
-                      <Metric icon={<CalendarClock size={19} />} label="Samples today" value={data?.totals?.samples_today ?? 0} />
-                      <Metric icon={<MapPin size={19} />} label="Locations" value={data?.byLocation?.length ?? 0} />
-                      <Metric icon={<UserRound size={19} />} label="Enumerators" value={data?.byEnumerator?.length ?? 0} />
-                    </div>
-                    <div className="chart-grid admin-chart-grid">
-                      <Breakdown title="Samples by date" rows={data?.byDate || []} labelKey="date" valueKey="samples" />
-                      <Breakdown title="Samples by location" rows={data?.byLocation || []} labelKey="location" valueKey="samples" />
-                      <Breakdown title="Samples by enumerator" rows={data?.byEnumerator || []} labelKey="enumerator_name" valueKey="samples" />
-                    </div>
+                    <SummaryPerformance data={data} />
                   </div>
                 </div>
               )}
@@ -3426,6 +3404,159 @@ function ClientInsight({ title, value, meta }) {
   );
 }
 
+function SummaryPerformance({ data }) {
+  const totalSamples = Number(data?.totals?.total_samples || 0);
+  const samplesToday = Number(data?.totals?.samples_today || 0);
+  const locations = data?.byLocation || [];
+  const enumerators = data?.byEnumerator || [];
+  const dates = data?.byDate || [];
+  const gpsSamples = (data?.mapRows || []).length;
+  const activeDays = dates.length;
+  const averagePerDay = activeDays ? Math.round(totalSamples / activeDays) : 0;
+  const topLocation = leadingRow(locations, 'location');
+  const topEnumerator = leadingRow(enumerators, 'enumerator_name');
+  const terminalRows = toReportChartRows(data?.byTerminal || [], 'terminal', 'samples', 4);
+  const movementRows = toReportChartRows(data?.byMovement || [], 'movement', 'samples', 4);
+  const locationRows = toReportChartRows(locations, 'location', 'samples', 8);
+  const enumeratorRows = toReportChartRows(enumerators, 'enumerator_name', 'samples', 9);
+
+  return (
+    <div className="summary-performance">
+      <div className="summary-performance-head">
+        <div>
+          <p className="eyebrow">Submissions</p>
+          <h2>Collection performance</h2>
+          <p>Live fieldwork snapshot across submissions, teams, locations, and GPS coverage.</p>
+        </div>
+        <div className="summary-period-pills">
+          <span>7D</span>
+          <span>31D</span>
+          <span>3M</span>
+          <span>12M</span>
+        </div>
+      </div>
+
+      <div className="summary-kpi-grid">
+        <SummaryKpiCard
+          icon={<ClipboardList size={18} />}
+          label="Total samples"
+          value={formatStatNumber(totalSamples)}
+          detail={`${formatStatNumber(averagePerDay)} avg/day`}
+          accent="teal"
+        />
+        <SummaryKpiCard
+          icon={<CalendarClock size={18} />}
+          label="Samples today"
+          value={formatStatNumber(samplesToday)}
+          detail={`${formatPercent(samplesToday, totalSamples)} of total`}
+          accent="blue"
+        />
+        <SummaryKpiCard
+          icon={<MapPin size={18} />}
+          label="Field locations"
+          value={formatStatNumber(locations.length)}
+          detail={topLocation ? `${truncateText(topLocation.label, 28)} leads` : 'No locations yet'}
+          accent="sky"
+        />
+        <SummaryKpiCard
+          icon={<UserRound size={18} />}
+          label="Enumerators"
+          value={formatStatNumber(enumerators.length)}
+          detail={topEnumerator ? `${truncateText(topEnumerator.label, 24)} leads` : 'No enumerators yet'}
+          accent="amber"
+        />
+        <SummaryKpiCard
+          icon={<MapPin size={18} />}
+          label="GPS coverage"
+          value={`${formatPercent(gpsSamples, totalSamples)}`}
+          detail={`${formatStatNumber(gpsSamples)} mapped samples`}
+          accent="pink"
+        />
+      </div>
+
+      <div className="summary-dashboard-grid">
+        <div className="panel summary-card summary-trend-card">
+          <div className="summary-card-head">
+            <div>
+              <span>Trend</span>
+              <h3><TrendingUp size={17} /> Daily sample run-rate</h3>
+            </div>
+            <strong>{formatStatNumber(totalSamples)} total</strong>
+          </div>
+          <TrendLineChart rows={dates} labelKey="date" valueKey="samples" />
+          <div className="summary-date-strip">
+            {dates.slice(0, 4).map((row) => (
+              <span key={row.date}><strong>{formatStatNumber(row.samples)}</strong>{formatProjectDate(row.date)}</span>
+            ))}
+          </div>
+        </div>
+
+        <div className="panel summary-card summary-mix-card">
+          <div className="summary-card-head">
+            <div>
+              <span>Split</span>
+              <h3><PieChart size={17} /> Terminal coverage</h3>
+            </div>
+          </div>
+          {terminalRows.length ? <DonutQuestionChart rows={terminalRows} /> : <p className="empty">No terminal split yet.</p>}
+        </div>
+
+        <div className="panel summary-card summary-mix-card">
+          <div className="summary-card-head">
+            <div>
+              <span>Flow</span>
+              <h3><PieChart size={17} /> Movement mix</h3>
+            </div>
+          </div>
+          {movementRows.length ? <DonutQuestionChart rows={movementRows} /> : <p className="empty">No movement split yet.</p>}
+        </div>
+
+        <SummaryRankCard title="Top survey locations" rows={locationRows} icon={<MapPin size={17} />} />
+        <SummaryRankCard title="Enumerator contribution" rows={enumeratorRows} icon={<UserRound size={17} />} />
+      </div>
+    </div>
+  );
+}
+
+function SummaryKpiCard({ icon, label, value, detail, accent }) {
+  return (
+    <div className={`summary-kpi-card ${accent || ''}`.trim()}>
+      <div>
+        <span>{icon}{label}</span>
+        <strong>{value}</strong>
+      </div>
+      <p>{detail}</p>
+    </div>
+  );
+}
+
+function SummaryRankCard({ title, rows, icon }) {
+  const total = rows.reduce((sum, row) => sum + row.frequency, 0);
+  const max = Math.max(...rows.map((row) => row.frequency), 1);
+  return (
+    <div className="panel summary-card summary-rank-card">
+      <div className="summary-card-head">
+        <div>
+          <span>Ranking</span>
+          <h3>{icon}{title}</h3>
+        </div>
+        <strong>{formatStatNumber(total)}</strong>
+      </div>
+      {rows.length === 0 && <p className="empty">No samples yet.</p>}
+      <div className="summary-rank-list">
+        {rows.map((row, index) => (
+          <div className="summary-rank-row" key={row.value}>
+            <span title={row.value}>{index + 1}. {row.value}</span>
+            <div><i style={{ width: `${(row.frequency / max) * 100}%` }} /></div>
+            <strong>{formatStatNumber(row.frequency)}</strong>
+            <em>{row.percentage}%</em>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ProjectReport({ project, data }) {
   const reportRows = data?.reportRows || data?.recent || [];
   const questionReports = useMemo(
@@ -3823,6 +3954,17 @@ function numericStats(values) {
 function formatStatNumber(value) {
   if (value === '-') return value;
   return Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function formatPercent(value, total) {
+  const denominator = Number(total) || 0;
+  if (!denominator) return '0%';
+  return `${Math.round((Number(value || 0) / denominator) * 100)}%`;
+}
+
+function truncateText(value, maxLength) {
+  const text = String(value || '-');
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text;
 }
 
 function reportTypeLabel(type) {

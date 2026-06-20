@@ -1281,13 +1281,6 @@ textarea {
   justify-content: space-between;
 }
 
-.summary-head-actions {
-  align-items: flex-end;
-  display: grid;
-  gap: 8px;
-  justify-items: end;
-}
-
 .summary-performance-head h2,
 .summary-performance-head p {
   margin: 0;
@@ -1320,40 +1313,6 @@ textarea {
   font-size: 0.78rem;
   font-weight: 850;
   padding: 7px 9px;
-}
-
-.graph-export-actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  justify-content: flex-end;
-}
-
-.graph-export-actions span {
-  align-items: center;
-  color: #52627d;
-  display: inline-flex;
-  font-size: 0.72rem;
-  font-weight: 850;
-  gap: 6px;
-  white-space: nowrap;
-}
-
-.graph-export-actions button {
-  min-height: 32px;
-  padding: 0 10px;
-}
-
-.graph-export-status {
-  background: #f2fbfb;
-  border: 1px solid #d7eeee;
-  border-radius: 8px;
-  color: #0a7777;
-  font-size: 0.78rem;
-  font-weight: 750;
-  margin: -4px 0 0;
-  padding: 8px 10px;
 }
 
 .summary-kpi-grid {
@@ -1454,6 +1413,14 @@ textarea {
   justify-content: space-between;
 }
 
+.summary-card-actions,
+.question-report-actions {
+  align-items: flex-end;
+  display: grid;
+  gap: 7px;
+  justify-items: end;
+}
+
 .summary-card-head span {
   color: #0a7777;
   font-size: 0.72rem;
@@ -1471,13 +1438,32 @@ textarea {
   margin: 4px 0 0;
 }
 
-.summary-card-head > strong {
+.summary-card-actions > strong {
   background: #edf7fb;
   border-radius: 999px;
   color: #133e98;
   font-size: 0.86rem;
   padding: 7px 10px;
   white-space: nowrap;
+}
+
+.graph-download-buttons {
+  align-items: center;
+  display: flex;
+  gap: 5px;
+  justify-content: flex-end;
+}
+
+.graph-download-buttons button {
+  border-radius: 7px;
+  font-size: 0.68rem;
+  font-weight: 850;
+  min-height: 28px;
+  padding: 0 8px;
+}
+
+.graph-download-buttons button:first-child {
+  gap: 4px;
 }
 
 .summary-date-strip {
@@ -2062,28 +2048,6 @@ textarea {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.report-hero-side {
-  display: grid;
-  gap: 10px;
-}
-
-.report-hero-side .graph-export-actions {
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  padding: 8px;
-}
-
-.report-hero-side .graph-export-actions span {
-  color: rgba(255, 255, 255, 0.86);
-}
-
-.report-hero-side .graph-export-actions button {
-  background: #ffffff;
-  border-color: rgba(255, 255, 255, 0.35);
-  color: #133e98;
-}
-
 .report-kpi {
   background: rgba(255, 255, 255, 0.14);
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -2127,6 +2091,13 @@ textarea {
   gap: 12px;
   min-height: 280px;
   padding: 16px;
+}
+
+.report-chart-head {
+  align-items: start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
 }
 
 .report-chart-card h2 {
@@ -2184,7 +2155,7 @@ textarea {
   margin: 0;
 }
 
-.question-report-head > strong {
+.question-report-actions > strong {
   align-items: center;
   background: #e9f8f7;
   border-radius: 999px;

@@ -1423,17 +1423,6 @@ async function exportElementAsImage(element, filename, format = 'png') {
   URL.revokeObjectURL(url);
 }
 
-async function exportGraphImages(container, baseName, format = 'png') {
-  const graphNodes = Array.from(container?.querySelectorAll('[data-export-graph]') || []);
-  if (graphNodes.length === 0) throw new Error('No graph cards found to export.');
-  for (const [index, node] of graphNodes.entries()) {
-    const title = node.getAttribute('data-export-title') || `graph-${index + 1}`;
-    await exportElementAsImage(node, `${baseName}-${index + 1}-${title}`, format);
-    await new Promise((resolve) => setTimeout(resolve, 180));
-  }
-  return graphNodes.length;
-}
-
 function ClientDashboard({ token, onLogout }) {
   const [projects, setProjects] = useState([]);
   const [selectedId, setSelectedId] = useState('');
@@ -3491,8 +3480,6 @@ function ClientInsight({ title, value, meta }) {
 }
 
 function SummaryPerformance({ data }) {
-  const summaryRef = useRef(null);
-  const [imageExportStatus, setImageExportStatus] = useState('');
   const totalSamples = Number(data?.totals?.total_samples || 0);
   const samplesToday = Number(data?.totals?.samples_today || 0);
   const locations = data?.byLocation || [];
@@ -3508,35 +3495,21 @@ function SummaryPerformance({ data }) {
   const locationRows = toReportChartRows(locations, 'location', 'samples', 8);
   const enumeratorRows = toReportChartRows(enumerators, 'enumerator_name', 'samples', 9);
 
-  async function downloadSummaryImages(format) {
-    try {
-      setImageExportStatus(`Preparing ${format.toUpperCase()} graphs...`);
-      const count = await exportGraphImages(summaryRef.current, 'vtrac-summary-graph', format);
-      setImageExportStatus(`${count} graph images downloaded.`);
-    } catch (error) {
-      setImageExportStatus(error.message || 'Unable to download graphs.');
-    }
-  }
-
   return (
-    <div className="summary-performance" ref={summaryRef}>
+    <div className="summary-performance">
       <div className="summary-performance-head">
         <div>
           <p className="eyebrow">Submissions</p>
           <h2>Collection performance</h2>
           <p>Live fieldwork snapshot across submissions, teams, locations, and GPS coverage.</p>
         </div>
-        <div className="summary-head-actions" data-export-ignore="true">
-          <div className="summary-period-pills">
-            <span>7D</span>
-            <span>31D</span>
-            <span>3M</span>
-            <span>12M</span>
-          </div>
-          <GraphExportActions onPng={() => downloadSummaryImages('png')} onJpeg={() => downloadSummaryImages('jpeg')} />
+        <div className="summary-period-pills">
+          <span>7D</span>
+          <span>31D</span>
+          <span>3M</span>
+          <span>12M</span>
         </div>
       </div>
-      {imageExportStatus && <p className="graph-export-status" data-export-ignore="true">{imageExportStatus}</p>}
 
       <div className="summary-kpi-grid">
         <SummaryKpiCard
@@ -3583,7 +3556,10 @@ function SummaryPerformance({ data }) {
               <span>Trend</span>
               <h3><TrendingUp size={17} /> Daily sample run-rate</h3>
             </div>
-            <strong>{formatStatNumber(totalSamples)} total</strong>
+            <div className="summary-card-actions">
+              <strong>{formatStatNumber(totalSamples)} total</strong>
+              <GraphDownloadButtons filename="vtrac-summary-daily-sample-run-rate" />
+            </div>
           </div>
           <TrendLineChart rows={dates} labelKey="date" valueKey="samples" />
           <div className="summary-date-strip">
@@ -3599,6 +3575,7 @@ function SummaryPerformance({ data }) {
               <span>Split</span>
               <h3><PieChart size={17} /> Terminal coverage</h3>
             </div>
+            <GraphDownloadButtons filename="vtrac-summary-terminal-coverage" />
           </div>
           {terminalRows.length ? <DonutQuestionChart rows={terminalRows} /> : <p className="empty">No terminal split yet.</p>}
         </div>
@@ -3609,6 +3586,7 @@ function SummaryPerformance({ data }) {
               <span>Flow</span>
               <h3><PieChart size={17} /> Movement mix</h3>
             </div>
+            <GraphDownloadButtons filename="vtrac-summary-movement-mix" />
           </div>
           {movementRows.length ? <DonutQuestionChart rows={movementRows} /> : <p className="empty">No movement split yet.</p>}
         </div>
@@ -3620,12 +3598,25 @@ function SummaryPerformance({ data }) {
   );
 }
 
-function GraphExportActions({ onPng, onJpeg }) {
+function GraphDownloadButtons({ filename }) {
+  async function download(format, event) {
+    const card = event.currentTarget.closest('[data-export-graph]');
+    const fallbackTitle = card?.getAttribute('data-export-title') || 'vtrac-graph';
+    try {
+      await exportElementAsImage(card, filename || fallbackTitle, format);
+    } catch (error) {
+      window.alert(error.message || 'Unable to download this graph.');
+    }
+  }
+
   return (
-    <div className="graph-export-actions">
-      <span><ImageIcon size={15} /> Download graphs</span>
-      <button type="button" className="secondary compact-button" onClick={onPng}>PNG</button>
-      <button type="button" className="secondary compact-button" onClick={onJpeg}>JPEG</button>
+    <div className="graph-download-buttons" data-export-ignore="true" aria-label="Download graph">
+      <button type="button" className="secondary compact-button" onClick={(event) => download('png', event)} title="Download graph as PNG">
+        <ImageIcon size={14} /> PNG
+      </button>
+      <button type="button" className="secondary compact-button" onClick={(event) => download('jpeg', event)} title="Download graph as JPEG">
+        JPG
+      </button>
     </div>
   );
 }
@@ -3652,7 +3643,10 @@ function SummaryRankCard({ title, rows, icon }) {
           <span>Ranking</span>
           <h3>{icon}{title}</h3>
         </div>
-        <strong>{formatStatNumber(total)}</strong>
+        <div className="summary-card-actions">
+          <strong>{formatStatNumber(total)}</strong>
+          <GraphDownloadButtons filename={`vtrac-summary-${title}`} />
+        </div>
       </div>
       {rows.length === 0 && <p className="empty">No samples yet.</p>}
       <div className="summary-rank-list">
@@ -3670,8 +3664,6 @@ function SummaryRankCard({ title, rows, icon }) {
 }
 
 function ProjectReport({ project, data }) {
-  const reportRef = useRef(null);
-  const [imageExportStatus, setImageExportStatus] = useState('');
   const reportRows = data?.reportRows || data?.recent || [];
   const questionReports = useMemo(
     () => buildQuestionReports(project?.questions || [], reportRows),
@@ -3683,20 +3675,9 @@ function ProjectReport({ project, data }) {
     ? Math.round(questionReports.reduce((sum, report) => sum + report.answerRate, 0) / questionReports.length)
     : 0;
   const strongestSignal = questionReports.find((report) => report.topValue);
-  const reportBaseName = `vtrac-${project?.slug || project?.name || 'project'}-report`;
-
-  async function downloadReportImages(format) {
-    try {
-      setImageExportStatus(`Preparing ${format.toUpperCase()} report graphs...`);
-      const count = await exportGraphImages(reportRef.current, reportBaseName, format);
-      setImageExportStatus(`${count} graph images downloaded.`);
-    } catch (error) {
-      setImageExportStatus(error.message || 'Unable to download report graphs.');
-    }
-  }
 
   return (
-    <div className="auto-report" ref={reportRef}>
+    <div className="auto-report">
       <div className="report-warning">
         Automated report based on submitted survey data. Review and clean records before using final client figures.
       </div>
@@ -3710,19 +3691,13 @@ function ProjectReport({ project, data }) {
             response coverage, and numeric statistics.
           </p>
         </div>
-        <div className="report-hero-side">
-          <div className="report-kpi-strip">
-            <ReportKpi label="Responses analyzed" value={totalResponses} />
-            <ReportKpi label="Questions" value={totalQuestions} />
-            <ReportKpi label="Avg. answered" value={`${averageCompletion}%`} />
-            <ReportKpi label="Top signal" value={strongestSignal?.topValue || '-'} compact />
-          </div>
-          <div data-export-ignore="true">
-            <GraphExportActions onPng={() => downloadReportImages('png')} onJpeg={() => downloadReportImages('jpeg')} />
-          </div>
+        <div className="report-kpi-strip">
+          <ReportKpi label="Responses analyzed" value={totalResponses} />
+          <ReportKpi label="Questions" value={totalQuestions} />
+          <ReportKpi label="Avg. answered" value={`${averageCompletion}%`} />
+          <ReportKpi label="Top signal" value={strongestSignal?.topValue || '-'} compact />
         </div>
       </div>
-      {imageExportStatus && <p className="graph-export-status" data-export-ignore="true">{imageExportStatus}</p>}
 
       <div className="report-dashboard-grid mixed-report-grid">
         <TrendChartPanel title="Submission trend" rows={data?.byDate || []} labelKey="date" valueKey="samples" />
@@ -3760,7 +3735,10 @@ const reportChartPalette = ['#0aa7a4', '#133e98', '#2f80ed', '#7c5cff', '#f59e0b
 function TrendChartPanel({ title, rows, labelKey, valueKey }) {
   return (
     <div className="panel report-chart-card trend-card" data-export-graph data-export-title={title}>
-      <h2><TrendingUp size={17} /> {title}</h2>
+      <div className="report-chart-head">
+        <h2><TrendingUp size={17} /> {title}</h2>
+        <GraphDownloadButtons filename={`vtrac-report-${title}`} />
+      </div>
       <TrendLineChart rows={rows} labelKey={labelKey} valueKey={valueKey} />
     </div>
   );
@@ -3770,7 +3748,10 @@ function DonutBreakdownPanel({ title, rows, labelKey, valueKey }) {
   const chartRows = toReportChartRows(rows, labelKey, valueKey, 5);
   return (
     <div className="panel report-chart-card" data-export-graph data-export-title={title}>
-      <h2><PieChart size={17} /> {title}</h2>
+      <div className="report-chart-head">
+        <h2><PieChart size={17} /> {title}</h2>
+        <GraphDownloadButtons filename={`vtrac-report-${title}`} />
+      </div>
       {chartRows.length === 0 ? <p className="empty">No samples yet.</p> : <DonutQuestionChart rows={chartRows} />}
     </div>
   );
@@ -3780,7 +3761,10 @@ function RankedBreakdownPanel({ title, rows, labelKey, valueKey }) {
   const chartRows = toReportChartRows(rows, labelKey, valueKey, 7);
   return (
     <div className="panel report-chart-card" data-export-graph data-export-title={title}>
-      <h2><BarChart3 size={17} /> {title}</h2>
+      <div className="report-chart-head">
+        <h2><BarChart3 size={17} /> {title}</h2>
+        <GraphDownloadButtons filename={`vtrac-report-${title}`} />
+      </div>
       {chartRows.length === 0 ? <p className="empty">No samples yet.</p> : <RankQuestionChart rows={chartRows} />}
     </div>
   );
@@ -3896,6 +3880,7 @@ function TrendLineChart({ rows, labelKey, valueKey, compact = false }) {
 }
 
 function QuestionReportCard({ report, index }) {
+  const filename = `vtrac-question-${index + 1}-${report.label}`;
   return (
     <div className="question-report-card" data-export-graph data-export-title={`${index + 1}-${report.label}`}>
       <div className="question-report-head">
@@ -3907,7 +3892,10 @@ function QuestionReportCard({ report, index }) {
             {' '}({report.missing} without data)
           </p>
         </div>
-        <strong>{report.answerRate}%</strong>
+        <div className="question-report-actions">
+          <strong>{report.answerRate}%</strong>
+          <GraphDownloadButtons filename={filename} />
+        </div>
       </div>
 
       {report.kind === 'number' ? (

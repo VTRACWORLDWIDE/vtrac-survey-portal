@@ -888,28 +888,34 @@ app.get('/api/responses/export.xlsx', requireAdmin, async (req, res, next) => {
   try {
     const { rows, questions } = await loadExportRows(req.query);
     const headerFormat = req.query.headerFormat === 'raw' ? 'raw' : 'labels';
-    const records = rows.map((row) => flattenResponse(row, questions, headerFormat));
-    const workbook = new ExcelJS.Workbook();
-    addExportWorksheet(workbook, 'All Responses', records, questions, headerFormat);
-    addExportWorksheet(
-      workbook,
-      'Departures',
-      records.filter((record) => String(record.location || '').includes(' - Departures')),
-      questions,
-      headerFormat
-    );
-    addExportWorksheet(
-      workbook,
-      'Arrivals',
-      records.filter((record) => String(record.location || '').includes(' - Arrivals')),
-      questions,
-      headerFormat
-    );
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+      stream: res,
+      useStyles: false,
+      useSharedStrings: false
+    });
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="vtrac-survey-responses.xlsx"');
-    await workbook.xlsx.write(res);
-    res.end();
+
+    addStreamingExportWorksheet(workbook, 'All Responses', rows, questions, headerFormat);
+    addStreamingExportWorksheet(
+      workbook,
+      'Departures',
+      rows,
+      questions,
+      headerFormat,
+      (row) => String(row.location || '').includes(' - Departures')
+    );
+    addStreamingExportWorksheet(
+      workbook,
+      'Arrivals',
+      rows,
+      questions,
+      headerFormat,
+      (row) => String(row.location || '').includes(' - Arrivals')
+    );
+
+    await workbook.commit();
   } catch (error) {
     next(error);
   }
@@ -1524,7 +1530,26 @@ async function loadExportRows(queryParams) {
   const project = queryParams.projectId ? await loadProjectForPublic(queryParams.projectId) : null;
   const questions = project?.questions || defaultQuestions;
   const result = await query(
-    `SELECT *
+    `SELECT
+      id,
+      project_id,
+      enumerator_name,
+      location,
+      respondent_name,
+      respondent_phone,
+      household_id,
+      answers,
+      latitude,
+      longitude,
+      gps_accuracy,
+      submitted_at,
+      created_at,
+      audio_mime_type,
+      audio_size,
+      client_submission_id,
+      survey_started_at,
+      survey_ended_at,
+      survey_duration_seconds
     FROM survey_responses
     ${filters.where}
     ORDER BY submitted_at DESC`,
@@ -1645,6 +1670,35 @@ function addExportWorksheet(workbook, name, records, questions = [], headerForma
     from: { row: 1, column: 1 },
     to: { row: 1, column: Math.max(columns.length, 1) }
   };
+}
+
+function addStreamingExportWorksheet(
+  workbook,
+  name,
+  rows,
+  questions = [],
+  headerFormat = 'labels',
+  predicate = () => true
+) {
+  const sheet = workbook.addWorksheet(name);
+  const columns = Object.keys(defaultExportRow(questions, headerFormat)).map((key) => ({
+    header: key,
+    key,
+    width: Math.min(Math.max(key.length + 4, 14), 36)
+  }));
+  sheet.columns = columns;
+  sheet.views = [{ state: 'frozen', ySplit: 1 }];
+  sheet.autoFilter = {
+    from: { row: 1, column: 1 },
+    to: { row: 1, column: Math.max(columns.length, 1) }
+  };
+
+  for (const row of rows) {
+    if (!predicate(row)) continue;
+    sheet.addRow(flattenResponse(row, questions, headerFormat)).commit();
+  }
+
+  sheet.commit();
 }
 
 function escapeXml(value) {

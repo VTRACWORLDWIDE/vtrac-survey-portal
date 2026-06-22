@@ -1589,6 +1589,18 @@ textarea {
   margin: 0;
 }
 
+.project-workspace-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.project-workspace-actions .compact-button {
+  white-space: nowrap;
+}
+
 .project-tabs {
   align-items: center;
   background: #ffffff;
@@ -2217,6 +2229,12 @@ textarea {
 .project-data-content .admin-filters .filter-actions .primary {
   min-height: 34px;
   padding: 0 12px;
+}
+
+.project-data-content .admin-filters .filter-actions .secondary {
+  min-height: 34px;
+  padding: 0 10px;
+  white-space: nowrap;
 }
 
 .data-grid-shell {
@@ -4776,6 +4794,10 @@ tbody tr:hover {
   }
 
   .project-tabs {
+    justify-content: flex-start;
+  }
+
+  .project-workspace-actions {
     justify-content: flex-start;
   }
 

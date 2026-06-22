@@ -1962,6 +1962,15 @@ function AdminDashboard({ token, onLogout }) {
     }
   }
 
+  async function refreshAdminData() {
+    await Promise.all([
+      loadProjects(),
+      loadDashboard(),
+      loadFilterOptions()
+    ]);
+    setStatus('Dashboard data refreshed.');
+  }
+
   function changeSelectedProject(projectId) {
     const emptyFilters = { enumerator: '', location: '', dateFrom: '', dateTo: '' };
     setSelectedId(projectId);
@@ -2496,7 +2505,12 @@ function AdminDashboard({ token, onLogout }) {
                   <h2>{selectedProject.name}</h2>
                   <p>{selectedProject.description || 'No project description added yet.'}</p>
                 </div>
-                <span className={`project-status ${selectedProjectStatus}`}>{selectedProjectStatus}</span>
+                <div className="project-workspace-actions">
+                  <button className="secondary compact-button" onClick={refreshAdminData} disabled={loading}>
+                    <RefreshCw size={15} /> {loading ? 'Refreshing...' : 'Refresh data'}
+                  </button>
+                  <span className={`project-status ${selectedProjectStatus}`}>{selectedProjectStatus}</span>
+                </div>
               </div>
 
               <div className="project-tabs" role="tablist" aria-label="Project workspace">
@@ -2650,7 +2664,9 @@ function AdminDashboard({ token, onLogout }) {
                           </label>
                           <div className="filter-actions">
                             <button className="primary" onClick={() => setAppliedFilters(filters)}><Search size={18} /> Search</button>
-                            <button className="icon-button" onClick={loadDashboard} aria-label="Refresh dashboard"><RefreshCw size={18} /></button>
+                            <button className="secondary compact-button" onClick={refreshAdminData} disabled={loading}>
+                              <RefreshCw size={15} /> {loading ? 'Refreshing...' : 'Refresh data'}
+                            </button>
                           </div>
                         </div>
                         <RecentTable rows={data?.recent || []} project={selectedProject} loading={loading} onView={(responseId) => openResponse(responseId, 'view')} onEdit={(responseId) => openResponse(responseId, 'edit')} />
@@ -2907,7 +2923,7 @@ function AdminDashboard({ token, onLogout }) {
               filterOptions={filterOptions}
               filters={filters}
               loading={loading}
-              loadDashboard={loadDashboard}
+              loadDashboard={refreshAdminData}
               projects={projects}
               setAppliedFilters={setAppliedFilters}
               setFilters={setFilters}
@@ -4028,7 +4044,9 @@ function PortfolioDashboard({
         </label>
         <div className="filter-actions">
           <button className="primary" onClick={() => setAppliedFilters(filters)}><Search size={18} /> Search</button>
-          <button className="icon-button" onClick={loadDashboard} aria-label="Refresh dashboard"><RefreshCw size={18} /></button>
+          <button className="secondary compact-button" onClick={loadDashboard} disabled={loading}>
+            <RefreshCw size={15} /> {loading ? 'Refreshing...' : 'Refresh data'}
+          </button>
         </div>
       </div>
 

@@ -1,5 +1,8 @@
 import 'dotenv/config';
 import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
@@ -885,17 +888,16 @@ app.get('/api/responses/export.csv', requireAdmin, async (req, res, next) => {
 });
 
 app.get('/api/responses/export.xlsx', requireAdmin, async (req, res, next) => {
+  let exportFilePath = '';
   try {
     const { rows, questions } = await loadExportRows(req.query);
     const headerFormat = req.query.headerFormat === 'raw' ? 'raw' : 'labels';
+    exportFilePath = path.join(os.tmpdir(), `vtrac-responses-${Date.now()}-${crypto.randomUUID()}.xlsx`);
     const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
-      stream: res,
+      filename: exportFilePath,
       useStyles: false,
       useSharedStrings: false
     });
-
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename="vtrac-survey-responses.xlsx"');
 
     addStreamingExportWorksheet(workbook, 'All Responses', rows, questions, headerFormat);
     addStreamingExportWorksheet(
@@ -916,7 +918,12 @@ app.get('/api/responses/export.xlsx', requireAdmin, async (req, res, next) => {
     );
 
     await workbook.commit();
+    res.download(exportFilePath, 'vtrac-survey-responses.xlsx', async (error) => {
+      await fs.unlink(exportFilePath).catch(() => {});
+      if (error && !res.headersSent) next(error);
+    });
   } catch (error) {
+    if (exportFilePath) await fs.unlink(exportFilePath).catch(() => {});
     next(error);
   }
 });
@@ -1687,11 +1694,6 @@ function addStreamingExportWorksheet(
     width: Math.min(Math.max(key.length + 4, 14), 36)
   }));
   sheet.columns = columns;
-  sheet.views = [{ state: 'frozen', ySplit: 1 }];
-  sheet.autoFilter = {
-    from: { row: 1, column: 1 },
-    to: { row: 1, column: Math.max(columns.length, 1) }
-  };
 
   for (const row of rows) {
     if (!predicate(row)) continue;

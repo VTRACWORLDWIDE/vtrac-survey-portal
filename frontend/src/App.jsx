@@ -1730,14 +1730,18 @@ function AdminLogin({ onLogin }) {
   async function submit(event) {
     event.preventDefault();
     setStatus('');
-    const response = await fetch(`${apiBase}/api/admin/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
-    const payload = await response.json();
-    if (!response.ok) return setStatus(payload.error || 'Unable to login.');
-    onLogin(payload.token);
+    try {
+      const response = await fetch(`${apiBase}/api/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const payload = await response.json();
+      if (!response.ok) return setStatus(payload.error || 'Unable to login.');
+      onLogin(payload.token);
+    } catch {
+      setStatus('Unable to reach the login service. Check deployment and network connectivity.');
+    }
   }
 
     return (

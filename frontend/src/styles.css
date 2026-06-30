@@ -655,38 +655,63 @@ textarea {
   grid-template-rows: auto 1fr;
   height: 100svh;
   min-height: 100vh;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.admin-login-shell {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
 }
 
 .admin-login-layout {
   align-items: center;
   display: grid;
   gap: clamp(18px, 3vw, 36px);
-  grid-template-columns: minmax(0, 1.22fr) minmax(340px, 420px);
+  grid-template-columns: minmax(0, 1fr);
   height: calc(100svh - 78px);
   margin: 0 auto;
-  max-width: 1240px;
+  max-width: 1120px;
   min-height: 0;
-  padding: clamp(14px, 2.6vh, 32px) clamp(18px, 3vw, 44px);
+  padding: clamp(18px, 3vw, 38px) clamp(18px, 3vw, 42px);
   width: 100%;
 }
 
+.admin-login-topbar {
+  justify-content: space-between;
+}
+
+.admin-login-topbar-copy {
+  align-items: flex-end;
+  color: #edf4fb;
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+
+.admin-login-topbar-copy strong {
+  font-size: 0.94rem;
+  font-weight: 850;
+  letter-spacing: 0.01em;
+}
+
 .admin-login-visual {
-  align-self: center;
+  align-self: stretch;
   background:
-    linear-gradient(135deg, rgba(19, 62, 152, 0.96), rgba(10, 167, 164, 0.9)),
-    linear-gradient(45deg, rgba(224, 161, 47, 0.18), rgba(255, 255, 255, 0));
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
-  box-shadow: 0 22px 52px rgba(22, 33, 38, 0.18);
+    linear-gradient(145deg, rgba(19, 62, 152, 0.95), rgba(10, 167, 164, 0.88)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  box-shadow: 0 22px 52px rgba(22, 33, 38, 0.14);
   color: #ffffff;
   display: grid;
-  gap: clamp(14px, 2vh, 22px);
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  height: min(640px, 100%);
+  gap: 14px;
+  grid-template-rows: auto auto auto;
+  height: auto;
   min-height: 0;
   overflow: hidden;
-  padding: clamp(22px, 4vw, 40px);
+  padding: 18px;
   position: relative;
 }
 
@@ -704,11 +729,11 @@ textarea {
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 50%;
   content: "";
-  height: 260px;
-  left: -90px;
+  height: 180px;
+  left: -60px;
   position: absolute;
-  top: 56%;
-  width: 260px;
+  top: 58%;
+  width: 180px;
 }
 
 .admin-visual-copy,
@@ -735,11 +760,11 @@ textarea {
 
 .admin-visual-copy h1 {
   color: #ffffff;
-  font-size: clamp(1.9rem, 3.4vw, 3.1rem);
+  font-size: clamp(1.8rem, 3vw, 2.6rem);
   font-weight: 900;
   line-height: 1.04;
   margin: 0 0 clamp(8px, 1.4vh, 14px);
-  max-width: 760px;
+  max-width: 720px;
 }
 
 .admin-visual-copy p {
@@ -754,7 +779,7 @@ textarea {
   align-items: stretch;
   display: grid;
   gap: clamp(10px, 1.8vh, 16px);
-  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.31fr);
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.36fr);
   min-height: 0;
 }
 
@@ -965,16 +990,16 @@ textarea {
     linear-gradient(180deg, rgba(10, 167, 164, 0.06), rgba(255, 255, 255, 0) 34%),
     #ffffff;
   border: 1px solid #cadde2;
-  border-radius: 8px;
+  border-radius: 12px;
   box-shadow: 0 22px 54px rgba(31, 47, 82, 0.14);
   display: grid;
-  gap: 15px;
+  gap: 14px;
   justify-self: stretch;
-  max-width: 420px;
-  height: min(560px, 100%);
+  max-width: 520px;
+  height: auto;
   min-height: 0;
   overflow: hidden;
-  padding: 28px;
+  padding: 28px 30px;
   position: relative;
   width: 100%;
 }
@@ -994,6 +1019,43 @@ textarea {
   display: flex;
   gap: 14px;
   padding-top: 8px;
+}
+
+.admin-role-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.role-chip {
+  align-items: flex-start;
+  background: #f6f8fb;
+  border: 1px solid #d8e5e9;
+  border-radius: 10px;
+  color: #1f2f52;
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  min-height: 58px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.role-chip span {
+  font-size: 0.92rem;
+  font-weight: 850;
+}
+
+.role-chip small {
+  color: #66758e;
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.role-chip.active {
+  background: linear-gradient(135deg, rgba(10, 119, 119, 0.12), rgba(19, 62, 152, 0.12));
+  border-color: #0aa7a4;
+  box-shadow: inset 0 0 0 1px rgba(10, 167, 164, 0.18);
 }
 
 .admin-login-logo-chip {
@@ -1082,9 +1144,42 @@ textarea {
 .admin-login-card .primary {
   background: linear-gradient(90deg, #0a7777, #0aa7a4);
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   box-shadow: 0 12px 24px rgba(10, 119, 119, 0.18);
   min-height: 52px;
+}
+
+.auth-info-panel {
+  align-self: stretch;
+  gap: 14px;
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  padding: 18px;
+}
+
+.auth-info-card {
+  background: rgba(255, 255, 255, 0.11);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  display: grid;
+  gap: 6px;
+  min-height: 0;
+  padding: 16px;
+}
+
+.auth-info-card .eyebrow {
+  color: #dff4f3;
+}
+
+.auth-info-card h3 {
+  color: #ffffff;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.auth-info-card p {
+  color: #edf4fb;
+  line-height: 1.45;
+  margin: 0;
 }
 
 .admin-login-assurance {
@@ -4584,7 +4679,6 @@ tbody tr:hover {
     overflow: visible;
   }
 
-  .admin-login-visual,
   .admin-login-card {
     height: auto;
     max-height: none;
@@ -4592,6 +4686,23 @@ tbody tr:hover {
 
   .admin-login-card {
     justify-self: center;
+  }
+
+  .admin-login-topbar {
+    gap: 12px;
+  }
+
+  .admin-login-topbar-copy {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .auth-info-panel {
+    order: 2;
+  }
+
+  .admin-login-layout {
+    grid-template-columns: 1fr;
   }
 
   .client-login-feature-grid {
@@ -4681,6 +4792,10 @@ tbody tr:hover {
 
   .admin-login-card-head {
     align-items: flex-start;
+  }
+
+  .admin-role-grid {
+    grid-template-columns: 1fr;
   }
 
   .admin-access-strip {

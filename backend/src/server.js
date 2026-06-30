@@ -17,6 +17,12 @@ const adminUsername = process.env.ADMIN_USERNAME || 'admin';
 const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
 const clientUsername = process.env.CLIENT_USERNAME || 'client';
 const clientPassword = process.env.CLIENT_PASSWORD || 'client123';
+const staffAccounts = [
+  { username: 'analyst', password: 'Analyst', role: 'analyst', displayName: 'Analyst' },
+  { username: 'tl', password: 'TL', role: 'teamLead', displayName: 'Team Lead' },
+  { username: 'fm', password: 'FM', role: 'floorManager', displayName: 'Floor Manager' },
+  { username: 'admin', password: 'admin', role: 'admin', displayName: 'Admin' }
+];
 const tokenSecret = process.env.ADMIN_TOKEN_SECRET || 'change-this-local-secret';
 const defaultProjectSlug = 'bengaluru-second-airport-feasibility';
 const defaultProjectSettings = {
@@ -65,8 +71,18 @@ app.get('/api/health', (_req, res) => {
 
 app.post('/api/admin/login', (req, res) => {
   const { username, password } = req.body;
+  const normalizedUsername = String(username || '').trim().toLowerCase();
+  const matchedStaff = staffAccounts.find((account) => account.username === normalizedUsername && account.password === password);
   if (username !== adminUsername || password !== adminPassword) {
-    return res.status(401).json({ error: 'Invalid admin login.' });
+    if (!matchedStaff) {
+      return res.status(401).json({ error: 'Invalid staff login.' });
+    }
+    return res.json({
+      token: createToken(matchedStaff.username, matchedStaff.role, null, { displayName: matchedStaff.displayName }),
+      username: matchedStaff.username,
+      role: matchedStaff.role,
+      displayName: matchedStaff.displayName
+    });
   }
   res.json({ token: createToken(username, 'admin'), username, role: 'admin' });
 });
@@ -1751,11 +1767,12 @@ function questionAppliesToLocation(questionId, location = '') {
   return true;
 }
 
-function createToken(username, role, clientId = null) {
+function createToken(username, role, clientId = null, extraClaims = {}) {
   const payload = {
     username,
     role,
     ...(clientId ? { clientId } : {}),
+    ...extraClaims,
     exp: Date.now() + 1000 * 60 * 60 * 12
   };
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
@@ -1777,7 +1794,8 @@ function verifyToken(token) {
 function requireAdmin(req, res, next) {
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
   const admin = verifyToken(token);
-  if (!admin || admin.role !== 'admin') return res.status(401).json({ error: 'Admin login required.' });
+  const allowedRoles = new Set(['admin', 'analyst', 'teamLead', 'floorManager']);
+  if (!admin || !allowedRoles.has(admin.role)) return res.status(401).json({ error: 'Staff login required.' });
   req.admin = admin;
   next();
 }

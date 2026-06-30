@@ -1708,9 +1708,24 @@ function AdminApp() {
 }
 
 function AdminLogin({ onLogin }) {
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('');
+  const pilotRoles = [
+    { key: 'analyst', label: 'Analyst', username: 'analyst', password: 'Analyst' },
+    { key: 'teamLead', label: 'Team Lead', username: 'tl', password: 'TL' },
+    { key: 'floorManager', label: 'Floor Manager', username: 'fm', password: 'FM' },
+    { key: 'admin', label: 'Admin', username: 'admin', password: 'admin' }
+  ];
+  const [selectedRole, setSelectedRole] = useState('teamLead');
+  const [username, setUsername] = useState('tl');
+  const [password, setPassword] = useState('TL');
   const [status, setStatus] = useState('');
+  const activeRole = pilotRoles.find((role) => role.key === selectedRole) || pilotRoles[0];
+
+  function chooseRole(role) {
+    setSelectedRole(role.key);
+    setUsername(role.username);
+    setPassword(role.password);
+    setStatus('');
+  }
 
   async function submit(event) {
     event.preventDefault();
@@ -1725,103 +1740,99 @@ function AdminLogin({ onLogin }) {
     onLogin(payload.token);
   }
 
-  return (
+    return (
     <section className="admin-login-screen">
-      <div className="admin-login-topbar">
-        <div className="admin-brand-mark">
-          <img src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
-          <span title="VTRAC Survey Console">VTRAC Survey Console</span>
+      <div className="admin-login-shell">
+        <header className="admin-login-topbar">
+          <div className="admin-brand-mark">
+            <img src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
+            <span title="VTRAC Survey Console">VTRAC Survey Console</span>
+          </div>
+          <div className="admin-login-topbar-copy">
+            <span className="eyebrow">Staff access</span>
+            <strong>One login surface for pilot testing</strong>
+          </div>
+        </header>
+
+        <div className="admin-login-layout">
+          <form className="admin-login-card modern-auth-card" onSubmit={submit}>
+            <div className="admin-login-card-head">
+              <div className="admin-login-logo-chip">
+                <img src="/vtrac-logo.jpg" alt="VTRAC" />
+              </div>
+              <div>
+                <p className="eyebrow">Secure sign in</p>
+                <h2>Log in to continue</h2>
+              </div>
+            </div>
+            <p className="login-support-text">
+              Use your assigned pilot credentials. Team Lead access is ready for testing now.
+            </p>
+            <div className="admin-role-grid" role="tablist" aria-label="Pilot login roles">
+              {pilotRoles.map((role) => (
+                <button
+                  key={role.key}
+                  type="button"
+                  className={`role-chip ${selectedRole === role.key ? 'active' : ''}`}
+                  onClick={() => chooseRole(role)}
+                >
+                  <span>{role.label}</span>
+                  <small>{role.username}</small>
+                </button>
+              ))}
+            </div>
+            <label>
+              User ID
+              <input
+                value={username}
+                onChange={(event) => {
+                  setUsername(event.target.value);
+                  setStatus('');
+                }}
+                required
+                autoComplete="username"
+                placeholder={activeRole.username}
+              />
+            </label>
+            <label>
+              Password
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  setStatus('');
+                }}
+                required
+                autoComplete="current-password"
+                placeholder={activeRole.password}
+              />
+            </label>
+            <button className="primary">Sign in</button>
+            {status && <p className="status">{status}</p>}
+            <div className="admin-login-assurance">
+              <span><ShieldCheck size={16} /> Role-based access</span>
+              <span><CheckCircle2 size={16} /> Cloud synced</span>
+              <span><BarChart3 size={16} /> Dashboard ready</span>
+            </div>
+          </form>
+
+          <aside className="admin-login-visual auth-info-panel" aria-label="VTRAC staff login overview">
+            <div className="auth-info-card">
+              <span className="eyebrow">Pilot credentials</span>
+              <h3>Team Lead access</h3>
+              <p>Use <strong>tl / TL</strong> to test the Team Lead experience.</p>
+            </div>
+            <div className="auth-info-card">
+              <span className="eyebrow">Other roles</span>
+              <p>Analyst, Floor Manager, and Admin pilot logins are enabled in the same sign in flow.</p>
+            </div>
+            <div className="auth-info-card">
+              <span className="eyebrow">What happens after sign in</span>
+              <p>You land on the role-scoped dashboard shell and can review the current pilot workflow.</p>
+            </div>
+          </aside>
         </div>
-      </div>
-      <div className="admin-login-layout">
-        <section className="admin-login-visual" aria-label="VTRAC survey operations overview">
-          <div className="admin-visual-copy">
-            <span className="admin-visual-kicker"><ShieldCheck size={16} /> Secure admin workspace</span>
-            <h1>Field research, mobility studies, and survey data in one command view.</h1>
-            <p>Plan projects, monitor live collection, review responses, and prepare exports for client reporting.</p>
-          </div>
-
-          <div className="admin-visual-grid">
-            <div className="mobility-map-panel">
-              <div className="map-grid-lines" />
-              <div className="route-line route-line-a" />
-              <div className="route-line route-line-b" />
-              <span className="map-node node-one"><MapPin size={15} /></span>
-              <span className="map-node node-two"><MapPin size={15} /></span>
-              <span className="map-node node-three"><MapPin size={15} /></span>
-              <div className="map-callout callout-one">
-                <strong>KIA Terminal</strong>
-                <span>Passenger intercepts</span>
-              </div>
-              <div className="map-callout callout-two">
-                <strong>City origins</strong>
-                <span>Zone-mapped responses</span>
-              </div>
-              <div className="map-mini-chart">
-                <span />
-                <span />
-                <span />
-                <span />
-              </div>
-            </div>
-
-            <div className="admin-insight-stack">
-              <div className="admin-insight-card">
-                <ClipboardList size={19} />
-                <span>Live samples</span>
-                <strong>448</strong>
-              </div>
-              <div className="admin-insight-card">
-                <TrendingUp size={19} />
-                <span>Daily run-rate</span>
-                <strong>149</strong>
-              </div>
-              <div className="admin-insight-card">
-                <BarChart3 size={19} />
-                <span>QC ready</span>
-                <strong>94%</strong>
-              </div>
-            </div>
-          </div>
-
-          <div className="admin-capability-row">
-            <span><Table2 size={16} /> Response review</span>
-            <span><MapPin size={16} /> GIS-ready data</span>
-            <span><Download size={16} /> XLSX / CSV export</span>
-          </div>
-        </section>
-
-        <form className="admin-login-card" onSubmit={submit}>
-          <div className="admin-login-card-head">
-            <div className="admin-login-logo-chip">
-              <img src="/vtrac-logo.jpg" alt="VTRAC" />
-            </div>
-            <div>
-              <p className="eyebrow">Administrator</p>
-              <h2>Sign in to manage field projects</h2>
-            </div>
-          </div>
-          <p className="login-support-text">Secure access for survey setup, live monitoring, response review, and client-ready exports.</p>
-          <div className="admin-access-strip">
-            <span><ShieldCheck size={15} /> Protected console</span>
-            <span><CheckCircle2 size={15} /> Cloud synced</span>
-          </div>
-          <label>
-            Username
-            <input value={username} onChange={(event) => setUsername(event.target.value)} required />
-          </label>
-          <label>
-            Password
-            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-          </label>
-          <button className="primary">Login</button>
-          {status && <p className="status">{status}</p>}
-          <div className="admin-login-assurance">
-            <span><ClipboardList size={16} /> Projects</span>
-            <span><BarChart3 size={16} /> Analytics</span>
-            <span><Download size={16} /> Exports</span>
-          </div>
-        </form>
       </div>
     </section>
   );

@@ -17,13 +17,8 @@ const adminUsername = process.env.ADMIN_USERNAME || 'admin';
 const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
 const clientUsername = process.env.CLIENT_USERNAME || 'client';
 const clientPassword = process.env.CLIENT_PASSWORD || 'client123';
-const staffAccounts = [
-  { username: 'analyst', password: 'Analyst', role: 'analyst', displayName: 'Analyst' },
-  { username: 'tl', password: 'TL', role: 'teamLead', displayName: 'Team Lead' },
-  { username: 'fm', password: 'FM', role: 'floorManager', displayName: 'Floor Manager' },
-  { username: 'admin', password: 'admin', role: 'admin', displayName: 'Admin' }
-];
 const tokenSecret = process.env.ADMIN_TOKEN_SECRET || 'change-this-local-secret';
+const defaultStaffPassword = process.env.STAFF_DEFAULT_PASSWORD || 'password';
 const defaultProjectSlug = 'bengaluru-second-airport-feasibility';
 const defaultProjectSettings = {
   airportLocationMode: false,
@@ -72,19 +67,23 @@ app.get('/api/health', (_req, res) => {
 app.post('/api/admin/login', (req, res) => {
   const { username, password } = req.body;
   const normalizedUsername = String(username || '').trim().toLowerCase();
-  const matchedStaff = staffAccounts.find((account) => account.username === normalizedUsername && account.password === password);
-  if (username !== adminUsername || password !== adminPassword) {
-    if (!matchedStaff) {
-      return res.status(401).json({ error: 'Invalid staff login.' });
-    }
-    return res.json({
-      token: createToken(matchedStaff.username, matchedStaff.role, null, { displayName: matchedStaff.displayName }),
-      username: matchedStaff.username,
-      role: matchedStaff.role,
-      displayName: matchedStaff.displayName
-    });
+  if (username === adminUsername && password === adminPassword) {
+    return res.json({ token: createToken(username, 'admin'), username, role: 'admin', displayName: 'Admin' });
   }
-  res.json({ token: createToken(username, 'admin'), username, role: 'admin' });
+  return authenticateStaffLogin(normalizedUsername, password)
+    .then((staff) => {
+      if (!staff) return res.status(401).json({ error: 'Invalid staff login.' });
+      res.json({
+        token: createToken(staff.username, staff.role, null, { displayName: staff.display_name, employeeCode: staff.employee_code }),
+        username: staff.username,
+        role: staff.role,
+        displayName: staff.display_name,
+        employeeCode: staff.employee_code
+      });
+    })
+    .catch((error) => {
+      throw error;
+    });
 });
 
 app.get('/api/admin/me', requireAdmin, (req, res) => {
@@ -1016,6 +1015,79 @@ app.listen(port, () => {
 
 async function ensureDatabase() {
   await query(`
+    CREATE TABLE IF NOT EXISTS employees (
+      id BIGSERIAL PRIMARY KEY,
+      employee_code TEXT NOT NULL UNIQUE,
+      employee_name TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'Analyst',
+      branch TEXT,
+      team TEXT,
+      reporting_team_lead TEXT,
+      reporting_team_lead_email TEXT,
+      reporting_floor_manager TEXT,
+      reporting_floor_manager_email TEXT,
+      employment_status TEXT NOT NULL DEFAULT 'Active',
+      join_date DATE,
+      exit_date DATE,
+      experience_years NUMERIC(5, 2),
+      phone_optional TEXT,
+      personal_email_optional TEXT,
+      notes_optional TEXT,
+      login_username TEXT,
+      login_password_hash TEXT,
+      must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS staff_accounts (
+      id BIGSERIAL PRIMARY KEY,
+      employee_id BIGINT REFERENCES employees(id) ON DELETE SET NULL,
+      username TEXT NOT NULL UNIQUE,
+      display_name TEXT NOT NULL,
+      role TEXT NOT NULL,
+      branch TEXT,
+      team TEXT,
+      reporting_team_lead TEXT,
+      reporting_team_lead_email TEXT,
+      reporting_floor_manager TEXT,
+      reporting_floor_manager_email TEXT,
+      password_hash TEXT NOT NULL,
+      must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS employee_change_requests (
+      id BIGSERIAL PRIMARY KEY,
+      request_type TEXT NOT NULL,
+      employee_code TEXT NOT NULL,
+      employee_name TEXT NOT NULL,
+      branch TEXT,
+      team TEXT,
+      requested_by_username TEXT NOT NULL,
+      requested_by_role TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'Pending',
+      comments TEXT,
+      reviewed_by TEXT,
+      reviewed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS employee_notifications (
+      id BIGSERIAL PRIMARY KEY,
+      recipient_username TEXT NOT NULL,
+      recipient_role TEXT NOT NULL,
+      request_id BIGINT REFERENCES employee_change_requests(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      is_read BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      read_at TIMESTAMPTZ
+    );
+
     CREATE TABLE IF NOT EXISTS survey_projects (
       id BIGSERIAL PRIMARY KEY,
       name TEXT NOT NULL,
@@ -1117,6 +1189,13 @@ async function ensureDatabase() {
     CREATE INDEX IF NOT EXISTS idx_client_project_access_project ON client_project_access (project_id);
     CREATE INDEX IF NOT EXISTS idx_response_clear_backups_project ON response_clear_backups (project_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_response_clear_backups_expires ON response_clear_backups (expires_at);
+    CREATE INDEX IF NOT EXISTS idx_employees_branch ON employees (branch);
+    CREATE INDEX IF NOT EXISTS idx_employees_team ON employees (team);
+    CREATE INDEX IF NOT EXISTS idx_employees_reporting_fm ON employees (reporting_floor_manager_email);
+    CREATE INDEX IF NOT EXISTS idx_staff_accounts_username ON staff_accounts (LOWER(username));
+    CREATE INDEX IF NOT EXISTS idx_staff_accounts_role ON staff_accounts (role);
+    CREATE INDEX IF NOT EXISTS idx_employee_requests_status ON employee_change_requests (status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_employee_notifications_recipient ON employee_notifications (recipient_username, is_read, created_at DESC);
   `);
 
   const existing = await query(`SELECT id FROM survey_projects WHERE slug = 'pilot-survey' LIMIT 1`);
@@ -1146,6 +1225,7 @@ async function ensureDatabase() {
   await query(`UPDATE survey_responses SET project_id = $1 WHERE project_id IS NULL`, [projectId]);
   await ensureBengaluruTransportQuestions();
   await ensureDefaultClientAccount();
+  await ensureStaffAccountsFromEmployees();
 }
 
 async function ensureBengaluruTransportQuestions() {
@@ -1282,6 +1362,96 @@ async function ensureDefaultClientAccount() {
     ON CONFLICT DO NOTHING`,
     [clientId]
   );
+}
+
+async function ensureStaffAccountsFromEmployees() {
+  const existingEmployees = await query(
+    `SELECT
+      id,
+      employee_code,
+      employee_name,
+      role,
+      branch,
+      team,
+      reporting_team_lead,
+      reporting_team_lead_email,
+      reporting_floor_manager,
+      reporting_floor_manager_email,
+      login_username,
+      login_password_hash,
+      must_change_password,
+      employment_status
+    FROM employees`
+  );
+
+  for (const employee of existingEmployees.rows) {
+    const username = String(employee.login_username || employee.employee_code || '').trim().toLowerCase();
+    if (!username) continue;
+    const displayName = String(employee.employee_name || username).trim();
+    const role = normalizeStaffRole(employee.role);
+    const passwordHash = employee.login_password_hash || hashPassword(defaultStaffPassword);
+    await query(
+      `INSERT INTO staff_accounts (
+        employee_id,
+        username,
+        display_name,
+        role,
+        branch,
+        team,
+        reporting_team_lead,
+        reporting_team_lead_email,
+        reporting_floor_manager,
+        reporting_floor_manager_email,
+        password_hash,
+        must_change_password,
+        is_active
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      ON CONFLICT (username) DO UPDATE SET
+        employee_id = EXCLUDED.employee_id,
+        display_name = EXCLUDED.display_name,
+        role = EXCLUDED.role,
+        branch = EXCLUDED.branch,
+        team = EXCLUDED.team,
+        reporting_team_lead = EXCLUDED.reporting_team_lead,
+        reporting_team_lead_email = EXCLUDED.reporting_team_lead_email,
+        reporting_floor_manager = EXCLUDED.reporting_floor_manager,
+        reporting_floor_manager_email = EXCLUDED.reporting_floor_manager_email,
+        password_hash = COALESCE(staff_accounts.password_hash, EXCLUDED.password_hash),
+        must_change_password = COALESCE(staff_accounts.must_change_password, EXCLUDED.must_change_password),
+        is_active = EXCLUDED.is_active,
+        updated_at = NOW()`,
+      [
+        employee.id,
+        username,
+        displayName,
+        role,
+        employee.branch || null,
+        employee.team || null,
+        employee.reporting_team_lead || null,
+        employee.reporting_team_lead_email || null,
+        employee.reporting_floor_manager || null,
+        employee.reporting_floor_manager_email || null,
+        passwordHash,
+        employee.must_change_password !== false,
+        String(employee.employment_status || 'Active').toLowerCase() === 'active'
+      ]
+    );
+  }
+}
+
+async function authenticateStaffLogin(username, password) {
+  const result = await query(
+    `SELECT *
+    FROM staff_accounts
+    WHERE LOWER(username) = LOWER($1)
+      AND is_active = TRUE
+    LIMIT 1`,
+    [String(username || '').trim()]
+  );
+  const staff = result.rows[0];
+  if (!staff || !verifyPassword(password || '', staff.password_hash)) return null;
+  return staff;
 }
 
 async function authenticateClient(username, password) {
@@ -1820,6 +1990,15 @@ function verifyPassword(password, storedHash) {
   const actual = crypto.scryptSync(String(password), salt, 64).toString('base64url');
   if (Buffer.byteLength(actual) !== Buffer.byteLength(hash)) return false;
   return crypto.timingSafeEqual(Buffer.from(actual), Buffer.from(hash));
+}
+
+function normalizeStaffRole(role) {
+  const normalized = String(role || '').trim().toLowerCase();
+  if (normalized === 'team lead' || normalized === 'tl') return 'teamLead';
+  if (normalized === 'floor manager' || normalized === 'fm') return 'floorManager';
+  if (normalized === 'admin') return 'admin';
+  if (normalized === 'qa/qc' || normalized === 'qc') return 'qaQc';
+  return 'analyst';
 }
 
 function normalizeProject(project) {

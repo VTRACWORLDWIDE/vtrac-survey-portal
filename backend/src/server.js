@@ -1840,12 +1840,6 @@ async function findClientForRecovery(identifier, email) {
 }
 
 async function findStaffForRecovery(identifier, email) {
-  if (
-    (identifier && identifier === normalizeLoginIdentifier(adminUsername)) ||
-    (email && adminEmail && email === adminEmail)
-  ) {
-    return { id: null, username: adminUsername, email: adminEmail || '', displayName: adminDisplayName };
-  }
   const result = await query(
     `SELECT id, username, email, display_name
     FROM staff_accounts
@@ -1855,7 +1849,14 @@ async function findStaffForRecovery(identifier, email) {
     [identifier, email]
   );
   const row = result.rows[0];
-  return row ? { id: row.id, username: row.username, email: row.email || '', displayName: row.display_name } : null;
+  if (row) return { id: row.id, username: row.username, email: row.email || '', displayName: row.display_name };
+  if (
+    (identifier && identifier === normalizeLoginIdentifier(adminUsername)) ||
+    (email && adminEmail && email === adminEmail)
+  ) {
+    return { id: null, username: adminUsername, email: adminEmail || '', displayName: adminDisplayName };
+  }
+  return null;
 }
 
 async function saveProject(payload) {

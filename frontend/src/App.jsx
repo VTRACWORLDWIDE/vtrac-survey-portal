@@ -249,13 +249,14 @@ export default function App() {
   }
 
   const isPublicSurvey = route.startsWith('/p/');
+  const isResetRoute = route.startsWith('/reset-access');
   const isAdminRoute = route.startsWith('/admin');
   const isClientRoute = route.startsWith('/client') || route === '/';
   const publicSlug = isPublicSurvey ? route.replace('/p/', '') : defaultProjectSlug;
 
   return (
     <main>
-      {!isPublicSurvey && !isAdminRoute && !isClientRoute && <header className="topbar">
+      {!isPublicSurvey && !isResetRoute && !isAdminRoute && !isClientRoute && <header className="topbar">
         <div className="brand-block">
           <img className="brand-logo" src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
           <div>
@@ -272,10 +273,127 @@ export default function App() {
       </header>}
       {isPublicSurvey
         ? <SurveyForm projectSlug={publicSlug} />
+        : isResetRoute
+        ? <ResetAccessPage />
         : route.startsWith('/admin')
         ? <AdminApp />
         : <ClientApp />}
     </main>
+  );
+}
+
+
+function ResetAccessPage() {
+  const [token] = useState(() => new URLSearchParams(window.location.search).get('token') || '');
+  const [account, setAccount] = useState(null);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [status, setStatus] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadToken() {
+      if (!token) {
+        setStatus('This access link is missing a token.');
+        setLoading(false);
+        return;
+      }
+      try {
+        const response = await fetch(`${apiBase}/api/auth/access-token/${encodeURIComponent(token)}`);
+        const payload = await response.json();
+        if (cancelled) return;
+        if (!response.ok) {
+          setStatus(payload.error || 'This access link is invalid or expired.');
+          setAccount(null);
+        } else {
+          setAccount(payload);
+          setStatus('');
+        }
+      } catch {
+        if (!cancelled) setStatus('Unable to verify this access link right now.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    loadToken();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  async function submit(event) {
+    event.preventDefault();
+    setStatus('');
+    if (password.length < 8) {
+      setStatus('Password must be at least 8 characters.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setStatus('Passwords do not match.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const response = await fetch(`${apiBase}/api/auth/access-token/${encodeURIComponent(token)}/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        setStatus(payload.error || 'Unable to update password.');
+        return;
+      }
+      setStatus(payload.message || 'Password updated. You can now sign in.');
+      setTimeout(() => {
+        window.history.replaceState({}, '', payload.loginPath || '/client');
+        window.location.reload();
+      }, 1200);
+    } catch {
+      setStatus('Unable to update password right now.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="admin-login-screen reset-access-screen">
+      <div className="reset-access-card modern-auth-card">
+        <div className="admin-login-card-head">
+          <div className="admin-login-logo-chip">
+            <img src="/vtrac-logo.jpg" alt="VTRAC" />
+          </div>
+          <div>
+            <p className="eyebrow">Secure access</p>
+            <h2>Set your VTRAC Survey Portal password</h2>
+          </div>
+        </div>
+        {loading ? (
+          <p className="login-support-text">Checking this secure access link...</p>
+        ) : account ? (
+          <form onSubmit={submit}>
+            <p className="login-support-text">
+              Account: <strong>{account.displayName || account.username}</strong>
+              {account.username ? ` · ${account.username}` : ''}
+            </p>
+            <label>
+              New password
+              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" required />
+            </label>
+            <label>
+              Confirm password
+              <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" required />
+            </label>
+            <button className="primary" disabled={saving}>{saving ? 'Updating...' : 'Set password'}</button>
+          </form>
+        ) : (
+          <p className="login-support-text">This access link could not be used.</p>
+        )}
+        {status && <p className={account ? 'status success' : 'status'}>{status}</p>}
+      </div>
+    </section>
   );
 }
 
@@ -2294,7 +2412,7 @@ function AdminDashboard({ token, onLogout }) {
       setStatus(payload.error || 'Unable to save client.');
       return;
     }
-    setStatus('Client access saved.');
+    setStatus(payload.message || 'Client access saved.');
     setEditingClient(null);
     await loadClients();
   }
@@ -3660,6 +3778,7 @@ function ClientAccessManager({ clients, projects, editingClient, recoveryRequest
           <label>
             Password {editingClient.id && <span className="hint-text">leave blank to keep existing password</span>}
             <input type="password" value={editingClient.password || ''} onChange={(event) => update('password', event.target.value)} />
+            <span className="hint-text">{editingClient.email ? 'Email sends a secure setup/reset link. Password is not emailed.' : 'Without email, share this password manually.'}</span>
           </label>
           <div className="project-check-list">
             {projects.map((project) => (

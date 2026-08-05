@@ -1015,6 +1015,66 @@ textarea {
   top: 0;
 }
 
+.reset-access-screen {
+  align-items: center;
+  display: grid;
+  grid-template-rows: 1fr;
+  justify-items: center;
+  padding: clamp(20px, 4vw, 48px);
+}
+
+.reset-access-card {
+  background:
+    linear-gradient(180deg, rgba(10, 167, 164, 0.06), rgba(255, 255, 255, 0) 34%),
+    #ffffff;
+  border: 1px solid #cadde2;
+  border-radius: 12px;
+  box-shadow: 0 22px 54px rgba(31, 47, 82, 0.14);
+  display: grid;
+  gap: 16px;
+  max-width: 520px;
+  overflow: hidden;
+  padding: 28px 30px;
+  position: relative;
+  width: min(100%, 520px);
+}
+
+.reset-access-card::before {
+  background: linear-gradient(90deg, #0aa7a4, #133e98, #e0a12f);
+  content: "";
+  height: 5px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.reset-access-card form {
+  display: grid;
+  gap: 14px;
+}
+
+.reset-access-card label {
+  color: #253743;
+  font-size: 0.88rem;
+  font-weight: 850;
+}
+
+.reset-access-card input {
+  border-color: #cfdee1;
+  border-radius: 8px;
+  margin-top: 6px;
+  min-height: 48px;
+}
+
+.reset-access-card .primary {
+  background: linear-gradient(90deg, #0a7777, #0aa7a4);
+  border: 0;
+  border-radius: 10px;
+  box-shadow: 0 12px 24px rgba(10, 119, 119, 0.18);
+  min-height: 52px;
+}
+
 .admin-login-card-head {
   align-items: center;
   display: flex;

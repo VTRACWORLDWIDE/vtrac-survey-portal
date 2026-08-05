@@ -9,6 +9,7 @@ import helmet from 'helmet';
 import ExcelJS from 'exceljs';
 import { stringify } from 'csv-stringify/sync';
 import { pool, query } from './db.js';
+import nodemailer from 'nodemailer';
 
 const app = express();
 const port = Number(process.env.PORT || 8081);
@@ -17,6 +18,16 @@ const adminUsername = process.env.ADMIN_USERNAME || 'admin';
 const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
 const adminDisplayName = process.env.ADMIN_DISPLAY_NAME || 'Admin';
 const adminEmail = normalizeEmail(process.env.ADMIN_EMAIL || '');
+const publicAppUrl = String(process.env.PUBLIC_APP_URL || process.env.APP_URL || 'https://survey.vtracworldwide.com').replace(/\/+$/, '');
+const smtpHost = process.env.SMTP_HOST || process.env.MAIL_HOST || 'smtp-relay.gmail.com';
+const smtpPort = Number(process.env.SMTP_PORT || process.env.MAIL_PORT || 587);
+const smtpSecure = String(process.env.SMTP_SECURE || process.env.MAIL_SECURE || 'false').toLowerCase() === 'true';
+const smtpUser = process.env.SMTP_USER || process.env.MAIL_USER || '';
+const smtpPassword = process.env.SMTP_PASS || process.env.SMTP_PASSWORD || process.env.MAIL_PASSWORD || '';
+const smtpHeloName = process.env.SMTP_HELO_NAME || 'survey.vtracworldwide.com';
+const mailFrom = process.env.SMTP_FROM || process.env.MAIL_FROM || 'VTRAC Survey Portal <data@vtracworldwide.com>';
+const recoveryNotifyEmail = normalizeEmail(process.env.RECOVERY_NOTIFY_EMAIL || process.env.SUPPORT_EMAIL || adminEmail || 'nagendra@vtracworldwide.com');
+const mailTransport = createMailTransport();
 const clientUsername = process.env.CLIENT_USERNAME || 'client';
 const clientPassword = process.env.CLIENT_PASSWORD || 'client123';
 const tokenSecret = process.env.ADMIN_TOKEN_SECRET || 'change-this-local-secret';
@@ -109,6 +120,32 @@ app.post('/api/auth/recovery-request', async (req, res, next) => {
   }
 });
 
+app.get('/api/auth/access-token/:token', async (req, res, next) => {
+  try {
+    const record = await loadAccessToken(req.params.token);
+    if (!record) return res.status(404).json({ error: 'This access link is invalid or expired.' });
+    res.json({
+      valid: true,
+      purpose: record.purpose,
+      accountType: record.accountType,
+      displayName: record.displayName,
+      username: record.username,
+      email: record.email
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/auth/access-token/:token/reset-password', async (req, res, next) => {
+  try {
+    const result = await resetPasswordWithAccessToken(req.params.token, req.body?.password);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post('/api/client/login', async (req, res, next) => {
   try {
     const { username, password } = req.body;
@@ -141,7 +178,7 @@ app.get('/api/admin/clients', requireAdmin, async (_req, res, next) => {
 app.post('/api/admin/clients', requireAdmin, async (req, res, next) => {
   try {
     const client = await saveClient(req.body);
-    res.status(201).json({ client });
+    res.status(201).json({ client, message: client.emailNotice || 'Client access saved.' });
   } catch (error) {
     next(error);
   }
@@ -150,7 +187,7 @@ app.post('/api/admin/clients', requireAdmin, async (req, res, next) => {
 app.put('/api/admin/clients/:id', requireAdmin, async (req, res, next) => {
   try {
     const client = await saveClient({ ...req.body, id: req.params.id });
-    res.json({ client });
+    res.json({ client, message: client.emailNotice || 'Client access saved.' });
   } catch (error) {
     next(error);
   }
@@ -1223,6 +1260,17 @@ async function ensureDatabase() {
       resolved_by TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS account_access_tokens (
+      id BIGSERIAL PRIMARY KEY,
+      account_type TEXT NOT NULL CHECK (account_type IN ('staff', 'client')),
+      account_id BIGINT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      purpose TEXT NOT NULL CHECK (purpose IN ('invite', 'password_reset', 'username_recovery')),
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     ALTER TABLE survey_projects ADD COLUMN IF NOT EXISTS settings JSONB NOT NULL DEFAULT '{}'::jsonb;
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS project_id BIGINT REFERENCES survey_projects(id);
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS audio_data TEXT;
@@ -1248,6 +1296,8 @@ async function ensureDatabase() {
     CREATE INDEX IF NOT EXISTS idx_client_project_access_project ON client_project_access (project_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_client_accounts_email_unique ON client_accounts (LOWER(email)) WHERE email IS NOT NULL AND email <> '';
     CREATE INDEX IF NOT EXISTS idx_account_recovery_requests_status ON account_recovery_requests (status, requested_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_account_access_tokens_lookup ON account_access_tokens (token_hash, used_at, expires_at);
+    CREATE INDEX IF NOT EXISTS idx_account_access_tokens_account ON account_access_tokens (account_type, account_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_response_clear_backups_project ON response_clear_backups (project_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_response_clear_backups_expires ON response_clear_backups (expires_at);
     CREATE INDEX IF NOT EXISTS idx_employees_branch ON employees (branch);
@@ -1610,6 +1660,8 @@ async function saveClient(payload) {
   const displayName = String(payload.displayName || payload.username || '').trim();
   const password = String(payload.password || '');
   const projectIds = Array.isArray(payload.projectIds) ? payload.projectIds.map(String) : [];
+  const isNewClient = !payload.id;
+  const shouldSendAccessEmail = Boolean(email && (isNewClient || password));
 
   if (!username || !displayName) {
     const error = new Error('Client username and display name are required.');
@@ -1668,7 +1720,23 @@ async function saveClient(payload) {
     );
   }
 
-  return (await loadClients()).find((item) => item.id === String(client.id));
+  const savedClient = (await loadClients()).find((item) => item.id === String(client.id));
+  if (savedClient && shouldSendAccessEmail) {
+    const emailResult = await sendAccountAccessEmail({
+      accountType: 'client',
+      accountId: client.id,
+      email,
+      username,
+      displayName,
+      purpose: isNewClient ? 'invite' : 'password_reset'
+    });
+    savedClient.emailNotice = emailResult.sent
+      ? (isNewClient ? 'Client access saved and setup email sent.' : 'Client access saved and reset email sent.')
+      : 'Client access saved, but the setup/reset email could not be delivered. Please share the temporary password manually and check SMTP settings.';
+  } else if (savedClient && !email && password) {
+    savedClient.emailNotice = 'Client access saved. Add an email address to send setup/reset links automatically.';
+  }
+  return savedClient;
 }
 
 
@@ -1724,7 +1792,7 @@ async function createRecoveryRequest(payload = {}) {
     ? await findClientForRecovery(identifier, email)
     : await findStaffForRecovery(identifier, email);
 
-  await query(
+  const result = await query(
     `INSERT INTO account_recovery_requests (
       account_type,
       request_type,
@@ -1733,7 +1801,8 @@ async function createRecoveryRequest(payload = {}) {
       matched_account_id,
       matched_username,
       matched_display_name
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7)
+    RETURNING *`,
     [
       accountType,
       requestType,
@@ -1745,16 +1814,21 @@ async function createRecoveryRequest(payload = {}) {
     ]
   );
 
+  const emailResult = await sendRecoveryEmails(result.rows[0], matched);
+  const baseMessage = matched
+    ? 'Recovery request recorded. If the mapped email is available, a secure email has been sent. Admin can also reset access from User Access.'
+    : 'Recovery request recorded. A portal admin will review the details you submitted.';
+
   return {
-    message: matched
-      ? 'Recovery request recorded. A portal admin can verify the account and reset access from User Access.'
-      : 'Recovery request recorded. A portal admin will review the details you submitted.'
+    message: emailResult.sent
+      ? `${baseMessage} Admin alert sent.`
+      : `${baseMessage} Email could not be delivered, but the request is visible to admin.`
   };
 }
 
 async function findClientForRecovery(identifier, email) {
   const result = await query(
-    `SELECT id, username, display_name
+    `SELECT id, username, email, display_name
     FROM client_accounts
     WHERE is_active = TRUE
       AND (($1 <> '' AND LOWER(username) = LOWER($1)) OR ($2 <> '' AND LOWER(COALESCE(email, '')) = LOWER($2)))
@@ -1762,7 +1836,7 @@ async function findClientForRecovery(identifier, email) {
     [identifier, email]
   );
   const row = result.rows[0];
-  return row ? { id: row.id, username: row.username, displayName: row.display_name } : null;
+  return row ? { id: row.id, username: row.username, email: row.email || '', displayName: row.display_name } : null;
 }
 
 async function findStaffForRecovery(identifier, email) {
@@ -1770,10 +1844,10 @@ async function findStaffForRecovery(identifier, email) {
     (identifier && identifier === normalizeLoginIdentifier(adminUsername)) ||
     (email && adminEmail && email === adminEmail)
   ) {
-    return { id: null, username: adminUsername, displayName: adminDisplayName };
+    return { id: null, username: adminUsername, email: adminEmail || '', displayName: adminDisplayName };
   }
   const result = await query(
-    `SELECT id, username, display_name
+    `SELECT id, username, email, display_name
     FROM staff_accounts
     WHERE is_active = TRUE
       AND (($1 <> '' AND LOWER(username) = LOWER($1)) OR ($2 <> '' AND LOWER(COALESCE(email, '')) = LOWER($2)))
@@ -1781,7 +1855,7 @@ async function findStaffForRecovery(identifier, email) {
     [identifier, email]
   );
   const row = result.rows[0];
-  return row ? { id: row.id, username: row.username, displayName: row.display_name } : null;
+  return row ? { id: row.id, username: row.username, email: row.email || '', displayName: row.display_name } : null;
 }
 
 async function saveProject(payload) {
@@ -2183,6 +2257,277 @@ function requireClient(req, res, next) {
   if (!client || client.role !== 'client' || !client.clientId) return res.status(401).json({ error: 'Client login required.' });
   req.client = client;
   next();
+}
+
+
+function createMailTransport() {
+  if (!smtpHost) return null;
+  const options = {
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpSecure,
+    requireTLS: !smtpSecure,
+    name: smtpHeloName
+  };
+  if (smtpUser && smtpPassword) {
+    options.auth = { user: smtpUser, pass: smtpPassword };
+  }
+  return nodemailer.createTransport(options);
+}
+
+function normalizeEmailRecipients(value) {
+  return String(Array.isArray(value) ? value.join(',') : value || '')
+    .split(/[;,]/)
+    .map((item) => normalizeEmail(item))
+    .filter((item, index, all) => item && isLikelyEmail(item) && all.indexOf(item) === index);
+}
+
+async function sendPortalEmail({ to, subject, text, html }) {
+  const recipients = normalizeEmailRecipients(to);
+  if (!recipients.length) return { sent: false, reason: 'no-recipient' };
+  if (!mailTransport) return { sent: false, reason: 'not-configured' };
+  try {
+    await mailTransport.sendMail({ from: mailFrom, to: recipients, subject, text, html });
+    return { sent: true };
+  } catch (error) {
+    console.error('VTRAC email delivery failed:', error.message);
+    return { sent: false, reason: 'delivery-failed' };
+  }
+}
+
+async function createAccessToken(accountType, accountId, purpose, expiresInHours = 48) {
+  const token = crypto.randomBytes(32).toString('base64url');
+  await query(
+    `UPDATE account_access_tokens
+    SET used_at = NOW()
+    WHERE account_type = $1 AND account_id = $2 AND purpose = $3 AND used_at IS NULL`,
+    [accountType, accountId, purpose]
+  );
+  await query(
+    `INSERT INTO account_access_tokens (account_type, account_id, token_hash, purpose, expires_at)
+    VALUES ($1, $2, $3, $4, NOW() + ($5 || ' hours')::interval)`,
+    [accountType, accountId, hashToken(token), purpose, String(expiresInHours)]
+  );
+  return token;
+}
+
+async function loadAccessToken(token) {
+  const tokenHash = hashToken(token);
+  const tokenResult = await query(
+    `SELECT *
+    FROM account_access_tokens
+    WHERE token_hash = $1
+      AND used_at IS NULL
+      AND expires_at > NOW()
+    LIMIT 1`,
+    [tokenHash]
+  );
+  const record = tokenResult.rows[0];
+  if (!record) return null;
+  const account = await loadAccessTokenAccount(record.account_type, record.account_id);
+  if (!account) return null;
+  return {
+    id: record.id,
+    accountType: record.account_type,
+    accountId: record.account_id,
+    purpose: record.purpose,
+    expiresAt: record.expires_at,
+    ...account
+  };
+}
+
+async function loadAccessTokenAccount(accountType, accountId) {
+  const result = accountType === 'client'
+    ? await query(
+      `SELECT id, username, email, display_name
+      FROM client_accounts
+      WHERE id = $1 AND is_active = TRUE
+      LIMIT 1`,
+      [accountId]
+    )
+    : await query(
+      `SELECT id, username, email, display_name
+      FROM staff_accounts
+      WHERE id = $1 AND is_active = TRUE
+      LIMIT 1`,
+      [accountId]
+    );
+  const row = result.rows[0];
+  return row ? { username: row.username, email: row.email || '', displayName: row.display_name } : null;
+}
+
+async function resetPasswordWithAccessToken(token, password) {
+  const nextPassword = String(password || '');
+  if (nextPassword.length < 8) {
+    const error = new Error('Password must be at least 8 characters.');
+    error.status = 400;
+    throw error;
+  }
+  const record = await loadAccessToken(token);
+  if (!record) {
+    const error = new Error('This access link is invalid or expired.');
+    error.status = 400;
+    throw error;
+  }
+  const used = await query(
+    `UPDATE account_access_tokens
+    SET used_at = NOW()
+    WHERE id = $1 AND used_at IS NULL
+    RETURNING id`,
+    [record.id]
+  );
+  if (!used.rows[0]) {
+    const error = new Error('This access link has already been used.');
+    error.status = 400;
+    throw error;
+  }
+  if (record.accountType === 'client') {
+    await query(
+      `UPDATE client_accounts
+      SET password_hash = $1, updated_at = NOW()
+      WHERE id = $2`,
+      [hashPassword(nextPassword), record.accountId]
+    );
+  } else {
+    await query(
+      `UPDATE staff_accounts
+      SET password_hash = $1, must_change_password = FALSE, updated_at = NOW()
+      WHERE id = $2`,
+      [hashPassword(nextPassword), record.accountId]
+    );
+  }
+  return {
+    ok: true,
+    message: 'Password updated. You can now sign in.',
+    loginPath: record.accountType === 'client' ? '/client' : '/admin'
+  };
+}
+
+async function sendAccountAccessEmail({ accountType, accountId, email, username, displayName, purpose }) {
+  if (!email || !accountId) return { sent: false, reason: 'missing-email-or-account' };
+  const token = await createAccessToken(accountType, accountId, purpose);
+  const setupUrl = `${publicAppUrl}/reset-access?token=${encodeURIComponent(token)}`;
+  const isInvite = purpose === 'invite';
+  return sendPortalEmail({
+    to: email,
+    subject: isInvite ? 'Set up your VTRAC Survey Portal access' : 'Reset your VTRAC Survey Portal password',
+    text: [
+      `Hello ${displayName || username},`,
+      isInvite ? 'Your VTRAC Survey Portal client access has been created.' : 'A VTRAC Survey Portal password reset was requested for your account.',
+      `Username: ${username}`,
+      `Set/reset password: ${setupUrl}`,
+      'This secure link expires in 48 hours and can be used once.'
+    ].join('\n'),
+    html: mailShell(isInvite ? 'Set up your access' : 'Reset your password', `
+      <p>Hello ${escapeHtml(displayName || username)},</p>
+      <p>${isInvite ? 'Your VTRAC Survey Portal access has been created.' : 'A password reset was requested for your VTRAC Survey Portal account.'}</p>
+      <table role="presentation" style="width:100%;border-collapse:collapse;margin-top:14px">
+        ${mailTableRow('Username', username)}
+        ${mailTableRow('Email', email)}
+      </table>
+      <p style="margin:24px 0 0"><a href="${escapeHtml(setupUrl)}" style="display:inline-block;background:#087f8c;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">Set password</a></p>
+      <p style="font-size:13px;color:#6b7890;margin-top:18px">This single-use link expires in 48 hours. If you did not expect this email, contact VTRAC.</p>
+    `)
+  });
+}
+
+async function sendRecoveryEmails(request, matched) {
+  if (!request) return { sent: false, reason: 'no-request' };
+  const requestLabel = request.request_type === 'username' ? 'Forgot username' : 'Forgot password';
+  const accountLabel = request.account_type === 'client' ? 'Client' : 'Staff/Admin';
+  const requestedAt = formatExportTimestamp(request.requested_at || new Date()) || new Date().toISOString();
+  const matchedLabel = matched
+    ? `${matched.displayName || matched.username} (${matched.username})`
+    : 'No account matched automatically';
+
+  const adminResult = await sendPortalEmail({
+    to: recoveryNotifyEmail,
+    subject: `[VTRAC Survey] ${requestLabel} request - ${accountLabel}`,
+    text: [
+      `${requestLabel} request received in VTRAC Survey Portal.`,
+      `Account type: ${accountLabel}`,
+      `Identifier: ${request.identifier || '-'}`,
+      `Submitted email: ${request.email || '-'}`,
+      `Matched account: ${matchedLabel}`,
+      `Requested at: ${requestedAt}`,
+      `Open admin: ${publicAppUrl}/admin`
+    ].join('\n'),
+    html: mailShell(`${requestLabel} request`, `
+      <p>A ${escapeHtml(requestLabel.toLowerCase())} request was submitted in the VTRAC Survey Portal.</p>
+      <table role="presentation" style="width:100%;border-collapse:collapse;margin-top:14px">
+        ${mailTableRow('Account type', accountLabel)}
+        ${mailTableRow('Identifier', request.identifier || '-')}
+        ${mailTableRow('Submitted email', request.email || '-')}
+        ${mailTableRow('Matched account', matchedLabel)}
+        ${mailTableRow('Requested at', requestedAt)}
+      </table>
+      <p style="margin:24px 0 0"><a href="${escapeHtml(publicAppUrl)}/admin" style="display:inline-block;background:#1645aa;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">Open User Access</a></p>
+    `)
+  });
+
+  let accountResult = { sent: false, reason: 'no-matched-account-email' };
+  if (matched?.email && matched?.id) {
+    if (request.request_type === 'password') {
+      accountResult = await sendAccountAccessEmail({
+        accountType: request.account_type,
+        accountId: matched.id,
+        email: matched.email,
+        username: matched.username,
+        displayName: matched.displayName,
+        purpose: 'password_reset'
+      });
+    } else {
+      accountResult = await sendPortalEmail({
+        to: matched.email,
+        subject: 'Your VTRAC Survey Portal username',
+        text: [
+          `Hello ${matched.displayName || matched.username},`,
+          `Your VTRAC Survey Portal username is: ${matched.username}`,
+          `Portal: ${publicAppUrl}`
+        ].join('\n'),
+        html: mailShell('Your username', `
+          <p>Hello ${escapeHtml(matched.displayName || matched.username)},</p>
+          <p>Your VTRAC Survey Portal username is:</p>
+          <p style="font-size:20px;font-weight:700;color:#14244a">${escapeHtml(matched.username)}</p>
+          <p><a href="${escapeHtml(publicAppUrl)}" style="color:#087f8c;font-weight:700">Open VTRAC Survey Portal</a></p>
+        `)
+      });
+    }
+  }
+
+  return { sent: adminResult.sent || accountResult.sent, adminResult, accountResult };
+}
+
+function mailShell(title, bodyHtml) {
+  return `
+    <div style="background:#f4f7fb;padding:34px 16px;font-family:Arial,sans-serif;color:#12233f">
+      <div style="max-width:620px;margin:auto;background:#fff;border-radius:14px;padding:34px;border:1px solid #dce5f0">
+        <div style="color:#087f8c;font-size:13px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase">VTRAC Worldwide</div>
+        <h1 style="font-size:25px;line-height:1.25;margin:12px 0 14px;color:#14244a">${escapeHtml(title)}</h1>
+        <div style="font-size:15px;line-height:1.6;color:#53627a">${bodyHtml}</div>
+      </div>
+    </div>`;
+}
+
+function mailTableRow(label, value) {
+  return `
+    <tr>
+      <td style="padding:10px 12px;border-top:1px solid #e4ecf4;color:#6b7890;width:36%;font-weight:700">${escapeHtml(label)}</td>
+      <td style="padding:10px 12px;border-top:1px solid #e4ecf4;color:#12233f">${escapeHtml(value)}</td>
+    </tr>`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(String(token || '')).digest('hex');
 }
 
 function hashPassword(password) {

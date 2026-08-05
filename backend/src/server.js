@@ -15,6 +15,8 @@ const port = Number(process.env.PORT || 8081);
 const localDateExpression = `(submitted_at AT TIME ZONE 'Asia/Kolkata')::date`;
 const adminUsername = process.env.ADMIN_USERNAME || 'admin';
 const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+const adminDisplayName = process.env.ADMIN_DISPLAY_NAME || 'Admin';
+const adminEmail = normalizeEmail(process.env.ADMIN_EMAIL || '');
 const clientUsername = process.env.CLIENT_USERNAME || 'client';
 const clientPassword = process.env.CLIENT_PASSWORD || 'client123';
 const tokenSecret = process.env.ADMIN_TOKEN_SECRET || 'change-this-local-secret';
@@ -66,18 +68,26 @@ app.get('/api/health', (_req, res) => {
 
 app.post('/api/admin/login', (req, res) => {
   const { username, password } = req.body;
-  const normalizedUsername = String(username || '').trim().toLowerCase();
-  if (username === adminUsername && password === adminPassword) {
-    return res.json({ token: createToken(username, 'admin'), username, role: 'admin', displayName: 'Admin' });
+  const identifier = normalizeLoginIdentifier(username);
+  const envAdminMatches = identifier === normalizeLoginIdentifier(adminUsername) || (adminEmail && identifier === adminEmail);
+  if (envAdminMatches && password === adminPassword) {
+    return res.json({
+      token: createToken(adminUsername, 'admin', null, { displayName: adminDisplayName, email: adminEmail || null }),
+      username: adminUsername,
+      role: 'admin',
+      displayName: adminDisplayName,
+      email: adminEmail || null
+    });
   }
-  return authenticateStaffLogin(normalizedUsername, password)
+  return authenticateStaffLogin(identifier, password)
     .then((staff) => {
       if (!staff) return res.status(401).json({ error: 'Invalid staff login.' });
       res.json({
-        token: createToken(staff.username, staff.role, null, { displayName: staff.display_name, employeeCode: staff.employee_code }),
+        token: createToken(staff.username, staff.role, null, { displayName: staff.display_name, email: staff.email, employeeCode: staff.employee_code }),
         username: staff.username,
         role: staff.role,
         displayName: staff.display_name,
+        email: staff.email,
         employeeCode: staff.employee_code
       });
     })
@@ -87,15 +97,25 @@ app.post('/api/admin/login', (req, res) => {
 });
 
 app.get('/api/admin/me', requireAdmin, (req, res) => {
-  res.json({ username: req.admin.username });
+  res.json({ username: req.admin.username, displayName: req.admin.displayName || req.admin.username, email: req.admin.email || null, role: req.admin.role });
+});
+
+app.post('/api/auth/recovery-request', async (req, res, next) => {
+  try {
+    const recovery = await createRecoveryRequest(req.body);
+    res.status(201).json({ ok: true, message: recovery.message });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post('/api/client/login', async (req, res, next) => {
   try {
     const { username, password } = req.body;
-    const client = await authenticateClient(username, password);
+    const identifier = normalizeLoginIdentifier(username);
+    const client = await authenticateClient(identifier, password);
     if (!client) return res.status(401).json({ error: 'Invalid client login.' });
-    res.json({ token: createToken(client.username, 'client', client.id), username: client.username, role: 'client' });
+    res.json({ token: createToken(client.username, 'client', client.id, { displayName: client.displayName, email: client.email }), username: client.username, role: 'client', displayName: client.displayName, email: client.email });
   } catch (error) {
     next(error);
   }
@@ -131,6 +151,23 @@ app.put('/api/admin/clients/:id', requireAdmin, async (req, res, next) => {
   try {
     const client = await saveClient({ ...req.body, id: req.params.id });
     res.json({ client });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/admin/recovery-requests', requireAdmin, async (_req, res, next) => {
+  try {
+    res.json({ requests: await loadRecoveryRequests() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/admin/recovery-requests/:id/resolve', requireAdmin, async (req, res, next) => {
+  try {
+    await resolveRecoveryRequest(req.params.id, req.admin.username);
+    res.json({ ok: true });
   } catch (error) {
     next(error);
   }
@@ -1001,10 +1038,12 @@ app.get('/api/responses/export.kml', requireAdmin, async (req, res, next) => {
 
 app.use((error, _req, res, _next) => {
   console.error(error);
-  const message = error.type === 'entity.too.large'
+  const message = error.status && error.message
+    ? error.message
+    : error.type === 'entity.too.large'
     ? 'Recording upload is too large. Please refresh and submit again.'
     : error.code === '23505'
-    ? 'Project slug already exists.'
+    ? 'A project slug, username, or email already exists.'
     : 'Something went wrong. Please try again.';
   res.status(error.status || 500).json({ error: message });
 });
@@ -1044,6 +1083,7 @@ async function ensureDatabase() {
       id BIGSERIAL PRIMARY KEY,
       employee_id BIGINT REFERENCES employees(id) ON DELETE SET NULL,
       username TEXT NOT NULL UNIQUE,
+      email TEXT,
       display_name TEXT NOT NULL,
       role TEXT NOT NULL,
       branch TEXT,
@@ -1139,6 +1179,7 @@ async function ensureDatabase() {
     CREATE TABLE IF NOT EXISTS client_accounts (
       id BIGSERIAL PRIMARY KEY,
       username TEXT NOT NULL UNIQUE,
+      email TEXT,
       display_name TEXT NOT NULL,
       password_hash TEXT NOT NULL,
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -1167,6 +1208,21 @@ async function ensureDatabase() {
       restored_count INT
     );
 
+    CREATE TABLE IF NOT EXISTS account_recovery_requests (
+      id BIGSERIAL PRIMARY KEY,
+      account_type TEXT NOT NULL CHECK (account_type IN ('staff', 'client')),
+      request_type TEXT NOT NULL CHECK (request_type IN ('username', 'password')),
+      identifier TEXT,
+      email TEXT,
+      matched_account_id BIGINT,
+      matched_username TEXT,
+      matched_display_name TEXT,
+      status TEXT NOT NULL DEFAULT 'Pending',
+      requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      resolved_at TIMESTAMPTZ,
+      resolved_by TEXT
+    );
+
     ALTER TABLE survey_projects ADD COLUMN IF NOT EXISTS settings JSONB NOT NULL DEFAULT '{}'::jsonb;
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS project_id BIGINT REFERENCES survey_projects(id);
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS audio_data TEXT;
@@ -1179,6 +1235,9 @@ async function ensureDatabase() {
     ALTER TABLE response_clear_backups ADD COLUMN IF NOT EXISTS restored_at TIMESTAMPTZ;
     ALTER TABLE response_clear_backups ADD COLUMN IF NOT EXISTS restored_by TEXT;
     ALTER TABLE response_clear_backups ADD COLUMN IF NOT EXISTS restored_count INT;
+    ALTER TABLE staff_accounts ADD COLUMN IF NOT EXISTS email TEXT;
+    ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS email TEXT;
+    ALTER TABLE account_recovery_requests ADD COLUMN IF NOT EXISTS matched_display_name TEXT;
 
     CREATE INDEX IF NOT EXISTS idx_survey_responses_project ON survey_responses (project_id);
     CREATE INDEX IF NOT EXISTS idx_survey_responses_submitted_at ON survey_responses (submitted_at DESC);
@@ -1187,12 +1246,15 @@ async function ensureDatabase() {
     CREATE INDEX IF NOT EXISTS idx_survey_responses_answers ON survey_responses USING GIN (answers);
     CREATE INDEX IF NOT EXISTS idx_client_project_access_client ON client_project_access (client_id);
     CREATE INDEX IF NOT EXISTS idx_client_project_access_project ON client_project_access (project_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_client_accounts_email_unique ON client_accounts (LOWER(email)) WHERE email IS NOT NULL AND email <> '';
+    CREATE INDEX IF NOT EXISTS idx_account_recovery_requests_status ON account_recovery_requests (status, requested_at DESC);
     CREATE INDEX IF NOT EXISTS idx_response_clear_backups_project ON response_clear_backups (project_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_response_clear_backups_expires ON response_clear_backups (expires_at);
     CREATE INDEX IF NOT EXISTS idx_employees_branch ON employees (branch);
     CREATE INDEX IF NOT EXISTS idx_employees_team ON employees (team);
     CREATE INDEX IF NOT EXISTS idx_employees_reporting_fm ON employees (reporting_floor_manager_email);
     CREATE INDEX IF NOT EXISTS idx_staff_accounts_username ON staff_accounts (LOWER(username));
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_accounts_email_unique ON staff_accounts (LOWER(email)) WHERE email IS NOT NULL AND email <> '';
     CREATE INDEX IF NOT EXISTS idx_staff_accounts_role ON staff_accounts (role);
     CREATE INDEX IF NOT EXISTS idx_employee_requests_status ON employee_change_requests (status, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_employee_notifications_recipient ON employee_notifications (recipient_username, is_read, created_at DESC);
@@ -1225,6 +1287,7 @@ async function ensureDatabase() {
   await query(`UPDATE survey_responses SET project_id = $1 WHERE project_id IS NULL`, [projectId]);
   await ensureBengaluruTransportQuestions();
   await ensureDefaultClientAccount();
+  await ensureEnvironmentAdminAccount();
   await ensureStaffAccountsFromEmployees();
 }
 
@@ -1364,6 +1427,24 @@ async function ensureDefaultClientAccount() {
   );
 }
 
+async function ensureEnvironmentAdminAccount() {
+  const username = String(adminUsername || 'admin').trim().toLowerCase();
+  if (!username || !adminPassword) return;
+  await query(
+    `INSERT INTO staff_accounts (username, email, display_name, role, password_hash, must_change_password, is_active)
+    VALUES ($1, $2, $3, 'admin', $4, FALSE, TRUE)
+    ON CONFLICT (username) DO UPDATE SET
+      email = COALESCE(EXCLUDED.email, staff_accounts.email),
+      display_name = EXCLUDED.display_name,
+      role = 'admin',
+      password_hash = EXCLUDED.password_hash,
+      must_change_password = FALSE,
+      is_active = TRUE,
+      updated_at = NOW()`,
+    [username, adminEmail || null, adminDisplayName, hashPassword(adminPassword)]
+  );
+}
+
 async function ensureStaffAccountsFromEmployees() {
   const existingEmployees = await query(
     `SELECT
@@ -1377,6 +1458,7 @@ async function ensureStaffAccountsFromEmployees() {
       reporting_team_lead_email,
       reporting_floor_manager,
       reporting_floor_manager_email,
+      personal_email_optional,
       login_username,
       login_password_hash,
       must_change_password,
@@ -1402,11 +1484,12 @@ async function ensureStaffAccountsFromEmployees() {
         reporting_team_lead_email,
         reporting_floor_manager,
         reporting_floor_manager_email,
+        email,
         password_hash,
         must_change_password,
         is_active
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
       ON CONFLICT (username) DO UPDATE SET
         employee_id = EXCLUDED.employee_id,
         display_name = EXCLUDED.display_name,
@@ -1417,6 +1500,7 @@ async function ensureStaffAccountsFromEmployees() {
         reporting_team_lead_email = EXCLUDED.reporting_team_lead_email,
         reporting_floor_manager = EXCLUDED.reporting_floor_manager,
         reporting_floor_manager_email = EXCLUDED.reporting_floor_manager_email,
+        email = EXCLUDED.email,
         password_hash = COALESCE(staff_accounts.password_hash, EXCLUDED.password_hash),
         must_change_password = COALESCE(staff_accounts.must_change_password, EXCLUDED.must_change_password),
         is_active = EXCLUDED.is_active,
@@ -1432,6 +1516,7 @@ async function ensureStaffAccountsFromEmployees() {
         employee.reporting_team_lead_email || null,
         employee.reporting_floor_manager || null,
         employee.reporting_floor_manager_email || null,
+        normalizeEmail(employee.personal_email_optional || ''),
         passwordHash,
         employee.must_change_password !== false,
         String(employee.employment_status || 'Active').toLowerCase() === 'active'
@@ -1440,32 +1525,34 @@ async function ensureStaffAccountsFromEmployees() {
   }
 }
 
-async function authenticateStaffLogin(username, password) {
+async function authenticateStaffLogin(identifier, password) {
+  const normalized = normalizeLoginIdentifier(identifier);
   const result = await query(
     `SELECT *
     FROM staff_accounts
-    WHERE LOWER(username) = LOWER($1)
+    WHERE (LOWER(username) = LOWER($1) OR LOWER(COALESCE(email, '')) = LOWER($1))
       AND is_active = TRUE
     LIMIT 1`,
-    [String(username || '').trim()]
+    [normalized]
   );
   const staff = result.rows[0];
   if (!staff || !verifyPassword(password || '', staff.password_hash)) return null;
   return staff;
 }
 
-async function authenticateClient(username, password) {
+async function authenticateClient(identifier, password) {
+  const normalized = normalizeLoginIdentifier(identifier);
   const result = await query(
     `SELECT *
     FROM client_accounts
-    WHERE LOWER(username) = LOWER($1)
+    WHERE (LOWER(username) = LOWER($1) OR LOWER(COALESCE(email, '')) = LOWER($1))
       AND is_active = TRUE
     LIMIT 1`,
-    [String(username || '').trim()]
+    [normalized]
   );
   const client = result.rows[0];
   if (!client || !verifyPassword(password || '', client.password_hash)) return null;
-  return { id: String(client.id), username: client.username, displayName: client.display_name };
+  return { id: String(client.id), username: client.username, displayName: client.display_name, email: client.email || null };
 }
 
 async function loadProjectsForClient(clientId) {
@@ -1508,6 +1595,7 @@ async function loadClients() {
   return clients.rows.map((client) => ({
     id: String(client.id),
     username: client.username,
+    email: client.email || '',
     displayName: client.display_name,
     isActive: client.is_active,
     projectIds: access.rows
@@ -1518,12 +1606,18 @@ async function loadClients() {
 
 async function saveClient(payload) {
   const username = String(payload.username || '').trim();
+  const email = normalizeEmail(payload.email || '');
   const displayName = String(payload.displayName || payload.username || '').trim();
   const password = String(payload.password || '');
   const projectIds = Array.isArray(payload.projectIds) ? payload.projectIds.map(String) : [];
 
   if (!username || !displayName) {
     const error = new Error('Client username and display name are required.');
+    error.status = 400;
+    throw error;
+  }
+  if (email && !isLikelyEmail(email)) {
+    const error = new Error('Enter a valid client email address.');
     error.status = 400;
     throw error;
   }
@@ -1538,23 +1632,23 @@ async function saveClient(payload) {
     ? password
       ? await query(
         `UPDATE client_accounts
-        SET username = $1, display_name = $2, password_hash = $3, is_active = $4, updated_at = NOW()
-        WHERE id = $5
+        SET username = $1, email = $2, display_name = $3, password_hash = $4, is_active = $5, updated_at = NOW()
+        WHERE id = $6
         RETURNING *`,
-        [username, displayName, hashPassword(password), payload.isActive !== false, payload.id]
+        [username, email || null, displayName, hashPassword(password), payload.isActive !== false, payload.id]
       )
       : await query(
         `UPDATE client_accounts
-        SET username = $1, display_name = $2, is_active = $3, updated_at = NOW()
-        WHERE id = $4
+        SET username = $1, email = $2, display_name = $3, is_active = $4, updated_at = NOW()
+        WHERE id = $5
         RETURNING *`,
-        [username, displayName, payload.isActive !== false, payload.id]
+        [username, email || null, displayName, payload.isActive !== false, payload.id]
       )
     : await query(
-      `INSERT INTO client_accounts (username, display_name, password_hash, is_active)
-      VALUES ($1, $2, $3, $4)
+      `INSERT INTO client_accounts (username, email, display_name, password_hash, is_active)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING *`,
-      [username, displayName, hashPassword(password), payload.isActive !== false]
+      [username, email || null, displayName, hashPassword(password), payload.isActive !== false]
     );
 
   const client = result.rows[0];
@@ -1575,6 +1669,119 @@ async function saveClient(payload) {
   }
 
   return (await loadClients()).find((item) => item.id === String(client.id));
+}
+
+
+async function loadRecoveryRequests() {
+  const result = await query(
+    `SELECT *
+    FROM account_recovery_requests
+    ORDER BY requested_at DESC
+    LIMIT 50`
+  );
+  return result.rows.map((request) => ({
+    id: String(request.id),
+    accountType: request.account_type,
+    requestType: request.request_type,
+    identifier: request.identifier || '',
+    email: request.email || '',
+    matchedAccountId: request.matched_account_id ? String(request.matched_account_id) : '',
+    matchedUsername: request.matched_username || '',
+    matchedDisplayName: request.matched_display_name || '',
+    status: request.status,
+    requestedAt: request.requested_at,
+    resolvedAt: request.resolved_at,
+    resolvedBy: request.resolved_by || ''
+  }));
+}
+
+async function resolveRecoveryRequest(id, resolvedBy) {
+  await query(
+    `UPDATE account_recovery_requests
+    SET status = 'Resolved', resolved_at = NOW(), resolved_by = $2
+    WHERE id = $1`,
+    [id, resolvedBy || 'admin']
+  );
+}
+
+async function createRecoveryRequest(payload = {}) {
+  const accountType = normalizeAccountType(payload.accountType);
+  const requestType = normalizeRecoveryType(payload.requestType);
+  const identifier = normalizeLoginIdentifier(payload.identifier || payload.username || '');
+  const email = normalizeEmail(payload.email || '');
+  if (!identifier && !email) {
+    const error = new Error('Enter your username or email so the admin can identify the account.');
+    error.status = 400;
+    throw error;
+  }
+  if (email && !isLikelyEmail(email)) {
+    const error = new Error('Enter a valid email address.');
+    error.status = 400;
+    throw error;
+  }
+
+  const matched = accountType === 'client'
+    ? await findClientForRecovery(identifier, email)
+    : await findStaffForRecovery(identifier, email);
+
+  await query(
+    `INSERT INTO account_recovery_requests (
+      account_type,
+      request_type,
+      identifier,
+      email,
+      matched_account_id,
+      matched_username,
+      matched_display_name
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+    [
+      accountType,
+      requestType,
+      identifier || null,
+      email || null,
+      matched?.id || null,
+      matched?.username || null,
+      matched?.displayName || null
+    ]
+  );
+
+  return {
+    message: matched
+      ? 'Recovery request recorded. A portal admin can verify the account and reset access from User Access.'
+      : 'Recovery request recorded. A portal admin will review the details you submitted.'
+  };
+}
+
+async function findClientForRecovery(identifier, email) {
+  const result = await query(
+    `SELECT id, username, display_name
+    FROM client_accounts
+    WHERE is_active = TRUE
+      AND (($1 <> '' AND LOWER(username) = LOWER($1)) OR ($2 <> '' AND LOWER(COALESCE(email, '')) = LOWER($2)))
+    LIMIT 1`,
+    [identifier, email]
+  );
+  const row = result.rows[0];
+  return row ? { id: row.id, username: row.username, displayName: row.display_name } : null;
+}
+
+async function findStaffForRecovery(identifier, email) {
+  if (
+    (identifier && identifier === normalizeLoginIdentifier(adminUsername)) ||
+    (email && adminEmail && email === adminEmail)
+  ) {
+    return { id: null, username: adminUsername, displayName: adminDisplayName };
+  }
+  const result = await query(
+    `SELECT id, username, display_name
+    FROM staff_accounts
+    WHERE is_active = TRUE
+      AND (($1 <> '' AND LOWER(username) = LOWER($1)) OR ($2 <> '' AND LOWER(COALESCE(email, '')) = LOWER($2)))
+    LIMIT 1`,
+    [identifier, email]
+  );
+  const row = result.rows[0];
+  return row ? { id: row.id, username: row.username, displayName: row.display_name } : null;
 }
 
 async function saveProject(payload) {
@@ -1990,6 +2197,28 @@ function verifyPassword(password, storedHash) {
   const actual = crypto.scryptSync(String(password), salt, 64).toString('base64url');
   if (Buffer.byteLength(actual) !== Buffer.byteLength(hash)) return false;
   return crypto.timingSafeEqual(Buffer.from(actual), Buffer.from(hash));
+}
+
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function normalizeLoginIdentifier(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isLikelyEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+}
+
+function normalizeAccountType(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === 'client' ? 'client' : 'staff';
+}
+
+function normalizeRecoveryType(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === 'username' ? 'username' : 'password';
 }
 
 function normalizeStaffRole(role) {

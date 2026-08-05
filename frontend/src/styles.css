@@ -5229,3 +5229,126 @@ tbody tr:hover {
     width: 100%;
   }
 }
+
+.auth-recovery {
+  border-top: 1px solid #dfe9ec;
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+}
+
+.auth-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.auth-recovery-actions button {
+  align-items: center;
+  background: #f5faf9;
+  border: 1px solid #d8e7e5;
+  border-radius: 8px;
+  color: #244560;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 850;
+  gap: 6px;
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
+.auth-recovery-actions button.active {
+  background: #e8f7f5;
+  border-color: #0aa7a4;
+  color: #0a7777;
+}
+
+.auth-recovery-panel {
+  background: #f8fbfa;
+  border: 1px solid #dfe9e6;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.auth-recovery-panel p {
+  color: #607279;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.auth-recovery-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.auth-recovery-panel .status {
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.compact-section-title {
+  align-items: center;
+  gap: 12px;
+}
+
+.compact-section-title h3 {
+  color: #1f2f52;
+  font-size: 1rem;
+  margin: 0;
+}
+
+.recovery-admin-card {
+  background: #f8fbfa;
+  border: 1px solid #dfe9e6;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.recovery-count-chip {
+  background: #eaf7f6;
+  border-radius: 999px;
+  color: #0a7777;
+  font-size: 0.8rem;
+  font-weight: 900;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.recovery-request-row {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dfe9e6;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  padding: 10px 12px;
+}
+
+.recovery-request-row span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.recovery-request-row strong,
+.recovery-request-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recovery-request-row small,
+.recovery-request-row em {
+  color: #607279;
+  font-size: 0.82rem;
+  font-style: normal;
+  font-weight: 700;
+}

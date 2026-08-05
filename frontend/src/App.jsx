@@ -16,6 +16,7 @@ import {
   FileText,
   Flame,
   Image as ImageIcon,
+  KeyRound,
   Layers,
   Link2,
   LogOut,
@@ -34,6 +35,7 @@ import {
   Trash2,
   Upload,
   UserRound,
+  UserSearch,
   X,
   PanelLeftClose,
   PanelLeftOpen,
@@ -1289,7 +1291,7 @@ function ClientApp() {
 }
 
 function ClientLogin({ onLogin }) {
-  const [username, setUsername] = useState('client');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(false);
@@ -1307,6 +1309,8 @@ function ClientLogin({ onLogin }) {
       const payload = await response.json();
       if (!response.ok) return setStatus(payload.error || 'Unable to login.');
       onLogin(payload.token);
+    } catch {
+      setStatus('Unable to reach the login service. Check deployment and network connectivity.');
     } finally {
       setLoading(false);
     }
@@ -1343,18 +1347,113 @@ function ClientLogin({ onLogin }) {
             <h2>View assigned survey dashboards</h2>
           </div>
           <label>
-            Username
-            <input value={username} onChange={(event) => setUsername(event.target.value)} required />
+            Username or email
+            <input
+              value={username}
+              onChange={(event) => {
+                setUsername(event.target.value);
+                setStatus('');
+              }}
+              required
+              autoComplete="username"
+              placeholder="client name or email"
+            />
           </label>
           <label>
             Password
-            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                setStatus('');
+              }}
+              required
+              autoComplete="current-password"
+            />
           </label>
           <button className="primary" disabled={loading}>{loading ? 'Signing in...' : 'Login'}</button>
+          <AccountRecoveryControls accountType="client" />
           {status && <p className="status">{status}</p>}
         </form>
       </div>
     </section>
+  );
+}
+
+function AccountRecoveryControls({ accountType }) {
+  const [mode, setMode] = useState('');
+  const [identifier, setIdentifier] = useState('');
+  const [email, setEmail] = useState('');
+  const [status, setStatus] = useState('');
+  const [loading, setLoading] = useState(false);
+  const isClient = accountType === 'client';
+
+  function openMode(nextMode) {
+    setMode((current) => current === nextMode ? '' : nextMode);
+    setStatus('');
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setStatus('');
+    setLoading(true);
+    try {
+      const response = await fetch(`${apiBase}/api/auth/recovery-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountType: isClient ? 'client' : 'staff',
+          requestType: mode,
+          identifier,
+          email
+        })
+      });
+      const payload = await response.json();
+      setStatus(payload.message || payload.error || 'Recovery request recorded.');
+      if (response.ok) {
+        setIdentifier('');
+        setEmail('');
+      }
+    } catch {
+      setStatus('Unable to record recovery request right now. Please contact the VTRAC admin.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="auth-recovery">
+      <div className="auth-recovery-actions">
+        <button type="button" onClick={() => openMode('username')} className={mode === 'username' ? 'active' : ''}>
+          <UserSearch size={15} /> Forgot username
+        </button>
+        <button type="button" onClick={() => openMode('password')} className={mode === 'password' ? 'active' : ''}>
+          <KeyRound size={15} /> Forgot password
+        </button>
+      </div>
+      {mode && (
+        <form className="auth-recovery-panel" onSubmit={submit}>
+          <p>{mode === 'username' ? 'Enter your email so admin can identify your account.' : 'Enter username or email. Admin will verify and reset access.'}</p>
+          <div className="auth-recovery-grid">
+            {mode === 'password' && (
+              <label>
+                Username
+                <input value={identifier} onChange={(event) => setIdentifier(event.target.value)} placeholder="optional" />
+              </label>
+            )}
+            <label>
+              Email
+              <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@company.com" />
+            </label>
+          </div>
+          <button type="submit" className="secondary compact-button" disabled={loading || (!identifier.trim() && !email.trim())}>
+            <Send size={15} /> {loading ? 'Sending...' : 'Send request'}
+          </button>
+          {status && <p className="status success">{status}</p>}
+        </form>
+      )}
+    </div>
   );
 }
 
@@ -1708,28 +1807,15 @@ function AdminApp() {
 }
 
 function AdminLogin({ onLogin }) {
-  const pilotRoles = [
-    { key: 'analyst', label: 'Analyst', username: 'analyst', password: 'Analyst' },
-    { key: 'teamLead', label: 'Team Lead', username: 'tl', password: 'TL' },
-    { key: 'floorManager', label: 'Floor Manager', username: 'fm', password: 'FM' },
-    { key: 'admin', label: 'Admin', username: 'admin', password: 'admin' }
-  ];
-  const [selectedRole, setSelectedRole] = useState('teamLead');
-  const [username, setUsername] = useState('tl');
-  const [password, setPassword] = useState('TL');
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('');
   const [status, setStatus] = useState('');
-  const activeRole = pilotRoles.find((role) => role.key === selectedRole) || pilotRoles[0];
-
-  function chooseRole(role) {
-    setSelectedRole(role.key);
-    setUsername(role.username);
-    setPassword(role.password);
-    setStatus('');
-  }
+  const [loading, setLoading] = useState(false);
 
   async function submit(event) {
     event.preventDefault();
     setStatus('');
+    setLoading(true);
     try {
       const response = await fetch(`${apiBase}/api/admin/login`, {
         method: 'POST',
@@ -1741,10 +1827,12 @@ function AdminLogin({ onLogin }) {
       onLogin(payload.token);
     } catch {
       setStatus('Unable to reach the login service. Check deployment and network connectivity.');
+    } finally {
+      setLoading(false);
     }
   }
 
-    return (
+  return (
     <section className="admin-login-screen">
       <div className="admin-login-shell">
         <header className="admin-login-topbar">
@@ -1754,7 +1842,7 @@ function AdminLogin({ onLogin }) {
           </div>
           <div className="admin-login-topbar-copy">
             <span className="eyebrow">Staff access</span>
-            <strong>One login surface for pilot testing</strong>
+            <strong>Secure admin workspace</strong>
           </div>
         </header>
 
@@ -1765,28 +1853,15 @@ function AdminLogin({ onLogin }) {
                 <img src="/vtrac-logo.jpg" alt="VTRAC" />
               </div>
               <div>
-                <p className="eyebrow">Secure sign in</p>
-                <h2>Log in to continue</h2>
+                <p className="eyebrow">Administrator</p>
+                <h2>Sign in to manage field projects</h2>
               </div>
             </div>
             <p className="login-support-text">
-              Use your assigned pilot credentials. Team Lead access is ready for testing now.
+              Use your VTRAC username or mapped email to access projects, dashboards, clients, and exports.
             </p>
-            <div className="admin-role-grid" role="tablist" aria-label="Pilot login roles">
-              {pilotRoles.map((role) => (
-                <button
-                  key={role.key}
-                  type="button"
-                  className={`role-chip ${selectedRole === role.key ? 'active' : ''}`}
-                  onClick={() => chooseRole(role)}
-                >
-                  <span>{role.label}</span>
-                  <small>{role.username}</small>
-                </button>
-              ))}
-            </div>
             <label>
-              User ID
+              Username or email
               <input
                 value={username}
                 onChange={(event) => {
@@ -1795,7 +1870,7 @@ function AdminLogin({ onLogin }) {
                 }}
                 required
                 autoComplete="username"
-                placeholder={activeRole.username}
+                placeholder="admin or name@vtracworldwide.com"
               />
             </label>
             <label>
@@ -1809,13 +1884,13 @@ function AdminLogin({ onLogin }) {
                 }}
                 required
                 autoComplete="current-password"
-                placeholder={activeRole.password}
               />
             </label>
-            <button className="primary">Sign in</button>
+            <button className="primary" disabled={loading}>{loading ? 'Signing in...' : 'Login'}</button>
+            <AccountRecoveryControls accountType="staff" />
             {status && <p className="status">{status}</p>}
             <div className="admin-login-assurance">
-              <span><ShieldCheck size={16} /> Role-based access</span>
+              <span><ShieldCheck size={16} /> Admin controlled</span>
               <span><CheckCircle2 size={16} /> Cloud synced</span>
               <span><BarChart3 size={16} /> Dashboard ready</span>
             </div>
@@ -1823,17 +1898,19 @@ function AdminLogin({ onLogin }) {
 
           <aside className="admin-login-visual auth-info-panel" aria-label="VTRAC staff login overview">
             <div className="auth-info-card">
-              <span className="eyebrow">Pilot credentials</span>
-              <h3>Team Lead access</h3>
-              <p>Use <strong>tl / TL</strong> to test the Team Lead experience.</p>
+              <span className="eyebrow">Account mapping</span>
+              <h3>Username or email</h3>
+              <p>Staff and client accounts can be tied to email addresses for cleaner access and support.</p>
             </div>
             <div className="auth-info-card">
-              <span className="eyebrow">Other roles</span>
-              <p>Analyst, Floor Manager, and Admin pilot logins are enabled in the same sign in flow.</p>
+              <span className="eyebrow">Recovery control</span>
+              <h3>Admin verified</h3>
+              <p>Forgot username and password requests are recorded for admin review before any access change.</p>
             </div>
             <div className="auth-info-card">
-              <span className="eyebrow">What happens after sign in</span>
-              <p>You land on the role-scoped dashboard shell and can review the current pilot workflow.</p>
+              <span className="eyebrow">Client access</span>
+              <h3>Project scoped</h3>
+              <p>Create client logins and assign only the specific projects they should be able to view.</p>
             </div>
           </aside>
         </div>
@@ -1845,6 +1922,7 @@ function AdminLogin({ onLogin }) {
 function AdminDashboard({ token, onLogout }) {
   const [projects, setProjects] = useState([]);
   const [clients, setClients] = useState([]);
+  const [recoveryRequests, setRecoveryRequests] = useState([]);
   const [filterOptions, setFilterOptions] = useState({ enumerators: [], locations: [] });
   const [selectedId, setSelectedId] = useState('');
   const [editing, setEditing] = useState(null);
@@ -1952,6 +2030,13 @@ function AdminDashboard({ token, onLogout }) {
     setClients(payload.clients || []);
   }
 
+  async function loadRecoveryRequests() {
+    const response = await fetch(`${apiBase}/api/admin/recovery-requests`, { headers: authHeaders });
+    if (response.status === 401) return onLogout();
+    const payload = await response.json();
+    setRecoveryRequests(payload.requests || []);
+  }
+
   async function loadFilterOptions() {
     if (!isPortfolioSection && !selectedProject) return;
     const params = new URLSearchParams();
@@ -1980,6 +2065,8 @@ function AdminDashboard({ token, onLogout }) {
   async function refreshAdminData() {
     await Promise.all([
       loadProjects(),
+      loadClients(),
+      loadRecoveryRequests(),
       loadDashboard(),
       loadFilterOptions()
     ]);
@@ -2045,6 +2132,7 @@ function AdminDashboard({ token, onLogout }) {
   useEffect(() => {
     loadProjects();
     loadClients();
+    loadRecoveryRequests();
   }, []);
 
   useEffect(() => {
@@ -2180,6 +2268,7 @@ function AdminDashboard({ token, onLogout }) {
   function startNewClient() {
     setEditingClient({
       username: '',
+      email: '',
       displayName: '',
       password: '',
       isActive: true,
@@ -2208,6 +2297,22 @@ function AdminDashboard({ token, onLogout }) {
     setStatus('Client access saved.');
     setEditingClient(null);
     await loadClients();
+  }
+
+  async function resolveRecoveryRequest(requestId) {
+    setStatus('');
+    const response = await fetch(`${apiBase}/api/admin/recovery-requests/${requestId}/resolve`, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Content-Type': 'application/json' }
+    });
+    if (response.status === 401) return onLogout();
+    const payload = await response.json();
+    if (!response.ok) {
+      setStatus(payload.error || 'Unable to resolve recovery request.');
+      return;
+    }
+    setStatus('Recovery request marked resolved.');
+    await loadRecoveryRequests();
   }
 
   async function openResponse(responseId, mode = 'view') {
@@ -2952,11 +3057,13 @@ function AdminDashboard({ token, onLogout }) {
               clients={clients}
               projects={projects}
               editingClient={editingClient}
+              recoveryRequests={recoveryRequests}
               onStartNew={startNewClient}
               onEdit={editClient}
               onChange={setEditingClient}
               onCancel={() => setEditingClient(null)}
               onSave={saveClient}
+              onResolveRecovery={resolveRecoveryRequest}
             />
             </section>
           )}
@@ -3512,7 +3619,7 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
   );
 }
 
-function ClientAccessManager({ clients, projects, editingClient, onStartNew, onEdit, onChange, onCancel, onSave }) {
+function ClientAccessManager({ clients, projects, editingClient, recoveryRequests = [], onStartNew, onEdit, onChange, onCancel, onSave, onResolveRecovery }) {
   function update(field, value) {
     onChange({ ...editingClient, [field]: value });
   }
@@ -3544,6 +3651,10 @@ function ClientAccessManager({ clients, projects, editingClient, onStartNew, onE
             <label>
               Username
               <input value={editingClient.username} onChange={(event) => update('username', event.target.value)} />
+            </label>
+            <label>
+              Email
+              <input type="email" value={editingClient.email || ''} onChange={(event) => update('email', event.target.value)} placeholder="name@client.com" />
             </label>
           </div>
           <label>
@@ -3579,11 +3690,40 @@ function ClientAccessManager({ clients, projects, editingClient, onStartNew, onE
           <button className="client-list-row" key={client.id} onClick={() => onEdit(client)}>
             <span>
               <strong>{client.displayName}</strong>
-              <small>{client.username} · {client.isActive ? 'Active' : 'Inactive'}</small>
+              <small>{client.username}{client.email ? ' · ' + client.email : ''} · {client.isActive ? 'Active' : 'Inactive'}</small>
             </span>
             <em>{client.projectIds.length} project{client.projectIds.length === 1 ? '' : 's'}</em>
           </button>
         ))}
+      </div>
+
+      <div className="recovery-admin-card">
+        <div className="section-title compact-section-title">
+          <div>
+            <p className="eyebrow">Account recovery</p>
+            <h3>Forgot username / password requests</h3>
+          </div>
+          <span className="recovery-count-chip">{recoveryRequests.filter((request) => request.status !== 'Resolved').length} pending</span>
+        </div>
+        {recoveryRequests.length === 0 && <p className="empty">No recovery requests yet.</p>}
+        {recoveryRequests.map((request) => {
+          const isResolved = request.status === 'Resolved';
+          return (
+            <div className="recovery-request-row" key={request.id}>
+              <span>
+                <strong>{request.requestType === 'username' ? 'Forgot username' : 'Forgot password'} · {request.accountType}</strong>
+                <small>
+                  {request.matchedDisplayName || request.matchedUsername || request.identifier || request.email || 'Unmatched account'}
+                  {request.email ? ' · ' + request.email : ''}
+                </small>
+              </span>
+              <em>{formatDateTime(request.requestedAt)}</em>
+              <button className="secondary compact-button" disabled={isResolved || !onResolveRecovery} onClick={() => onResolveRecovery(request.id)}>
+                {isResolved ? 'Resolved' : 'Mark resolved'}
+              </button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -668,13 +668,13 @@ textarea {
 .admin-login-layout {
   align-items: center;
   display: grid;
-  gap: clamp(18px, 3vw, 36px);
-  grid-template-columns: minmax(0, 1fr);
-  height: calc(100svh - 78px);
+  gap: clamp(24px, 3vw, 42px);
+  grid-template-columns: minmax(380px, 520px) minmax(420px, 640px);
+  justify-content: center;
   margin: 0 auto;
-  max-width: 1120px;
-  min-height: 0;
-  padding: clamp(18px, 3vw, 38px) clamp(18px, 3vw, 42px);
+  max-width: 1260px;
+  min-height: calc(100svh - 78px);
+  padding: clamp(24px, 3vw, 42px);
   width: 100%;
 }
 
@@ -1002,6 +1002,7 @@ textarea {
   padding: 28px 30px;
   position: relative;
   width: 100%;
+  z-index: 2;
 }
 
 .admin-login-card::before {
@@ -1150,10 +1151,13 @@ textarea {
 }
 
 .auth-info-panel {
-  align-self: stretch;
+  align-content: center;
+  align-self: center;
   gap: 14px;
-  grid-template-rows: repeat(3, minmax(0, 1fr));
-  padding: 18px;
+  grid-template-rows: repeat(3, auto);
+  justify-self: stretch;
+  min-height: min(560px, calc(100svh - 132px));
+  padding: 22px;
 }
 
 .auth-info-card {
@@ -4670,6 +4674,7 @@ tbody tr:hover {
 
   .admin-login-layout {
     align-items: start;
+    grid-template-columns: 1fr;
     height: auto;
     min-height: auto;
   }
@@ -4698,11 +4703,8 @@ tbody tr:hover {
   }
 
   .auth-info-panel {
+    min-height: auto;
     order: 2;
-  }
-
-  .admin-login-layout {
-    grid-template-columns: 1fr;
   }
 
   .client-login-feature-grid {

@@ -4220,6 +4220,15 @@ function escapeHtml(value) {
 
 function ProjectEditor({ project, onChange, onCancel, onSave }) {
   const settings = normalizeSurveySettings(project.settings, project.slug);
+  const questions = Array.isArray(project.questions) ? project.questions : [];
+  const [studioTab, setStudioTab] = useState('builder');
+  const [propertiesTab, setPropertiesTab] = useState('properties');
+  const [questionSearch, setQuestionSearch] = useState('');
+  const [activeSection, setActiveSection] = useState('Vehicle Ownership');
+  const [selectedQuestionIndex, setSelectedQuestionIndex] = useState(0);
+  const [draggedQuestionIndex, setDraggedQuestionIndex] = useState(null);
+  const selectedIndex = questions.length ? Math.min(selectedQuestionIndex, questions.length - 1) : -1;
+  const selectedQuestion = selectedIndex >= 0 ? questions[selectedIndex] : null;
 
   function update(field, value) {
     onChange({ ...project, [field]: value });
@@ -4238,25 +4247,152 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
   }
 
   function updateQuestion(index, field, value) {
-    const questions = [...project.questions];
-    questions[index] = { ...questions[index], [field]: value };
-    onChange({ ...project, questions });
+    const nextQuestions = [...questions];
+    nextQuestions[index] = { ...nextQuestions[index], [field]: value };
+    onChange({ ...project, questions: nextQuestions });
+  }
+
+  function patchQuestion(index, patch) {
+    const nextQuestions = [...questions];
+    nextQuestions[index] = { ...nextQuestions[index], ...patch };
+    onChange({ ...project, questions: nextQuestions });
   }
 
   function addQuestion() {
-    onChange({ ...project, questions: [...project.questions, { ...blankQuestion }] });
+    addQuestionFromBank({
+      label: 'Short Text',
+      type: 'text',
+      templateLabel: 'New question'
+    });
   }
 
   function removeQuestion(index) {
-    onChange({ ...project, questions: project.questions.filter((_, currentIndex) => currentIndex !== index) });
+    const nextQuestions = questions.filter((_, currentIndex) => currentIndex !== index);
+    onChange({ ...project, questions: nextQuestions });
+    setSelectedQuestionIndex(Math.max(0, Math.min(index, nextQuestions.length - 1)));
   }
 
   function moveQuestion(index, direction) {
     const nextIndex = index + direction;
-    if (nextIndex < 0 || nextIndex >= project.questions.length) return;
-    const questions = [...project.questions];
-    [questions[index], questions[nextIndex]] = [questions[nextIndex], questions[index]];
-    onChange({ ...project, questions });
+    if (nextIndex < 0 || nextIndex >= questions.length) return;
+    const nextQuestions = [...questions];
+    [nextQuestions[index], nextQuestions[nextIndex]] = [nextQuestions[nextIndex], nextQuestions[index]];
+    onChange({ ...project, questions: nextQuestions });
+    setSelectedQuestionIndex(nextIndex);
+  }
+
+  function reorderQuestion(fromIndex, toIndex) {
+    if (fromIndex === null || fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    const nextQuestions = [...questions];
+    const [movedQuestion] = nextQuestions.splice(fromIndex, 1);
+    nextQuestions.splice(toIndex, 0, movedQuestion);
+    onChange({ ...project, questions: nextQuestions });
+    setSelectedQuestionIndex(toIndex);
+    setDraggedQuestionIndex(null);
+  }
+
+  function duplicateQuestion(index) {
+    const source = questions[index];
+    if (!source) return;
+    const copiedQuestion = {
+      ...source,
+      id: `${source.id || variableFromLabel(source.label, index)}_copy_${questions.length + 1}`,
+      label: `${source.label || 'Question'} copy`
+    };
+    const nextQuestions = [...questions];
+    nextQuestions.splice(index + 1, 0, copiedQuestion);
+    onChange({ ...project, questions: nextQuestions });
+    setSelectedQuestionIndex(index + 1);
+  }
+
+  function variableFromLabel(label, index) {
+    const base = String(label || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 34);
+    return base || `q${index + 1}`;
+  }
+
+  function stableQuestionType(type) {
+    if (type === 'long-text' || type === 'textarea' || type === 'consent') return 'textarea';
+    if (['number', 'decimal', 'slider', 'rating', 'nps'].includes(type)) return 'number';
+    if (['date', 'time'].includes(type)) return 'date';
+    if (
+      ['yes-no', 'single-choice', 'multiple-choice', 'dropdown', 'ranking', 'autocomplete', 'likert', 'matrix'].includes(type)
+    ) {
+      return 'select';
+    }
+    return 'text';
+  }
+
+  function defaultOptionsForType(type) {
+    if (type === 'yes-no') return 'Yes\nNo';
+    if (type === 'likert') return 'Strongly disagree\nDisagree\nNeutral\nAgree\nStrongly agree';
+    if (type === 'rating') return '1\n2\n3\n4\n5';
+    if (type === 'nps') return '0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10';
+    if (type === 'single-choice' || type === 'multiple-choice' || type === 'dropdown') return 'Option 1\nOption 2\nOther';
+    if (type === 'ranking') return 'First choice\nSecond choice\nThird choice';
+    return '';
+  }
+
+  function questionTypeLabel(question) {
+    const labels = {
+      text: 'Short Text',
+      textarea: 'Long Text',
+      number: 'Number',
+      date: 'Date',
+      select: 'Choice'
+    };
+    return labels[question?.type] || 'Short Text';
+  }
+
+  function optionRowsFor(question) {
+    const labels = String(question?.options || '')
+      .split(/\r?\n/)
+      .map((option) => option.trim())
+      .filter(Boolean);
+    return labels.map((label, index) => ({
+      code: String(index + 1).padStart(2, '0'),
+      label,
+      exclusive: /other|none|refused|don't know/i.test(label)
+    }));
+  }
+
+  function updateOptionLabel(optionIndex, value) {
+    if (!selectedQuestion) return;
+    const rows = optionRowsFor(selectedQuestion);
+    rows[optionIndex] = { ...(rows[optionIndex] || {}), label: value };
+    patchQuestion(selectedIndex, { options: rows.map((row) => row.label).filter(Boolean).join('\n') });
+  }
+
+  function addOption() {
+    if (!selectedQuestion) return;
+    const rows = optionRowsFor(selectedQuestion);
+    rows.push({ code: String(rows.length + 1).padStart(2, '0'), label: `Option ${rows.length + 1}`, exclusive: false });
+    patchQuestion(selectedIndex, { options: rows.map((row) => row.label).join('\n') });
+  }
+
+  function removeOption(optionIndex) {
+    if (!selectedQuestion) return;
+    const rows = optionRowsFor(selectedQuestion).filter((_, index) => index !== optionIndex);
+    patchQuestion(selectedIndex, { options: rows.map((row) => row.label).join('\n') });
+  }
+
+  function addQuestionFromBank(item) {
+    const nextIndex = questions.length;
+    const label = item.templateLabel || item.label || 'New question';
+    const nextQuestion = {
+      ...blankQuestion,
+      id: variableFromLabel(label, nextIndex),
+      label,
+      type: stableQuestionType(item.type),
+      options: defaultOptionsForType(item.type),
+      required: false
+    };
+    onChange({ ...project, questions: [...questions, nextQuestion] });
+    setSelectedQuestionIndex(nextIndex);
+    setActiveSection(activeSection || 'Draft Section');
   }
 
   const componentControls = [
@@ -4286,21 +4422,124 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
       description: 'Use only for household surveys where an ID is required.'
     }
   ];
+  const questionBankGroups = [
+    {
+      title: 'Basic',
+      items: [
+        { label: 'Short Text', type: 'text' },
+        { label: 'Long Text', type: 'long-text' },
+        { label: 'Number', type: 'number' },
+        { label: 'Decimal', type: 'decimal' },
+        { label: 'Date', type: 'date' },
+        { label: 'Time', type: 'time' },
+        { label: 'Yes / No', type: 'yes-no' }
+      ]
+    },
+    {
+      title: 'Choice',
+      items: [
+        { label: 'Single Choice', type: 'single-choice' },
+        { label: 'Multiple Choice', type: 'multiple-choice' },
+        { label: 'Dropdown', type: 'dropdown' },
+        { label: 'Ranking', type: 'ranking' },
+        { label: 'Autocomplete', type: 'autocomplete' }
+      ]
+    },
+    {
+      title: 'Scale',
+      items: [
+        { label: 'Likert', type: 'likert' },
+        { label: 'Rating', type: 'rating' },
+        { label: 'Slider', type: 'slider' },
+        { label: 'Matrix', type: 'matrix' },
+        { label: 'NPS', type: 'nps' }
+      ]
+    },
+    {
+      title: 'Field Survey',
+      items: [
+        { label: 'GPS Location', type: 'gps', templateLabel: 'Capture GPS location' },
+        { label: 'Photo / Video', type: 'media', templateLabel: 'Attach media evidence' },
+        { label: 'Audio', type: 'audio', templateLabel: 'Audio verification note' },
+        { label: 'Signature', type: 'signature', templateLabel: 'Respondent signature' },
+        { label: 'Barcode / QR', type: 'barcode', templateLabel: 'Scan barcode or QR code' },
+        { label: 'File Upload', type: 'file', templateLabel: 'Upload supporting document' }
+      ]
+    },
+    {
+      title: 'Advanced',
+      items: [
+        { label: 'Repeating Group', type: 'roster', templateLabel: 'Roster details' },
+        { label: 'Matrix', type: 'matrix', templateLabel: 'Matrix question' },
+        { label: 'Calculated Field', type: 'calculated', templateLabel: 'Calculated value' },
+        { label: 'Zone / Map', type: 'zone', templateLabel: 'Zone mapped location' },
+        { label: 'Lookup', type: 'lookup', templateLabel: 'Lookup value' },
+        { label: 'Consent', type: 'consent', templateLabel: 'Consent statement' }
+      ]
+    }
+  ];
+  const visibleQuestionBankGroups = questionBankGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => item.label.toLowerCase().includes(questionSearch.trim().toLowerCase()))
+    }))
+    .filter((group) => group.items.length > 0);
+  const studioTabs = ['Builder', 'Logic', 'Quality Rules', 'Languages', 'Variables', 'Versions', 'Settings'];
+  const propertyTabs = ['Properties', 'Logic', 'Validation', 'Quality'];
+  const sectionTabs = [
+    'Introduction & Consent',
+    'Household',
+    'Socio-Economic',
+    'Vehicle Ownership',
+    'Travel Behaviour',
+    'Origin Destination',
+    'Enumerator Observation'
+  ];
+  const surveyHealth = Math.min(98, Math.max(58, 70 + Math.round(questions.length * 1.8) + (questions.some((question) => question.required) ? 8 : 0)));
+  const logicRuleCount = questions.filter((question) => question.type === 'select').length;
+  const qualityRuleCount = Object.values(settings.componentPolicy || {}).filter((mode) => mode !== 'off').length;
+  const estimatedMinutes = Math.max(4, Math.round(questions.length * 1.35));
+  const optionRows = optionRowsFor(selectedQuestion);
 
   return (
-    <div className="editor-panel">
-      <div className="section-title">
+    <div className="survey-studio-shell">
+      <div className="survey-studio-header">
         <div>
-          <p className="eyebrow">Form Designer</p>
-          <h2>{project.id ? 'Edit Project Form' : 'New Project Form'}</h2>
+          <button type="button" className="studio-back-button" onClick={onCancel}>Back to projects</button>
+          <div className="studio-title-row">
+            <h2>{project.name || 'Untitled Survey'}</h2>
+            <span className="studio-version">v1.4</span>
+            <span className="studio-status"><CheckCircle2 size={14} /> Draft</span>
+            <span className="studio-save-state">Autosaved just now</span>
+          </div>
+          <p>{project.description || 'Build, validate, test, and publish a professional field survey.'}</p>
         </div>
-        <div className="actions">
-          <button className="secondary" onClick={onCancel}>Cancel</button>
-          <button className="primary" onClick={() => onSave(project)}><Save size={18} /> Save</button>
+        <div className="studio-header-actions">
+          <span className="studio-avatar-stack"><span>NR</span><span>QA</span><span>+3</span></span>
+          <button type="button" className="secondary"><Eye size={16} /> Preview</button>
+          <button type="button" className="secondary"><Send size={16} /> Run Test</button>
+          <button type="button" className="primary" onClick={() => onSave(project)}><Upload size={16} /> Publish</button>
+          <button type="button" className="primary" onClick={() => onSave(project)}><Save size={16} /> Save</button>
         </div>
       </div>
 
-      <div className="inline-grid">
+      <div className="studio-top-tabs" role="tablist" aria-label="Survey Studio workflow tabs">
+        {studioTabs.map((tab) => {
+          const key = tab.toLowerCase().replaceAll(' ', '-');
+          return (
+            <button
+              key={tab}
+              type="button"
+              className={studioTab === key ? 'active' : ''}
+              onClick={() => setStudioTab(key)}
+            >
+              {tab}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="studio-project-setup">
         <label>
           Project name
           <input value={project.name} onChange={(event) => update('name', event.target.value)} />
@@ -4309,20 +4548,300 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
           URL slug
           <input value={project.slug} onChange={(event) => update('slug', event.target.value)} placeholder="example-survey" />
         </label>
+        <label>
+          Description
+          <input value={project.description} onChange={(event) => update('description', event.target.value)} />
+        </label>
+        <label>
+          Locations
+          <textarea value={project.locations} onChange={(event) => update('locations', event.target.value)} />
+        </label>
       </div>
-      <label>
-        Description
-        <textarea value={project.description} onChange={(event) => update('description', event.target.value)} />
-      </label>
-      <label>
-        Locations
-        <textarea value={project.locations} onChange={(event) => update('locations', event.target.value)} />
-      </label>
 
-      <div className="form-section component-settings">
-        <div className="section-kicker"><ShieldCheck size={16} /> Survey components</div>
-        <p className="component-settings-note">Set each reusable survey feature as off, optional, or mandatory for this project.</p>
-        <div className="component-grid">
+      <div className="survey-studio-grid">
+        <aside className="studio-question-bank">
+          <div className="studio-panel-title">
+            <ClipboardList size={18} />
+            <span>Question Bank</span>
+          </div>
+          <label className="studio-search">
+            <Search size={15} />
+            <input value={questionSearch} onChange={(event) => setQuestionSearch(event.target.value)} placeholder="Search question types..." />
+          </label>
+          <div className="studio-bank-groups">
+            {visibleQuestionBankGroups.map((group) => (
+              <div className="studio-bank-group" key={group.title}>
+                <h3>{group.title}</h3>
+                {group.items.map((item) => (
+                  <button key={`${group.title}-${item.label}`} type="button" onClick={() => addQuestionFromBank(item)}>
+                    <Plus size={14} />
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="studio-bank-actions">
+            <button type="button" className="secondary" onClick={addQuestion}><Plus size={16} /> Custom Question</button>
+            <button type="button" className="secondary"><Layers size={16} /> Question Library</button>
+          </div>
+        </aside>
+
+        <main className="studio-canvas">
+          <div className="studio-meta-grid">
+            <div><strong>{questions.length}</strong><span>Total Questions</span></div>
+            <div><strong>{sectionTabs.length}</strong><span>Sections</span></div>
+            <div><strong>{logicRuleCount}</strong><span>Logic Rules</span></div>
+            <div><strong>{qualityRuleCount}</strong><span>Quality Rules</span></div>
+            <div><strong>4</strong><span>Languages</span></div>
+            <div><strong>{estimatedMinutes}-{estimatedMinutes + 5} min</strong><span>Est. Duration</span></div>
+            <div className="studio-health">
+              <span style={{ '--health': `${surveyHealth}%` }}>{surveyHealth}</span>
+              <small>Survey Health</small>
+            </div>
+          </div>
+
+          <div className="studio-section-tabs" role="tablist" aria-label="Survey sections">
+            {sectionTabs.map((section, index) => (
+              <button
+                key={section}
+                type="button"
+                className={activeSection === section ? 'active' : ''}
+                onClick={() => setActiveSection(section)}
+              >
+                {index + 1}. {section}
+              </button>
+            ))}
+            <button type="button" className="studio-more-button" title="More sections">...</button>
+          </div>
+
+          <section className="studio-section-card">
+            <div className="studio-section-card-header">
+              <div>
+                <p className="eyebrow">Section {Math.max(1, sectionTabs.indexOf(activeSection) + 1)}</p>
+                <h3>{activeSection}</h3>
+                <span>Organise questions, response options, quality checks, and branching rules.</span>
+              </div>
+              <div className="studio-section-actions">
+                <button type="button" className="secondary">Collapse</button>
+                <button type="button" className="secondary"><Copy size={15} /> Duplicate</button>
+                <button type="button" className="secondary"><Plus size={15} /> Add Section</button>
+              </div>
+            </div>
+
+            {questions.length === 0 ? (
+              <div className="studio-empty-canvas">
+                <ClipboardList size={32} />
+                <h3>Start building your survey</h3>
+                <p>Add a question from the bank or create a custom question.</p>
+                <button type="button" className="primary" onClick={addQuestion}><Plus size={16} /> Add first question</button>
+              </div>
+            ) : (
+              <div className="studio-question-stack">
+                {questions.map((question, index) => {
+                  const isSelected = index === selectedIndex;
+                  const rows = optionRowsFor(question).slice(0, 6);
+                  return (
+                    <article
+                      key={`${question.id || 'question'}-${index}`}
+                      className={`studio-question-card ${isSelected ? 'selected' : ''}`}
+                      draggable
+                      onDragStart={() => setDraggedQuestionIndex(index)}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={() => reorderQuestion(draggedQuestionIndex, index)}
+                      onClick={() => setSelectedQuestionIndex(index)}
+                    >
+                      <div className="studio-question-card-header">
+                        <span className="studio-drag-handle">::</span>
+                        <strong>Q{index + 1}</strong>
+                        <div>
+                          <h4>{question.label || 'Untitled question'}</h4>
+                          <p>{question.id || variableFromLabel(question.label, index)}</p>
+                        </div>
+                        <span className="studio-pill">{questionTypeLabel(question)}</span>
+                        {question.required && <span className="studio-pill danger">Required</span>}
+                        {question.type === 'select' && <span className="studio-pill blue">Logic ready</span>}
+                        <button type="button" className="icon-button" onClick={(event) => { event.stopPropagation(); duplicateQuestion(index); }} title="Duplicate question"><Copy size={15} /></button>
+                        <button type="button" className="icon-button" onClick={(event) => { event.stopPropagation(); removeQuestion(index); }} title="Delete question"><Trash2 size={15} /></button>
+                      </div>
+
+                      {question.type === 'select' && rows.length > 0 ? (
+                        <div className="studio-option-preview">
+                          {rows.map((row) => (
+                            <span key={`${question.id}-${row.code}-${row.label}`}>
+                              <i />
+                              {row.label}
+                            </span>
+                          ))}
+                        </div>
+                      ) : question.type === 'textarea' ? (
+                        <div className="studio-long-preview">Long text response area</div>
+                      ) : question.type === 'number' ? (
+                        <div className="studio-short-preview">Numeric answer</div>
+                      ) : (
+                        <div className="studio-short-preview">Short answer</div>
+                      )}
+
+                      <div className="studio-question-footer">
+                        <span><ShieldCheck size={14} /> QA ready</span>
+                        <span><Settings size={14} /> Validation optional</span>
+                        <div>
+                          <button
+                            type="button"
+                            className="icon-button"
+                            onClick={(event) => { event.stopPropagation(); moveQuestion(index, -1); }}
+                            disabled={index === 0}
+                            title="Move question up"
+                          >
+                            <ArrowUp size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-button"
+                            onClick={(event) => { event.stopPropagation(); moveQuestion(index, 1); }}
+                            disabled={index === questions.length - 1}
+                            title="Move question down"
+                          >
+                            <ArrowDown size={15} />
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+            <button type="button" className="studio-add-question-line" onClick={addQuestion}><Plus size={16} /> Add Question</button>
+          </section>
+        </main>
+
+        <aside className="studio-properties">
+          <div className="studio-properties-tabs">
+            {propertyTabs.map((tab) => (
+              <button
+                type="button"
+                key={tab}
+                className={propertiesTab === tab.toLowerCase() ? 'active' : ''}
+                onClick={() => setPropertiesTab(tab.toLowerCase())}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {selectedQuestion ? (
+            <div className="studio-property-body">
+              {propertiesTab === 'properties' && (
+                <>
+                  <div className="studio-panel-title">
+                    <Settings size={18} />
+                    <span>Question Properties</span>
+                  </div>
+                  <label>
+                    Question Type
+                    <select value={selectedQuestion.type} onChange={(event) => patchQuestion(selectedIndex, { type: event.target.value, options: event.target.value === 'select' ? selectedQuestion.options || 'Option 1\nOption 2' : '' })}>
+                      <option value="text">Short Text</option>
+                      <option value="textarea">Long Text</option>
+                      <option value="select">Choice / Dropdown</option>
+                      <option value="number">Number</option>
+                      <option value="date">Date</option>
+                    </select>
+                  </label>
+                  <label>
+                    Question Text
+                    <textarea value={selectedQuestion.label || ''} onChange={(event) => patchQuestion(selectedIndex, { label: event.target.value, id: variableFromLabel(event.target.value, selectedIndex) })} />
+                  </label>
+                  <label>
+                    Enumerator Instruction
+                    <textarea value={selectedQuestion.instruction || ''} onChange={(event) => updateQuestion(selectedIndex, 'instruction', event.target.value)} placeholder="Read out the options clearly, probe only where needed." />
+                  </label>
+                  <label>
+                    Variable Name
+                    <input value={selectedQuestion.id || ''} onChange={(event) => updateQuestion(selectedIndex, 'id', event.target.value)} />
+                  </label>
+
+                  {selectedQuestion.type === 'select' && (
+                    <div className="studio-option-editor">
+                      <div className="studio-option-editor-header">
+                        <strong>Response Options</strong>
+                        <button type="button" className="secondary" onClick={addOption}><Plus size={14} /> Add Option</button>
+                      </div>
+                      {optionRows.map((row, index) => (
+                        <div className="studio-option-row" key={`${row.code}-${index}`}>
+                          <span>{row.code}</span>
+                          <input value={row.label} onChange={(event) => updateOptionLabel(index, event.target.value)} />
+                          <button type="button" className="icon-button" onClick={() => removeOption(index)} title="Remove option"><Trash2 size={14} /></button>
+                        </div>
+                      ))}
+                      <small>Codes are previewed for questionnaire design. Export-level value coding will be finalised in the data dictionary stage.</small>
+                    </div>
+                  )}
+
+                  <div className="studio-toggle-list">
+                    <label className="studio-toggle-row">
+                      <span>Required</span>
+                      <input type="checkbox" checked={Boolean(selectedQuestion.required)} onChange={(event) => updateQuestion(selectedIndex, 'required', event.target.checked)} />
+                    </label>
+                    <label className="studio-toggle-row">
+                      <span>Randomise options</span>
+                      <input type="checkbox" disabled />
+                    </label>
+                    <label className="studio-toggle-row">
+                      <span>Show Other option</span>
+                      <input type="checkbox" checked={selectedQuestion.type === 'select' && /other/i.test(selectedQuestion.options || '')} readOnly />
+                    </label>
+                  </div>
+                </>
+              )}
+
+              {propertiesTab === 'logic' && (
+                <div className="studio-rules-panel">
+                  <div className="studio-panel-title"><Layers size={18} /><span>Logic Builder</span></div>
+                  <div className="studio-rule-card">
+                    <strong>IF</strong>
+                    <p>{selectedQuestion.label || `Q${selectedIndex + 1}`} is answered</p>
+                    <strong>THEN</strong>
+                    <p>Continue to next question or add skip logic in Phase 2.</p>
+                  </div>
+                  <button type="button" className="secondary"><Plus size={15} /> Add Logic Rule</button>
+                </div>
+              )}
+
+              {propertiesTab === 'validation' && (
+                <div className="studio-rules-panel">
+                  <div className="studio-panel-title"><ShieldCheck size={18} /><span>Validation</span></div>
+                  <label>Minimum<input placeholder="No minimum" /></label>
+                  <label>Maximum<input placeholder="No maximum" /></label>
+                  <label>Action<select defaultValue="warn"><option value="warn">Warn</option><option value="block">Block submission</option></select></label>
+                </div>
+              )}
+
+              {propertiesTab === 'quality' && (
+                <div className="studio-rules-panel">
+                  <div className="studio-panel-title"><Flame size={18} /><span>Quality Rules</span></div>
+                  <div className="studio-rule-card">
+                    <strong>Quality signal</strong>
+                    <p>Flag inconsistent answers, short interviews, duplicate GPS points, or risky media gaps.</p>
+                  </div>
+                  <button type="button" className="secondary"><Plus size={15} /> Add Quality Rule</button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="studio-empty-properties">
+              <Settings size={28} />
+              <p>Select a question to edit its properties.</p>
+            </div>
+          )}
+        </aside>
+      </div>
+
+      <div className="studio-component-dock">
+        <div>
+          <div className="section-kicker"><ShieldCheck size={16} /> Survey components</div>
+          <p>Set reusable survey features as off, optional, or mandatory for this project.</p>
+        </div>
+        <div className="studio-component-grid">
           {componentControls.map((component) => {
             const mode = getComponentMode(settings, component.key);
             return (
@@ -4354,64 +4873,23 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
         </div>
       </div>
 
-      <div className="question-list">
-        {project.questions.map((question, index) => (
-          <div className="question-card" key={`${question.id || 'question'}-${index}`}>
-            <div className="question-header">
-              <strong><ClipboardList size={16} /> Question {index + 1}</strong>
-              <div className="question-actions">
-                <button
-                  className="icon-button"
-                  onClick={() => moveQuestion(index, -1)}
-                  disabled={index === 0}
-                  aria-label={`Move question ${index + 1} up`}
-                  title="Move question up"
-                >
-                  <ArrowUp size={16} />
-                </button>
-                <button
-                  className="icon-button"
-                  onClick={() => moveQuestion(index, 1)}
-                  disabled={index === project.questions.length - 1}
-                  aria-label={`Move question ${index + 1} down`}
-                  title="Move question down"
-                >
-                  <ArrowDown size={16} />
-                </button>
-                <button className="icon-button" onClick={() => removeQuestion(index)} aria-label="Remove question" title="Remove question"><Trash2 size={16} /></button>
-              </div>
-            </div>
-            <div className="inline-grid">
-              <label>
-                Label
-                <input value={question.label} onChange={(event) => updateQuestion(index, 'label', event.target.value)} />
-              </label>
-              <label>
-                Type
-                <select value={question.type} onChange={(event) => updateQuestion(index, 'type', event.target.value)}>
-                  <option value="text">Text</option>
-                  <option value="textarea">Long text</option>
-                  <option value="select">Dropdown</option>
-                  <option value="number">Number</option>
-                  <option value="date">Date</option>
-                </select>
-              </label>
-            </div>
-            {question.type === 'select' && (
-              <label>
-                Options
-                <textarea value={question.options} onChange={(event) => updateQuestion(index, 'options', event.target.value)} />
-              </label>
-            )}
-            <label className="check-row">
-              <input type="checkbox" checked={question.required} onChange={(event) => updateQuestion(index, 'required', event.target.checked)} />
-              Required
-            </label>
+      <div className="studio-workflow-strip">
+        {['Create / Import', 'Build Survey', 'Configure Logic', 'Add Quality Rules', 'Translate', 'Preview & Test', 'Publish'].map((step, index) => (
+          <div key={step}>
+            <span>{index + 1}</span>
+            <strong>{step}</strong>
+            <small>
+              {index === 0 && 'Start blank, template, or import'}
+              {index === 1 && 'Drag, drop, and organise'}
+              {index === 2 && 'Skip and branching rules'}
+              {index === 3 && 'Fraud and QC checks'}
+              {index === 4 && 'Multi-language support'}
+              {index === 5 && 'Run test interview'}
+              {index === 6 && 'Ready for field deploy'}
+            </small>
           </div>
         ))}
       </div>
-
-      <button className="secondary add-question" onClick={addQuestion}><Plus size={18} /> Add Question</button>
     </div>
   );
 }

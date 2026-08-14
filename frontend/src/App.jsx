@@ -91,13 +91,91 @@ const markerPalettes = {
   sequential: ['#133e98', '#1d5fbf', '#2f80ed', '#48a4d8', '#77c7c2', '#aae2c1', '#e1f5d8'],
   diverging: ['#2f80ed', '#79c7c2', '#dff3ef', '#fde7dc', '#ff9b79', '#ef476f']
 };
+const componentModes = ['off', 'optional', 'mandatory'];
+const componentModeLabels = {
+  off: 'Off',
+  optional: 'Optional',
+  mandatory: 'Mandatory'
+};
+const defaultComponentPolicy = {
+  airportLocationFlow: 'off',
+  gps: 'off',
+  audio: 'off',
+  respondentPhone: 'optional',
+  householdId: 'off'
+};
 const defaultProjectSettings = {
+  componentPolicy: { ...defaultComponentPolicy },
   airportLocationMode: false,
   captureGps: false,
   captureAudio: false,
   showRespondentPhone: true,
   showHouseholdId: false
 };
+
+function normalizeComponentMode(value, fallback = 'off') {
+  return componentModes.includes(value) ? value : fallback;
+}
+
+function normalizeSurveySettings(rawSettings = {}, slug = '') {
+  const parsed = typeof rawSettings === 'string' ? safeParseJson(rawSettings, {}) : rawSettings || {};
+  const providedPolicy = parsed.componentPolicy || {};
+  const componentPolicy = {
+    airportLocationFlow: normalizeComponentMode(
+      providedPolicy.airportLocationFlow,
+      parsed.airportLocationMode === undefined
+        ? (slug === defaultProjectSlug ? 'mandatory' : defaultComponentPolicy.airportLocationFlow)
+        : (parsed.airportLocationMode ? 'mandatory' : 'off')
+    ),
+    gps: normalizeComponentMode(providedPolicy.gps, parsed.captureGps ? 'optional' : defaultComponentPolicy.gps),
+    audio: normalizeComponentMode(providedPolicy.audio, parsed.captureAudio ? 'optional' : defaultComponentPolicy.audio),
+    respondentPhone: normalizeComponentMode(
+      providedPolicy.respondentPhone,
+      parsed.showRespondentPhone === false ? 'off' : defaultComponentPolicy.respondentPhone
+    ),
+    householdId: normalizeComponentMode(providedPolicy.householdId, parsed.showHouseholdId ? 'optional' : defaultComponentPolicy.householdId)
+  };
+  return withComponentPolicy({ ...defaultProjectSettings, ...parsed }, componentPolicy);
+}
+
+function withComponentPolicy(settings, componentPolicy) {
+  const normalizedPolicy = {
+    airportLocationFlow: normalizeComponentMode(componentPolicy.airportLocationFlow, defaultComponentPolicy.airportLocationFlow),
+    gps: normalizeComponentMode(componentPolicy.gps, defaultComponentPolicy.gps),
+    audio: normalizeComponentMode(componentPolicy.audio, defaultComponentPolicy.audio),
+    respondentPhone: normalizeComponentMode(componentPolicy.respondentPhone, defaultComponentPolicy.respondentPhone),
+    householdId: normalizeComponentMode(componentPolicy.householdId, defaultComponentPolicy.householdId)
+  };
+  return {
+    ...settings,
+    componentPolicy: normalizedPolicy,
+    airportLocationMode: normalizedPolicy.airportLocationFlow !== 'off',
+    captureGps: normalizedPolicy.gps !== 'off',
+    captureAudio: normalizedPolicy.audio !== 'off',
+    showRespondentPhone: normalizedPolicy.respondentPhone !== 'off',
+    showHouseholdId: normalizedPolicy.householdId !== 'off'
+  };
+}
+
+function getComponentMode(settings, key) {
+  return normalizeComponentMode(settings?.componentPolicy?.[key], defaultComponentPolicy[key] || 'off');
+}
+
+function isComponentEnabled(settings, key) {
+  return getComponentMode(settings, key) !== 'off';
+}
+
+function isComponentMandatory(settings, key) {
+  return getComponentMode(settings, key) === 'mandatory';
+}
+
+function safeParseJson(value, fallback) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
 const airportTerminals = ['Terminal 1', 'Terminal 2'];
 const airportMovements = ['Departures', 'Arrivals'];
 const airportSurveyPoints = {
@@ -399,7 +477,16 @@ function ResetAccessPage() {
 
 function SurveyForm({ projectSlug }) {
   const [config, setConfig] = useState({ locations: [], questions: [] });
-  const settings = { ...defaultProjectSettings, ...(config.settings || {}) };
+  const settings = normalizeSurveySettings(config.settings || {}, projectSlug);
+  const gpsEnabled = isComponentEnabled(settings, 'gps');
+  const gpsRequired = isComponentMandatory(settings, 'gps');
+  const audioEnabled = isComponentEnabled(settings, 'audio');
+  const audioRequired = isComponentMandatory(settings, 'audio');
+  const phoneEnabled = isComponentEnabled(settings, 'respondentPhone');
+  const phoneRequired = isComponentMandatory(settings, 'respondentPhone');
+  const householdEnabled = isComponentEnabled(settings, 'householdId');
+  const householdRequired = isComponentMandatory(settings, 'householdId');
+  const locationFlowEnabled = isComponentEnabled(settings, 'airportLocationFlow');
   const [form, setForm] = useState({
     enumeratorName: '',
     location: '',
@@ -496,8 +583,8 @@ function SurveyForm({ projectSlug }) {
   }
 
   function activateCaptureModules() {
-    if (settings.captureAudio) beginRequiredAudio();
-    if (settings.captureGps) requestGpsCapture();
+    if (audioEnabled) beginRequiredAudio();
+    if (gpsEnabled) requestGpsCapture();
   }
 
   function update(field, value) {
@@ -593,7 +680,7 @@ function SurveyForm({ projectSlug }) {
   }
 
   function requestGpsCapture() {
-    if (!settings.captureGps || gpsAttemptedRef.current || gpsPosition) return;
+    if (!gpsEnabled || gpsAttemptedRef.current || gpsPosition) return;
     gpsAttemptedRef.current = true;
     if (!navigator.geolocation) {
       setGpsStatus('GPS is not supported on this browser.');
@@ -733,14 +820,26 @@ function SurveyForm({ projectSlug }) {
     const surveyEndedAt = new Date().toISOString();
     const surveyDurationSeconds = Math.max(0, Math.round((new Date(surveyEndedAt).getTime() - new Date(surveyStartedAt).getTime()) / 1000));
     let finalAudio = audioRef.current || audio;
-    if (settings.captureAudio) {
+    if (audioEnabled) {
       finalAudio = await finalizeAudioRecording();
+    }
+    const hasGps = Number.isFinite(Number(gpsPosition?.latitude)) && Number.isFinite(Number(gpsPosition?.longitude));
+    if (gpsRequired && !hasGps) {
+      requestGpsCapture();
+      setStatus('GPS coordinates are mandatory for this project. Please allow location permission and submit again.');
+      setSaving(false);
+      return;
+    }
+    if (audioRequired && !finalAudio) {
+      setStatus('Audio recording is mandatory for this project. Please allow microphone access and submit again.');
+      setSaving(false);
+      return;
     }
     const submissionPayload = {
       ...form,
       projectSlug,
       ...gpsPosition,
-      audio: settings.captureAudio ? finalAudio : null,
+      audio: audioEnabled ? finalAudio : null,
       surveyStartedAt,
       surveyEndedAt,
       surveyDurationSeconds,
@@ -808,7 +907,7 @@ function SurveyForm({ projectSlug }) {
               locations={config.locations || []}
               value={form.location}
               onChange={(value) => update('location', value)}
-              airportMode={settings.airportLocationMode}
+              airportMode={locationFlowEnabled}
             />
           </div>
 
@@ -819,16 +918,16 @@ function SurveyForm({ projectSlug }) {
                 Respondent name
                 <input value={form.respondentName} onChange={(event) => update('respondentName', event.target.value)} />
               </label>
-              {settings.showRespondentPhone && (
+              {phoneEnabled && (
                 <label>
-                  Phone
-                  <input inputMode="tel" value={form.respondentPhone} onChange={(event) => update('respondentPhone', event.target.value)} />
+                  Phone {phoneRequired && <span className="required-note">Required</span>}
+                  <input inputMode="tel" value={form.respondentPhone} onChange={(event) => update('respondentPhone', event.target.value)} required={phoneRequired} />
                 </label>
               )}
-              {settings.showHouseholdId && (
+              {householdEnabled && (
                 <label>
-                  Household ID
-                  <input value={form.householdId} onChange={(event) => update('householdId', event.target.value)} />
+                  Household ID {householdRequired && <span className="required-note">Required</span>}
+                  <input value={form.householdId} onChange={(event) => update('householdId', event.target.value)} required={householdRequired} />
                 </label>
               )}
             </div>
@@ -906,12 +1005,12 @@ function SurveyForm({ projectSlug }) {
             <p>{syncStatus || 'Pending responses sync automatically when online.'}</p>
             <button className="secondary" onClick={syncPendingSubmissions} type="button"><RefreshCw size={18} /> Sync now</button>
           </div>
-          {(settings.captureGps || settings.captureAudio) && (
+          {(gpsEnabled || audioEnabled) && (
             <div className="panel quiet-panel">
               <h2>Capture Modules</h2>
               <div className="info-list">
-                {settings.captureGps && <span><MapPin size={17} /> GPS: {gpsStatus}</span>}
-                {settings.captureAudio && <span><ShieldCheck size={17} /> Audio: {audioStatus}</span>}
+                {gpsEnabled && <span><MapPin size={17} /> GPS ({componentModeLabels[getComponentMode(settings, 'gps')]}): {gpsStatus}</span>}
+                {audioEnabled && <span><ShieldCheck size={17} /> Audio ({componentModeLabels[getComponentMode(settings, 'audio')]}): {audioStatus}</span>}
               </div>
             </div>
           )}
@@ -1174,7 +1273,7 @@ function SurveyLocationInput({ locations, value, onChange, airportMode = false }
   const [draftPoint, setDraftPoint] = useState('');
   const [otherPoint, setOtherPoint] = useState('');
   const selected = parseAirportLocation(value);
-  const usesAirportFlow = airportMode || locations.some((location) => location.startsWith(airportPrefix)) || value.startsWith(airportPrefix);
+  const usesAirportFlow = airportMode;
 
   useEffect(() => {
     if (selected) {
@@ -1929,6 +2028,7 @@ function AdminLogin({ onLogin }) {
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
 
   async function submit(event) {
     event.preventDefault();
@@ -1950,89 +2050,196 @@ function AdminLogin({ onLogin }) {
     }
   }
 
-  return (
-    <section className="admin-login-screen">
-      <div className="admin-login-shell">
-        <header className="admin-login-topbar">
-          <div className="admin-brand-mark">
-            <img src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
-            <span title="VTRAC Survey Console">VTRAC Survey Console</span>
-          </div>
-          <div className="admin-login-topbar-copy">
-            <span className="eyebrow">Staff access</span>
-            <strong>Secure admin workspace</strong>
-          </div>
-        </header>
+  const navItems = ['Product', 'PeopleOS', 'Solutions', 'Pricing', 'Resources'];
+  const previewMetrics = [
+    { label: 'Live samples', value: '9.5K', icon: ClipboardList },
+    { label: 'Daily run-rate', value: '1.4K', icon: TrendingUp },
+    { label: 'QA ready', value: '94%', icon: ShieldCheck }
+  ];
 
-        <div className="admin-login-layout">
-          <form className="admin-login-card modern-auth-card" onSubmit={submit}>
-            <div className="admin-login-card-head">
-              <div className="admin-login-logo-chip">
-                <img src="/vtrac-logo.jpg" alt="VTRAC" />
-              </div>
-              <div>
-                <p className="eyebrow">Administrator</p>
-                <h2>Sign in to manage field projects</h2>
-              </div>
-            </div>
-            <p className="login-support-text">
-              Use your VTRAC username or mapped email to access projects, dashboards, clients, and exports.
-            </p>
-            <label>
-              Username or email
-              <input
-                value={username}
-                onChange={(event) => {
-                  setUsername(event.target.value);
-                  setStatus('');
-                }}
-                required
-                autoComplete="username"
-                placeholder="admin or name@vtracworldwide.com"
-              />
-            </label>
-            <label>
-              Password
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => {
-                  setPassword(event.target.value);
-                  setStatus('');
-                }}
-                required
-                autoComplete="current-password"
-              />
-            </label>
-            <button className="primary" disabled={loading}>{loading ? 'Signing in...' : 'Login'}</button>
-            <AccountRecoveryControls accountType="staff" />
-            {status && <p className="status">{status}</p>}
-            <div className="admin-login-assurance">
-              <span><ShieldCheck size={16} /> Admin controlled</span>
-              <span><CheckCircle2 size={16} /> Cloud synced</span>
-              <span><BarChart3 size={16} /> Dashboard ready</span>
-            </div>
-          </form>
-
-          <aside className="admin-login-visual auth-info-panel" aria-label="VTRAC staff login overview">
-            <div className="auth-info-card">
-              <span className="eyebrow">Account mapping</span>
-              <h3>Username or email</h3>
-              <p>Staff and client accounts can be tied to email addresses for cleaner access and support.</p>
-            </div>
-            <div className="auth-info-card">
-              <span className="eyebrow">Recovery control</span>
-              <h3>Admin verified</h3>
-              <p>Forgot username and password requests are recorded for admin review before any access change.</p>
-            </div>
-            <div className="auth-info-card">
-              <span className="eyebrow">Client access</span>
-              <h3>Project scoped</h3>
-              <p>Create client logins and assign only the specific projects they should be able to view.</p>
-            </div>
-          </aside>
-        </div>
+  const loginForm = (
+    <form id="login" className="admin-login-card modern-auth-card vtrac-modal-auth-card" onSubmit={submit}>
+      <div className="vtrac-modal-auth-heading">
+        <p className="eyebrow">Staff access</p>
+        <h2 id="vtrac-modal-login-title">Login to VTRAC Survey Portal</h2>
       </div>
+      <label>
+        Username or email
+        <input
+          value={username}
+          onChange={(event) => {
+            setUsername(event.target.value);
+            setStatus('');
+          }}
+          required
+          autoComplete="username"
+          placeholder="Email or Username"
+        />
+      </label>
+      <label>
+        Password
+        <input
+          type="password"
+          value={password}
+          onChange={(event) => {
+            setPassword(event.target.value);
+            setStatus('');
+          }}
+          required
+          autoComplete="current-password"
+          placeholder="Password"
+        />
+      </label>
+      <button className="primary" disabled={loading}>{loading ? 'Signing in...' : 'Login'}</button>
+      {status && <p className="status">{status}</p>}
+    </form>
+  );
+
+  return (
+    <section className="admin-login-screen vtrac-landing-login">
+      <div className="vtrac-landing-backdrop" aria-hidden="true" />
+      <header className="admin-login-topbar vtrac-landing-nav">
+        <a className="vtrac-landing-brand" href="/admin" aria-label="VTRAC Survey Portal admin login">
+          <img src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
+          <span>VTRAC SurveyOS</span>
+        </a>
+        <nav className="vtrac-landing-menu" aria-label="Survey portal sections">
+          {navItems.map((item) => (
+            <a key={item} href="#platform">{item}</a>
+          ))}
+        </nav>
+        <button type="button" className="vtrac-login-link" onClick={() => setLoginOpen(true)}>
+          <UserRound size={18} /> Login
+        </button>
+      </header>
+
+      <main className="admin-login-shell vtrac-landing-shell" id="platform">
+        <section className="vtrac-hero-copy" aria-labelledby="vtrac-login-title">
+          <h1 id="vtrac-login-title">Modern survey platform for field intelligence</h1>
+          <p>
+            VTRAC brings enterprise-scale survey collection, live field monitoring, QA review, maps, and client-ready reporting into one connected platform.
+          </p>
+        </section>
+
+        <section className="vtrac-dashboard-preview" aria-label="VTRAC survey dashboard preview">
+          <div className="vtrac-preview-topbar">
+            <span className="vtrac-preview-mark">V</span>
+            <strong>Bengaluru Airport Mobility Survey</strong>
+            <div className="vtrac-preview-search">
+              <Search size={16} />
+              <span>Search projects, teams, locations</span>
+            </div>
+            <span className="vtrac-preview-live">Live</span>
+          </div>
+          <div className="vtrac-preview-body">
+            <aside className="vtrac-preview-rail">
+              <span className="active"><ClipboardList size={18} /> Home</span>
+              <span><MapPin size={18} /> Field Ops</span>
+              <span><BarChart3 size={18} /> Analytics</span>
+              <span><Settings size={18} /> Settings</span>
+            </aside>
+            <div className="vtrac-preview-content">
+              <div className="vtrac-preview-metrics">
+                {previewMetrics.map(({ label, value, icon: Icon }) => (
+                  <div key={label}>
+                    <span className="vtrac-metric-icon"><Icon size={18} /></span>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+              <div className="vtrac-preview-grid">
+                <div className="vtrac-preview-card wide trend-card">
+                  <div className="vtrac-card-heading">
+                    <div>
+                      <span>Trend</span>
+                      <strong>Fieldwork velocity</strong>
+                    </div>
+                    <em>+18%</em>
+                  </div>
+                  <div className="vtrac-trend-visual" aria-hidden="true">
+                    <svg viewBox="0 0 420 150" role="img">
+                      <defs>
+                        <linearGradient id="vtracTrendFill" x1="0" x2="0" y1="0" y2="1">
+                          <stop offset="0%" stopColor="#14b8b2" stopOpacity="0.42" />
+                          <stop offset="100%" stopColor="#14b8b2" stopOpacity="0" />
+                        </linearGradient>
+                      </defs>
+                      <path className="trend-fill" d="M12 118 L12 94 C56 88 78 70 115 76 C157 84 173 44 213 52 C257 62 274 32 314 38 C352 44 372 24 408 18 L408 132 L12 132 Z" />
+                      <path className="trend-line" d="M12 94 C56 88 78 70 115 76 C157 84 173 44 213 52 C257 62 274 32 314 38 C352 44 372 24 408 18" />
+                      <circle cx="408" cy="18" r="6" />
+                    </svg>
+                  </div>
+                  <div className="vtrac-trend-labels">
+                    <span>Mon</span>
+                    <span>9.5K samples</span>
+                    <span>Sun</span>
+                  </div>
+                </div>
+                <div className="vtrac-preview-card mix-card">
+                  <div className="vtrac-card-heading">
+                    <div>
+                      <span>Split</span>
+                      <strong>Terminal mix</strong>
+                    </div>
+                  </div>
+                  <div className="vtrac-donut" aria-hidden="true">
+                    <span>68%</span>
+                  </div>
+                  <div className="vtrac-chip-list">
+                    <span><i /> Terminal 1</span>
+                    <span><i /> Terminal 2</span>
+                  </div>
+                </div>
+                <div className="vtrac-preview-card quality-card">
+                  <div className="vtrac-card-heading">
+                    <div>
+                      <span>Quality</span>
+                      <strong>Review readiness</strong>
+                    </div>
+                  </div>
+                  <div className="vtrac-quality-bars" aria-hidden="true">
+                    <span style={{ '--value': '92%' }}><b>Sync</b><i /></span>
+                    <span style={{ '--value': '86%' }}><b>GPS</b><i /></span>
+                    <span style={{ '--value': '94%' }}><b>QC</b><i /></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      {loginOpen && (
+        <div className="vtrac-login-modal" role="dialog" aria-modal="true" aria-labelledby="vtrac-modal-login-title">
+          <button type="button" className="vtrac-login-modal-scrim" aria-label="Close login" onClick={() => setLoginOpen(false)} />
+          <section className="vtrac-login-modal-panel">
+            <div className="vtrac-login-modal-visual">
+              <img src="/vtrac-login-bg.png" alt="" />
+              <div>
+                <strong>Collect. Monitor. Assure.</strong>
+                <span>Secure survey operations for VTRAC teams and clients.</span>
+              </div>
+            </div>
+            <div className="vtrac-login-modal-form">
+              <button type="button" className="vtrac-login-modal-close" onClick={() => setLoginOpen(false)} aria-label="Close login">
+                <X size={22} />
+              </button>
+              <div className="vtrac-modal-brand">
+                <img src="/vtrac-logo.jpg" alt="VTRAC" />
+                <span>VTRAC</span>
+              </div>
+              {loginForm}
+              <div className="vtrac-auth-divider"><span>Quick access</span></div>
+              <div className="vtrac-auth-links">
+                <a href="/client"><UserRound size={18} /> Client login</a>
+                <a href="/survey"><ExternalLink size={18} /> Open survey link</a>
+              </div>
+              <AccountRecoveryControls accountType="staff" />
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   );
 }
@@ -2040,17 +2247,23 @@ function AdminLogin({ onLogin }) {
 function AdminDashboard({ token, onLogout }) {
   const [projects, setProjects] = useState([]);
   const [clients, setClients] = useState([]);
+  const [foundation, setFoundation] = useState({ organisation: null, workspace: null, roles: [], permissions: [], navigation: [], counts: {} });
+  const [users, setUsers] = useState([]);
+  const [vendors, setVendors] = useState([]);
   const [recoveryRequests, setRecoveryRequests] = useState([]);
   const [filterOptions, setFilterOptions] = useState({ enumerators: [], locations: [] });
   const [selectedId, setSelectedId] = useState('');
   const [editing, setEditing] = useState(null);
   const [editingClient, setEditingClient] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
+  const [editingVendor, setEditingVendor] = useState(null);
+  const [organisationDraft, setOrganisationDraft] = useState(null);
   const [editingResponse, setEditingResponse] = useState(null);
   const [responseMode, setResponseMode] = useState('edit');
   const [audioPreview, setAudioPreview] = useState(null);
   const [projectSearch, setProjectSearch] = useState('');
   const [projectStatusFilter, setProjectStatusFilter] = useState('deployed');
-  const [activeAdminSection, setActiveAdminSection] = useState('projects');
+  const [activeAdminSection, setActiveAdminSection] = useState('overview');
   const [menuCollapsed, setMenuCollapsed] = useState(false);
   const [selectedProjectIds, setSelectedProjectIds] = useState([]);
   const [projectWorkspaceTab, setProjectWorkspaceTab] = useState('summary');
@@ -2099,7 +2312,7 @@ function AdminDashboard({ token, onLogout }) {
   const selectedVisibleProjects = filteredProjects.filter((project) => selectedProjectIds.includes(project.id));
   const allVisibleProjectsSelected = filteredProjects.length > 0 && selectedVisibleProjects.length === filteredProjects.length;
   const totalProjectSubmissions = projects.reduce((sum, project) => sum + Number(project.responseCount || 0), 0);
-  const isPortfolioSection = activeAdminSection === 'library';
+  const isPortfolioSection = activeAdminSection === 'overview' || activeAdminSection === 'library';
   const clientProjectRows = clients.map((client) => ({
     label: client.displayName || client.username,
     samples: client.projectIds?.length || 0
@@ -2107,6 +2320,21 @@ function AdminDashboard({ token, onLogout }) {
   const selectedProjectLatest = data?.recent?.[0]?.submitted_at ? formatProjectDate(data.recent[0].submitted_at) : '-';
   const selectedProjectQuestions = selectedProject?.questions?.length || 0;
   const selectedProjectStatus = getProjectStatus(selectedProject);
+  const activeConsoleTitle = activeAdminSection === 'projectWorkspace' && selectedProject
+    ? selectedProject.name
+    : activeAdminSection === 'overview'
+      ? 'SurveyOS - VTRAC Workspace'
+      : activeAdminSection === 'library'
+        ? 'SurveyOS - Portfolio Analytics'
+        : activeAdminSection === 'organisation'
+          ? 'SurveyOS - Organisation Context'
+          : activeAdminSection === 'users'
+            ? 'SurveyOS - Users & RBAC'
+            : activeAdminSection === 'clients'
+              ? 'SurveyOS - Clients'
+              : activeAdminSection === 'vendors'
+                ? 'SurveyOS - Vendors'
+                : 'SurveyOS - Project Library';
   const authHeaders = { Authorization: `Bearer ${token}` };
 
   useEffect(() => {
@@ -2139,6 +2367,35 @@ function AdminDashboard({ token, onLogout }) {
     const payload = await response.json();
     setProjects(payload.projects || []);
     setSelectedId((current) => current || payload.projects?.[0]?.id || '');
+  }
+
+  async function loadFoundation() {
+    const response = await fetch(`${apiBase}/api/admin/foundation`, { headers: authHeaders });
+    if (response.status === 401) return onLogout();
+    const payload = await response.json();
+    setFoundation({
+      organisation: payload.organisation || null,
+      workspace: payload.workspace || null,
+      roles: payload.roles || [],
+      permissions: payload.permissions || [],
+      navigation: payload.navigation || [],
+      counts: payload.counts || {}
+    });
+    setUsers(payload.users || []);
+    setVendors(payload.vendors || []);
+    if (payload.clients) setClients(payload.clients);
+    const organisation = payload.organisation || {};
+    const workspace = payload.workspace || {};
+    setOrganisationDraft({
+      name: organisation.name || '',
+      legalName: organisation.legalName || '',
+      website: organisation.website || '',
+      primaryContactName: organisation.primaryContactName || '',
+      primaryContactEmail: organisation.primaryContactEmail || '',
+      primaryContactPhone: organisation.primaryContactPhone || '',
+      workspaceName: workspace.name || '',
+      workspaceDescription: workspace.description || ''
+    });
   }
 
   async function loadClients() {
@@ -2183,6 +2440,7 @@ function AdminDashboard({ token, onLogout }) {
   async function refreshAdminData() {
     await Promise.all([
       loadProjects(),
+      loadFoundation(),
       loadClients(),
       loadRecoveryRequests(),
       loadDashboard(),
@@ -2201,6 +2459,9 @@ function AdminDashboard({ token, onLogout }) {
   function openAdminSection(section) {
     setActiveAdminSection(section);
     setEditing(null);
+    setEditingClient(null);
+    setEditingUser(null);
+    setEditingVendor(null);
     setEditingResponse(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -2249,6 +2510,7 @@ function AdminDashboard({ token, onLogout }) {
 
   useEffect(() => {
     loadProjects();
+    loadFoundation();
     loadClients();
     loadRecoveryRequests();
   }, []);
@@ -2310,7 +2572,7 @@ function AdminDashboard({ token, onLogout }) {
       slug: '',
       description: '',
       locations: 'Kadiri\nAnantapur\nOther',
-      settings: { ...defaultProjectSettings },
+      settings: normalizeSurveySettings(),
       isActive: true,
       questions: [{ ...blankQuestion, label: 'Sample question', type: 'text', required: true }]
     });
@@ -2320,7 +2582,7 @@ function AdminDashboard({ token, onLogout }) {
     setEditing({
       ...project,
       locations: project.locations.join('\n'),
-      settings: { ...defaultProjectSettings, ...(project.settings || {}) },
+      settings: normalizeSurveySettings(project.settings, project.slug),
       questions: project.questions.map((question) => ({
         ...question,
         options: (question.options || []).join('\n')
@@ -2431,6 +2693,98 @@ function AdminDashboard({ token, onLogout }) {
     }
     setStatus('Recovery request marked resolved.');
     await loadRecoveryRequests();
+  }
+
+  async function saveOrganisationContext() {
+    if (!organisationDraft) return;
+    setStatus('');
+    const response = await fetch(`${apiBase}/api/admin/organisation`, {
+      method: 'PUT',
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify(organisationDraft)
+    });
+    if (response.status === 401) return onLogout();
+    const payload = await response.json();
+    if (!response.ok) {
+      setStatus(payload.error || 'Unable to save organisation context.');
+      return;
+    }
+    setStatus(payload.message || 'Organisation context saved.');
+    await loadFoundation();
+  }
+
+  function startNewUser() {
+    setEditingUser({
+      username: '',
+      email: '',
+      displayName: '',
+      role: 'analyst',
+      branch: '',
+      team: '',
+      password: '',
+      isActive: true
+    });
+  }
+
+  function editUser(user) {
+    setEditingUser({ ...user, password: '' });
+  }
+
+  async function saveUserAccess(user) {
+    setStatus('');
+    const method = user.id ? 'PUT' : 'POST';
+    const url = user.id ? `${apiBase}/api/admin/users/${user.id}` : `${apiBase}/api/admin/users`;
+    const response = await fetch(url, {
+      method,
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify(user)
+    });
+    if (response.status === 401) return onLogout();
+    const payload = await response.json();
+    if (!response.ok) {
+      setStatus(payload.error || 'Unable to save user.');
+      return;
+    }
+    setStatus(payload.message || 'User access saved.');
+    setEditingUser(null);
+    await loadFoundation();
+  }
+
+  function startNewVendor() {
+    setEditingVendor({
+      name: '',
+      contactName: '',
+      contactEmail: '',
+      contactPhone: '',
+      serviceArea: '',
+      status: 'Active',
+      assignedProjectIds: selectedProject?.id ? [selectedProject.id] : [],
+      notes: ''
+    });
+  }
+
+  function editVendor(vendor) {
+    setEditingVendor({ ...vendor });
+  }
+
+  async function saveVendorAccess(vendor) {
+    setStatus('');
+    const method = vendor.id ? 'PUT' : 'POST';
+    const url = vendor.id ? `${apiBase}/api/admin/vendors/${vendor.id}` : `${apiBase}/api/admin/vendors`;
+    const response = await fetch(url, {
+      method,
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify(vendor)
+    });
+    if (response.status === 401) return onLogout();
+    const payload = await response.json();
+    if (!response.ok) {
+      setStatus(payload.error || 'Unable to save vendor.');
+      return;
+    }
+    setStatus(payload.message || 'Vendor saved.');
+    setEditingVendor(null);
+    await loadFoundation();
   }
 
   async function openResponse(responseId, mode = 'view') {
@@ -2580,14 +2934,45 @@ function AdminDashboard({ token, onLogout }) {
     }
   }
 
+  const platformNavItems = [
+    { key: 'overview', label: 'Platform Overview', icon: <Layers size={17} />, action: () => openAdminSection('overview'), active: activeAdminSection === 'overview' },
+    { key: 'organisations', label: 'Organisations', icon: <UserRound size={17} />, action: () => openAdminSection('organisation'), active: activeAdminSection === 'organisation' },
+    { key: 'subscriptions', label: 'Subscriptions', icon: <ClipboardList size={17} />, action: () => openAdminSection('clients'), active: activeAdminSection === 'clients' },
+    { key: 'plans', label: 'Plans', icon: <FileText size={17} />, action: () => openAdminSection('projects'), active: activeAdminSection === 'projects' || activeAdminSection === 'projectWorkspace' },
+    { key: 'revenue', label: 'Revenue', icon: <TrendingUp size={17} />, action: () => openAdminSection('library'), active: activeAdminSection === 'library' },
+    { key: 'ai-usage', label: 'AI Usage', icon: <Flame size={17} />, action: () => openAdminSection('library'), active: false },
+    { key: 'system-health', label: 'System Health', icon: <ShieldCheck size={17} />, action: refreshAdminData, active: false },
+    { key: 'audit-logs', label: 'Audit Logs', icon: <Eye size={17} />, action: () => openAdminSection('users'), active: false },
+    { key: 'feature-flags', label: 'Feature Flags', icon: <Settings size={17} />, action: () => openAdminSection('organisation'), active: false },
+    { key: 'integrations', label: 'Integrations', icon: <Share2 size={17} />, action: () => openAdminSection('vendors'), active: activeAdminSection === 'vendors' }
+  ];
+  const settingsNavItems = [
+    { key: 'users', label: 'Users', icon: <UserSearch size={17} />, action: () => openAdminSection('users'), active: activeAdminSection === 'users' },
+    { key: 'roles', label: 'Roles & Permissions', icon: <ShieldCheck size={17} />, action: () => openAdminSection('users'), active: false },
+    { key: 'email-templates', label: 'Email Templates', icon: <FileText size={17} />, action: () => openAdminSection('organisation'), active: false },
+    { key: 'settings', label: 'Settings', icon: <Settings size={17} />, action: () => openAdminSection('organisation'), active: false },
+    { key: 'downloads', label: 'Downloads', icon: <Download size={17} />, action: () => { if (selectedProject) { setProjectDataTab('downloads'); openProjectWorkspace(selectedProject, 'data'); } else openAdminSection('projects'); }, active: activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'data' && projectDataTab === 'downloads' },
+    { key: 'map', label: 'Map', icon: <MapPin size={17} />, action: () => { if (selectedProject) { setProjectDataTab('map'); openProjectWorkspace(selectedProject, 'data'); } else openAdminSection('projects'); }, active: activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'data' && projectDataTab === 'map' }
+  ];
+  const projectStatusItems = [
+    { key: 'all', label: 'All projects', count: projectCounts.all },
+    { key: 'deployed', label: 'Deployed', count: projectCounts.deployed },
+    { key: 'draft', label: 'Draft', count: projectCounts.draft },
+    { key: 'archived', label: 'Archived', count: projectCounts.archived }
+  ];
+
   return (
     <section className="admin-console">
       <div className="admin-console-topbar">
         <div className="admin-brand-mark">
           <img src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
-          <span title={activeAdminSection === 'projectWorkspace' ? selectedProject?.name : 'VTRAC Survey Console'}>
-            {activeAdminSection === 'projectWorkspace' && selectedProject ? selectedProject.name : 'VTRAC Survey Console'}
+          <span title={activeConsoleTitle}>
+            {activeConsoleTitle}
           </span>
+        </div>
+        <div className="admin-topbar-context">
+          <span>Phase 1 Foundation</span>
+          <strong>Command Center</strong>
         </div>
         <label className="admin-search">
           <Search size={22} />
@@ -2596,52 +2981,76 @@ function AdminDashboard({ token, onLogout }) {
         <button className="admin-avatar" onClick={onLogout} title="Logout" aria-label="Logout"><LogOut size={20} /></button>
       </div>
 
-      <div className={`admin-console-shell ${menuCollapsed ? 'menu-collapsed' : ''}`}>
-        <aside className="admin-icon-rail">
-          <button className={activeAdminSection === 'projects' || activeAdminSection === 'projectWorkspace' ? 'active' : ''} onClick={() => openAdminSection('projects')} title="Projects"><ClipboardList size={24} /></button>
-          <button className={activeAdminSection === 'library' ? 'active' : ''} onClick={() => openAdminSection('library')} title="Portfolio dashboard"><BarChart3 size={24} /></button>
-          <button className={activeAdminSection === 'account' ? 'active' : ''} onClick={() => openAdminSection('account')} title="Client accounts"><UserRound size={24} /></button>
-        </aside>
+      <div className={`admin-console-shell surveyos-nav-shell ${menuCollapsed ? 'menu-collapsed' : ''}`}>
+        <aside className="admin-sidebar surveyos-app-sidebar" aria-label="SurveyOS administration navigation">
+          <div className="surveyos-sidebar-brand">
+            <img src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
+            <div>
+              <strong>SurveyOS</strong>
+              <span>Field Intelligence Platform</span>
+            </div>
+            <button
+              className="admin-collapse-button surveyos-collapse-button"
+              onClick={() => setMenuCollapsed(!menuCollapsed)}
+              aria-label={menuCollapsed ? 'Expand menu' : 'Collapse menu'}
+              title={menuCollapsed ? 'Expand menu' : 'Collapse menu'}
+            >
+              {menuCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            </button>
+          </div>
 
-        <aside className="admin-sidebar">
-          <button
-            className="admin-collapse-button"
-            onClick={() => setMenuCollapsed(!menuCollapsed)}
-            aria-label={menuCollapsed ? 'Expand menu' : 'Collapse menu'}
-            title={menuCollapsed ? 'Expand menu' : 'Collapse menu'}
-          >
-            {menuCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          <button className="admin-new-button surveyos-new-button" onClick={startNewProject}>
+            <Plus size={16} />
+            <span>New Form</span>
           </button>
-          <button className="admin-new-button" onClick={startNewProject}>NEW FORM</button>
-          <button className={`admin-sidebar-row ${projectStatusFilter === 'all' ? 'active' : ''}`} onClick={() => filterProjects('all')}>
-            <span>All projects</span>
-            <strong>{projectCounts.all}</strong>
-          </button>
-          <button className={`admin-sidebar-row ${projectStatusFilter === 'deployed' ? 'active' : ''}`} onClick={() => filterProjects('deployed')}>
-            <span>Deployed</span>
-            <strong>{projectCounts.deployed}</strong>
-          </button>
-          <button className={`admin-sidebar-row ${projectStatusFilter === 'draft' ? 'active' : ''}`} onClick={() => filterProjects('draft')}>
-            <span>Draft</span>
-            <strong>{projectCounts.draft}</strong>
-          </button>
-          <button className={`admin-sidebar-row ${projectStatusFilter === 'archived' ? 'active' : ''}`} onClick={() => filterProjects('archived')}>
-            <span>Archived</span>
-            <strong>{projectCounts.archived}</strong>
-          </button>
-          <div className="admin-sidebar-project-list">
-            {filteredProjects.slice(0, 10).map((project) => (
+
+          <nav className="surveyos-sidebar-nav" aria-label="Platform sections">
+            <p className="surveyos-nav-section-title">Platform</p>
+            {platformNavItems.map((item) => (
+              <button type="button" className={item.active ? 'active' : ''} key={item.key} onClick={item.action} title={item.label}>
+                {item.icon}
+                <span>{item.label}</span>
+              </button>
+            ))}
+
+            <p className="surveyos-nav-section-title">Project Status</p>
+            {projectStatusItems.map((item) => (
+              <button type="button" className={projectStatusFilter === item.key ? 'active compact' : 'compact'} key={item.key} onClick={() => filterProjects(item.key)} title={item.label}>
+                <ClipboardList size={17} />
+                <span>{item.label}</span>
+                <strong className="surveyos-sidebar-count">{item.count}</strong>
+              </button>
+            ))}
+
+            <p className="surveyos-nav-section-title">Settings</p>
+            {settingsNavItems.map((item) => (
+              <button type="button" className={item.active ? 'active' : ''} key={item.key} onClick={item.action} title={item.label}>
+                {item.icon}
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          <div className="surveyos-sidebar-projects">
+            <div>
+              <span>Recent Projects</span>
+              <strong>{filteredProjects.length}</strong>
+            </div>
+            {filteredProjects.slice(0, 6).map((project) => (
               <button
                 className={project.id === selectedProject?.id ? 'active' : ''}
                 key={project.id}
                 onClick={() => openProjectWorkspace(project)}
+                title={project.name}
               >
-                {project.name}
+                <FileText size={15} />
+                <span>{project.name}</span>
               </button>
             ))}
           </div>
+
           {selectedProject && activeAdminSection === 'projectWorkspace' && (
-            <div className="admin-selected-card">
+            <div className="admin-selected-card surveyos-selected-project">
               <span>Selected project</span>
               <strong>{selectedProject.name}</strong>
               <a href={selectedProject.publicUrl} target="_blank" rel="noreferrer"><Link2 size={15} /> Public survey link</a>
@@ -2650,6 +3059,36 @@ function AdminDashboard({ token, onLogout }) {
         </aside>
 
         <div className="admin-main">
+          {activeAdminSection === 'overview' && (
+            <SurveyOSFoundationDashboard
+              clients={clients}
+              data={data}
+              download={download}
+              loading={loading}
+              foundation={foundation}
+              users={users}
+              vendors={vendors}
+              onOpenAnalytics={() => openAdminSection('library')}
+              onOpenClients={() => openAdminSection('clients')}
+              onOpenOrganisation={() => openAdminSection('organisation')}
+              onOpenUsers={() => openAdminSection('users')}
+              onOpenVendors={() => openAdminSection('vendors')}
+              onOpenProjectWorkspace={(tab = 'summary') => selectedProject && openProjectWorkspace(selectedProject, tab)}
+              onOpenProjectMap={() => {
+                if (selectedProject) {
+                  setProjectDataTab('map');
+                  openProjectWorkspace(selectedProject, 'data');
+                } else {
+                  openAdminSection('projects');
+                }
+              }}
+              onOpenProjects={() => openAdminSection('projects')}
+              onRefresh={refreshAdminData}
+              projects={projects}
+              totalProjectSubmissions={totalProjectSubmissions}
+            />
+          )}
+
           {activeAdminSection === 'projects' && (
             <>
               <div className="admin-project-toolbar">
@@ -3152,6 +3591,59 @@ function AdminDashboard({ token, onLogout }) {
             </section>
           )}
 
+
+          {activeAdminSection === 'organisation' && (
+            <OrganisationContextPanel
+              foundation={foundation}
+              draft={organisationDraft}
+              onChange={setOrganisationDraft}
+              onSave={saveOrganisationContext}
+            />
+          )}
+
+          {activeAdminSection === 'users' && (
+            <UserManagementPanel
+              users={users}
+              roles={foundation.roles}
+              editingUser={editingUser}
+              onStartNew={startNewUser}
+              onEdit={editUser}
+              onChange={setEditingUser}
+              onCancel={() => setEditingUser(null)}
+              onSave={saveUserAccess}
+            />
+          )}
+
+          {activeAdminSection === 'clients' && (
+            <section id="client-access">
+              <ClientAccessManager
+                clients={clients}
+                projects={projects}
+                editingClient={editingClient}
+                recoveryRequests={recoveryRequests}
+                onStartNew={startNewClient}
+                onEdit={editClient}
+                onChange={setEditingClient}
+                onCancel={() => setEditingClient(null)}
+                onSave={saveClient}
+                onResolveRecovery={resolveRecoveryRequest}
+              />
+            </section>
+          )}
+
+          {activeAdminSection === 'vendors' && (
+            <VendorManagementPanel
+              vendors={vendors}
+              projects={projects}
+              editingVendor={editingVendor}
+              onStartNew={startNewVendor}
+              onEdit={editVendor}
+              onChange={setEditingVendor}
+              onCancel={() => setEditingVendor(null)}
+              onSave={saveVendorAccess}
+            />
+          )}
+
           {activeAdminSection === 'library' && (
             <PortfolioDashboard
               clients={clients}
@@ -3169,22 +3661,6 @@ function AdminDashboard({ token, onLogout }) {
             />
           )}
 
-          {activeAdminSection === 'account' && (
-            <section id="client-access">
-            <ClientAccessManager
-              clients={clients}
-              projects={projects}
-              editingClient={editingClient}
-              recoveryRequests={recoveryRequests}
-              onStartNew={startNewClient}
-              onEdit={editClient}
-              onChange={setEditingClient}
-              onCancel={() => setEditingClient(null)}
-              onSave={saveClient}
-              onResolveRecovery={resolveRecoveryRequest}
-            />
-            </section>
-          )}
 
           {editingResponse && (
             <ResponseEditor
@@ -3570,7 +4046,7 @@ function escapeHtml(value) {
 }
 
 function ProjectEditor({ project, onChange, onCancel, onSave }) {
-  const settings = { ...defaultProjectSettings, ...(project.settings || {}) };
+  const settings = normalizeSurveySettings(project.settings, project.slug);
 
   function update(field, value) {
     onChange({ ...project, [field]: value });
@@ -3578,6 +4054,14 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
 
   function updateSetting(field, value) {
     onChange({ ...project, settings: { ...settings, [field]: value } });
+  }
+
+  function updateComponentPolicy(field, value) {
+    const componentPolicy = {
+      ...settings.componentPolicy,
+      [field]: normalizeComponentMode(value)
+    };
+    onChange({ ...project, settings: withComponentPolicy(settings, componentPolicy) });
   }
 
   function updateQuestion(index, field, value) {
@@ -3601,6 +4085,34 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
     [questions[index], questions[nextIndex]] = [questions[nextIndex], questions[index]];
     onChange({ ...project, questions });
   }
+
+  const componentControls = [
+    {
+      key: 'airportLocationFlow',
+      title: 'Airport terminal location flow',
+      description: 'Terminal, movement, and survey point branching for airport intercept surveys.'
+    },
+    {
+      key: 'gps',
+      title: 'GPS coordinates',
+      description: 'Capture latitude, longitude, and accuracy when browser permission is allowed.'
+    },
+    {
+      key: 'audio',
+      title: 'Audio recording',
+      description: 'Attach a compressed browser audio recording to each response when required.'
+    },
+    {
+      key: 'respondentPhone',
+      title: 'Respondent phone field',
+      description: 'Show, require, or hide phone collection for this project.'
+    },
+    {
+      key: 'householdId',
+      title: 'Household ID field',
+      description: 'Use only for household surveys where an ID is required.'
+    }
+  ];
 
   return (
     <div className="editor-panel">
@@ -3636,42 +4148,36 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
 
       <div className="form-section component-settings">
         <div className="section-kicker"><ShieldCheck size={16} /> Survey components</div>
+        <p className="component-settings-note">Set each reusable survey feature as off, optional, or mandatory for this project.</p>
         <div className="component-grid">
-          <label className="check-row component-toggle">
-            <input type="checkbox" checked={settings.airportLocationMode} onChange={(event) => updateSetting('airportLocationMode', event.target.checked)} />
-            <span>
-              <strong>Airport terminal location flow</strong>
-              <small>Terminal, movement, and survey point branching.</small>
-            </span>
-          </label>
-          <label className="check-row component-toggle">
-            <input type="checkbox" checked={settings.captureGps} onChange={(event) => updateSetting('captureGps', event.target.checked)} />
-            <span>
-              <strong>GPS coordinates</strong>
-              <small>Capture latitude, longitude, and accuracy when browser permission is allowed.</small>
-            </span>
-          </label>
-          <label className="check-row component-toggle">
-            <input type="checkbox" checked={settings.captureAudio} onChange={(event) => updateSetting('captureAudio', event.target.checked)} />
-            <span>
-              <strong>Audio recording</strong>
-              <small>Attach a compressed browser audio recording to each response.</small>
-            </span>
-          </label>
-          <label className="check-row component-toggle">
-            <input type="checkbox" checked={settings.showRespondentPhone} onChange={(event) => updateSetting('showRespondentPhone', event.target.checked)} />
-            <span>
-              <strong>Respondent phone field</strong>
-              <small>Show or hide phone collection for this project.</small>
-            </span>
-          </label>
-          <label className="check-row component-toggle">
-            <input type="checkbox" checked={settings.showHouseholdId} onChange={(event) => updateSetting('showHouseholdId', event.target.checked)} />
-            <span>
-              <strong>Household ID field</strong>
-              <small>Use only for household surveys where an ID is required.</small>
-            </span>
-          </label>
+          {componentControls.map((component) => {
+            const mode = getComponentMode(settings, component.key);
+            return (
+              <div className={`component-policy-card ${mode}`} key={component.key}>
+                <div className="component-policy-header">
+                  <span className="component-policy-check">{mode !== 'off' ? <CheckCircle2 size={18} /> : null}</span>
+                  <span>
+                    <strong>{component.title}</strong>
+                    <small>{component.description}</small>
+                  </span>
+                </div>
+                <div className="component-policy-options" role="group" aria-label={`${component.title} policy`}>
+                  {componentModes.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className={`component-policy-option ${option} ${mode === option ? 'active' : ''}`}
+                      onClick={() => updateComponentPolicy(component.key, option)}
+                      aria-pressed={mode === option}
+                    >
+                      {mode === option && <CheckCircle2 size={14} />}
+                      {componentModeLabels[option]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -3735,6 +4241,304 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
       <button className="secondary add-question" onClick={addQuestion}><Plus size={18} /> Add Question</button>
     </div>
   );
+}
+
+function OrganisationContextPanel({ foundation, draft, onChange, onSave }) {
+  const organisation = foundation.organisation || {};
+  const workspace = foundation.workspace || {};
+  const workingDraft = draft || {
+    name: organisation.name || '',
+    legalName: organisation.legalName || '',
+    website: organisation.website || '',
+    primaryContactName: organisation.primaryContactName || '',
+    primaryContactEmail: organisation.primaryContactEmail || '',
+    primaryContactPhone: organisation.primaryContactPhone || '',
+    workspaceName: workspace.name || '',
+    workspaceDescription: workspace.description || ''
+  };
+
+  function update(field, value) {
+    onChange({ ...workingDraft, [field]: value });
+  }
+
+  return (
+    <section className="phase1-shell">
+      <div className="phase1-header">
+        <div>
+          <p className="eyebrow">Foundation</p>
+          <h2>Organisation context</h2>
+          <p>Single source for tenant identity, workspace naming, and platform governance.</p>
+        </div>
+        <button className="primary" onClick={onSave}><Save size={17} /> Save Context</button>
+      </div>
+      <div className="phase1-overview-grid">
+        <SummaryKpiCard icon={<Layers size={18} />} label="Tenant" value={organisation.name || 'VTRAC'} detail={organisation.slug || 'vtrac-worldwide'} accent="teal" />
+        <SummaryKpiCard icon={<ClipboardList size={18} />} label="Workspace" value={workspace.name || 'Field Intelligence'} detail={workspace.slug || 'workspace'} accent="blue" />
+        <SummaryKpiCard icon={<ShieldCheck size={18} />} label="RBAC roles" value={foundation.roles?.length || 0} detail="Configurable role catalog" accent="sky" />
+        <SummaryKpiCard icon={<UserRound size={18} />} label="Access scope" value="Tenant" detail="Projects, users, clients, vendors" accent="amber" />
+      </div>
+      <div className="panel phase1-editor-card">
+        <div className="inline-grid">
+          <label>
+            Organisation name
+            <input value={workingDraft.name} onChange={(event) => update('name', event.target.value)} />
+          </label>
+          <label>
+            Legal name
+            <input value={workingDraft.legalName} onChange={(event) => update('legalName', event.target.value)} />
+          </label>
+          <label>
+            Website
+            <input value={workingDraft.website} onChange={(event) => update('website', event.target.value)} />
+          </label>
+        </div>
+        <div className="inline-grid">
+          <label>
+            Primary contact
+            <input value={workingDraft.primaryContactName} onChange={(event) => update('primaryContactName', event.target.value)} />
+          </label>
+          <label>
+            Contact email
+            <input type="email" value={workingDraft.primaryContactEmail} onChange={(event) => update('primaryContactEmail', event.target.value)} />
+          </label>
+          <label>
+            Contact phone
+            <input value={workingDraft.primaryContactPhone} onChange={(event) => update('primaryContactPhone', event.target.value)} />
+          </label>
+        </div>
+        <div className="inline-grid two">
+          <label>
+            Workspace name
+            <input value={workingDraft.workspaceName} onChange={(event) => update('workspaceName', event.target.value)} />
+          </label>
+          <label>
+            Workspace description
+            <input value={workingDraft.workspaceDescription} onChange={(event) => update('workspaceDescription', event.target.value)} />
+          </label>
+        </div>
+      </div>
+      <RolePermissionMatrix roles={foundation.roles || []} permissions={foundation.permissions || []} />
+    </section>
+  );
+}
+
+function RolePermissionMatrix({ roles, permissions }) {
+  return (
+    <div className="panel rbac-matrix-card">
+      <div className="section-title">
+        <div>
+          <p className="eyebrow">RBAC</p>
+          <h2>Role and permission catalog</h2>
+        </div>
+        <span className="recovery-count-chip">{roles.length} roles</span>
+      </div>
+      <div className="rbac-role-grid">
+        {roles.map((role) => (
+          <div className="rbac-role-card" key={role.key}>
+            <div>
+              <strong>{role.name}</strong>
+              <small>{role.scope}</small>
+            </div>
+            <p>{role.description}</p>
+            <div className="permission-chip-row">
+              {(role.permissions || []).includes('*')
+                ? <span>All permissions</span>
+                : (role.permissions || []).slice(0, 5).map((permission) => <span key={permission}>{permissionLabel(permission, permissions)}</span>)}
+              {(role.permissions || []).length > 5 && <span>+{role.permissions.length - 5} more</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function UserManagementPanel({ users, roles, editingUser, onStartNew, onEdit, onChange, onCancel, onSave }) {
+  function update(field, value) {
+    onChange({ ...editingUser, [field]: value });
+  }
+
+  return (
+    <section className="phase1-shell">
+      <div className="phase1-header">
+        <div>
+          <p className="eyebrow">Access Control</p>
+          <h2>Users & RBAC</h2>
+          <p>Create staff access, map emails, and assign Phase 1 roles.</p>
+        </div>
+        <button className="primary" onClick={onStartNew}><Plus size={17} /> New User</button>
+      </div>
+      {editingUser && (
+        <div className="panel phase1-editor-card">
+          <div className="inline-grid">
+            <label>
+              Display name
+              <input value={editingUser.displayName} onChange={(event) => update('displayName', event.target.value)} />
+            </label>
+            <label>
+              Username
+              <input value={editingUser.username} onChange={(event) => update('username', event.target.value)} />
+            </label>
+            <label>
+              Email
+              <input type="email" value={editingUser.email || ''} onChange={(event) => update('email', event.target.value)} />
+            </label>
+          </div>
+          <div className="inline-grid">
+            <label>
+              Role
+              <select value={editingUser.role} onChange={(event) => update('role', event.target.value)}>
+                {roles.map((role) => <option key={role.key} value={role.key}>{role.name}</option>)}
+                <option value="admin">Legacy Admin</option>
+                <option value="analyst">Legacy Analyst</option>
+              </select>
+            </label>
+            <label>
+              Branch
+              <input value={editingUser.branch || ''} onChange={(event) => update('branch', event.target.value)} />
+            </label>
+            <label>
+              Team
+              <input value={editingUser.team || ''} onChange={(event) => update('team', event.target.value)} />
+            </label>
+          </div>
+          <label>
+            Password {editingUser.id && <span className="hint-text">leave blank to keep existing password</span>}
+            <input type="password" value={editingUser.password || ''} onChange={(event) => update('password', event.target.value)} />
+          </label>
+          <label className="check-row">
+            <input type="checkbox" checked={editingUser.isActive !== false} onChange={(event) => update('isActive', event.target.checked)} />
+            Active user
+          </label>
+          <div className="actions">
+            <button className="secondary" onClick={onCancel}>Cancel</button>
+            <button className="primary" onClick={() => onSave(editingUser)}><Save size={18} /> Save User</button>
+          </div>
+        </div>
+      )}
+      <div className="phase1-table-grid">
+        {users.map((user) => (
+          <button className="phase1-access-row" key={user.id} onClick={() => onEdit(user)}>
+            <span>
+              <strong>{user.displayName}</strong>
+              <small>{user.username}{user.email ? ' · ' + user.email : ''}</small>
+            </span>
+            <em>{roleDisplayName(user.role, roles)}</em>
+            <i className={user.isActive ? 'active' : 'inactive'}>{user.isActive ? 'Active' : 'Inactive'}</i>
+          </button>
+        ))}
+        {users.length === 0 && <p className="empty">No internal users yet.</p>}
+      </div>
+    </section>
+  );
+}
+
+function VendorManagementPanel({ vendors, projects, editingVendor, onStartNew, onEdit, onChange, onCancel, onSave }) {
+  function update(field, value) {
+    onChange({ ...editingVendor, [field]: value });
+  }
+
+  function toggleProject(projectId) {
+    const current = new Set(editingVendor.assignedProjectIds || []);
+    if (current.has(projectId)) current.delete(projectId);
+    else current.add(projectId);
+    update('assignedProjectIds', [...current]);
+  }
+
+  return (
+    <section className="phase1-shell">
+      <div className="phase1-header">
+        <div>
+          <p className="eyebrow">Operations</p>
+          <h2>Vendors</h2>
+          <p>Track external data collection partners, contact details, and assigned project scope.</p>
+        </div>
+        <button className="primary" onClick={onStartNew}><Plus size={17} /> New Vendor</button>
+      </div>
+      {editingVendor && (
+        <div className="panel phase1-editor-card">
+          <div className="inline-grid">
+            <label>
+              Vendor name
+              <input value={editingVendor.name} onChange={(event) => update('name', event.target.value)} />
+            </label>
+            <label>
+              Contact name
+              <input value={editingVendor.contactName || ''} onChange={(event) => update('contactName', event.target.value)} />
+            </label>
+            <label>
+              Contact email
+              <input type="email" value={editingVendor.contactEmail || ''} onChange={(event) => update('contactEmail', event.target.value)} />
+            </label>
+          </div>
+          <div className="inline-grid">
+            <label>
+              Contact phone
+              <input value={editingVendor.contactPhone || ''} onChange={(event) => update('contactPhone', event.target.value)} />
+            </label>
+            <label>
+              Service area
+              <input value={editingVendor.serviceArea || ''} onChange={(event) => update('serviceArea', event.target.value)} />
+            </label>
+            <label>
+              Status
+              <select value={editingVendor.status || 'Active'} onChange={(event) => update('status', event.target.value)}>
+                <option>Active</option>
+                <option>Paused</option>
+                <option>Inactive</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            Notes
+            <textarea value={editingVendor.notes || ''} onChange={(event) => update('notes', event.target.value)} />
+          </label>
+          <div className="project-check-list">
+            {projects.map((project) => (
+              <label className="check-row" key={project.id}>
+                <input
+                  type="checkbox"
+                  checked={(editingVendor.assignedProjectIds || []).includes(project.id)}
+                  onChange={() => toggleProject(project.id)}
+                />
+                {project.name}
+              </label>
+            ))}
+          </div>
+          <div className="actions">
+            <button className="secondary" onClick={onCancel}>Cancel</button>
+            <button className="primary" onClick={() => onSave(editingVendor)}><Save size={18} /> Save Vendor</button>
+          </div>
+        </div>
+      )}
+      <div className="phase1-vendor-grid">
+        {vendors.map((vendor) => (
+          <button className="phase1-vendor-card" key={vendor.id} onClick={() => onEdit(vendor)}>
+            <span>{vendor.status}</span>
+            <strong>{vendor.name}</strong>
+            <small>{vendor.contactName || 'No contact'}{vendor.contactEmail ? ' · ' + vendor.contactEmail : ''}</small>
+            <em>{vendor.assignedProjectIds?.length || 0} assigned project{vendor.assignedProjectIds?.length === 1 ? '' : 's'}</em>
+          </button>
+        ))}
+        {vendors.length === 0 && <p className="empty">No vendors yet.</p>}
+      </div>
+    </section>
+  );
+}
+
+function roleDisplayName(roleKey, roles = []) {
+  const found = roles.find((role) => role.key === roleKey);
+  if (found) return found.name;
+  if (roleKey === 'admin') return 'Legacy Admin';
+  if (roleKey === 'teamLead') return 'Team Lead';
+  if (roleKey === 'floorManager') return 'Floor Manager';
+  if (roleKey === 'qaQc') return 'QA/QC';
+  return roleKey || 'Analyst';
+}
+
+function permissionLabel(permissionKey, permissions = []) {
+  const found = permissions.find((permission) => permission.key === permissionKey);
+  return found?.label || permissionKey;
 }
 
 function ClientAccessManager({ clients, projects, editingClient, recoveryRequests = [], onStartNew, onEdit, onChange, onCancel, onSave, onResolveRecovery }) {
@@ -3872,6 +4676,11 @@ function ResponseEditor({ response, mode = 'edit', project, onChange, onCancel, 
     });
   }
 
+  const findings = response.qualityFindings || [];
+  const auditLogs = response.auditLogs || [];
+  const qualityScore = response.qualityScore ?? 100;
+  const reviewStatus = response.reviewStatus || 'Accept';
+
   return (
     <div className="response-editor-backdrop" role="presentation">
       <div className="panel response-editor" role="dialog" aria-modal="true" aria-label={`${readOnly ? 'View' : 'Edit'} response ${response.id}`}>
@@ -3892,6 +4701,31 @@ function ResponseEditor({ response, mode = 'edit', project, onChange, onCancel, 
             {!readOnly && <button className="primary" onClick={() => onSave(response)}><Save size={18} /> Save Response</button>}
           </div>
         </div>
+
+        <div className={`quality-review-card ${reviewStatus.toLowerCase()}`}>
+          <div>
+            <span className="quality-label">Quality score</span>
+            <strong>{qualityScore}</strong>
+            <span className="quality-status">{reviewStatus}</span>
+          </div>
+          <div>
+            <span className="quality-label">Supervisor signals</span>
+            <p>{findings.length ? `${findings.length} finding${findings.length === 1 ? '' : 's'} need review` : 'No quality findings recorded yet.'}</p>
+          </div>
+        </div>
+
+        {findings.length > 0 && (
+          <div className="quality-findings-panel">
+            <h3>Quality findings</h3>
+            {findings.map((finding) => (
+              <div className={`quality-finding ${finding.severity}`} key={`${finding.ruleKey}-${finding.message}`}>
+                <span>{finding.severity}</span>
+                <p>{finding.message}</p>
+                <strong>-{finding.scoreImpact}</strong>
+              </div>
+            ))}
+          </div>
+        )}
 
         {response.hasAudio && (
           <div className="audio-review-card">
@@ -3948,6 +4782,23 @@ function ResponseEditor({ response, mode = 'edit', project, onChange, onCancel, 
                 disabled={readOnly}
               />
             ))}
+        </div>
+
+        <div className="audit-trail-panel">
+          <h3>Correction audit trail</h3>
+          {auditLogs.length === 0 ? (
+            <p className="empty">No admin corrections have been saved for this response.</p>
+          ) : (
+            auditLogs.map((log) => (
+              <div className="audit-log-row" key={log.id}>
+                <div>
+                  <strong>{log.changedBy || 'Admin'}</strong>
+                  <span>{new Date(log.createdAt).toLocaleString()}</span>
+                </div>
+                <p>{(log.changedFields || []).join(', ') || 'Response updated'}</p>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
@@ -4029,7 +4880,8 @@ function RecentTable({ rows, project, loading, onView, onEdit }) {
     }));
 
   const baseColumns = [
-    { key: 'validation', label: 'Validation', type: 'select', options: ['-'], width: 130, value: () => '-' },
+    { key: 'validation', label: 'Validation', type: 'select', options: ['Accept', 'Review', 'Reject'], width: 130, value: (row) => row.review_status || 'Accept' },
+    { key: 'quality_score', label: 'Quality', type: 'number', width: 110, value: (row) => row.quality_score ?? 100 },
     { key: 'submitted_at', label: 'Submitted', type: 'date', width: 140, value: (row) => formatProjectDate(row.submitted_at) },
     { key: 'enumerator_name', label: 'Enumerator', type: 'text', width: 150, value: (row) => row.enumerator_name || '-' },
     { key: 'location', label: 'Location', type: 'text', width: 230, value: (row) => row.location || '-' },
@@ -4233,6 +5085,382 @@ function ClientInsight({ title, value, meta }) {
   );
 }
 
+function SurveyOSFoundationDashboard({
+  clients,
+  data,
+  download,
+  foundation,
+  loading,
+  onOpenAnalytics,
+  onOpenClients,
+  onOpenOrganisation,
+  onOpenProjectWorkspace,
+  onOpenProjectMap,
+  onOpenProjects,
+  onOpenRefresh,
+  onOpenUsers,
+  onOpenVendors,
+  onRefresh,
+  projects,
+  totalProjectSubmissions,
+  users = [],
+  vendors = []
+}) {
+  const portfolioProjects = projects.filter((project) => project.slug !== 'pilot-survey');
+  const deployedProjects = portfolioProjects.filter((project) => getProjectStatus(project) === 'deployed');
+  const draftProjects = portfolioProjects.filter((project) => getProjectStatus(project) === 'draft');
+  const activeClients = clients.filter((client) => client.isActive !== false);
+  const activeUsers = users.filter((user) => user.isActive !== false);
+  const totalSamples = Number(data?.totals?.total_samples ?? totalProjectSubmissions ?? 0);
+  const samplesToday = Number(data?.totals?.samples_today || 0);
+  const mappedSamples = (data?.mapRows || []).length;
+  const locations = data?.byLocation || [];
+  const enumerators = data?.byEnumerator || [];
+  const dateRows = data?.byDate || [];
+  const sortedDateRows = [...dateRows].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const dateRangeLabel = sortedDateRows.length
+    ? `${formatProjectDate(sortedDateRows[0].date)} - ${formatProjectDate(sortedDateRows[sortedDateRows.length - 1].date)}`
+    : 'Live range';
+  const qualitySummary = data?.qualitySummary || {};
+  const reviewQueue = Number(qualitySummary.review_count || 0) + Number(qualitySummary.reject_count || 0);
+  const flaggedResponses = Number(qualitySummary.flagged_count || 0);
+  const averageQualityScore = Number(qualitySummary.average_quality_score ?? 100);
+  const totalOrganisations = Math.max(1, activeClients.length + 1);
+  const activeSubscriptions = Math.max(deployedProjects.length, activeClients.length);
+  const totalUsers = activeUsers.length + activeClients.length + vendors.length;
+  const storageUsedGb = Math.max(0.01, (totalSamples * 0.00016) + (portfolioProjects.length * 0.02));
+  const apiCalls = totalSamples * 4 + activeUsers.length * 25;
+  const interviewTarget = Math.max(40000, totalSamples);
+  const storageTarget = 10;
+  const apiTarget = Math.max(200000, apiCalls);
+  const topProject = leadingRow(data?.byProject || [], 'project');
+  const topLocation = leadingRow(locations, 'location');
+  const topEnumerator = leadingRow(enumerators, 'enumerator_name');
+  const projectRows = toReportChartRows(
+    data?.byProject?.length
+      ? data.byProject.filter((row) => row.slug !== 'pilot-survey')
+      : portfolioProjects.map((project) => ({ project: project.name, samples: Number(project.responseCount || 0) })),
+    'project',
+    'samples',
+    5
+  );
+  const subscriptionRows = toReportChartRows([
+    { plan: 'Enterprise', count: Math.max(0, activeClients.filter((client) => (client.projectIds || []).length >= 2).length) },
+    { plan: 'Business', count: Math.max(0, activeClients.filter((client) => (client.projectIds || []).length === 1).length) },
+    { plan: 'Professional', count: Math.max(0, vendors.length) },
+    { plan: 'Starter', count: Math.max(0, draftProjects.length) }
+  ], 'plan', 'count', 4);
+  const locationRows = toReportChartRows(locations, 'location', 'samples', 5);
+  const reviewRows = toReportChartRows(data?.byReviewStatus || [], 'review_status', 'samples', 4);
+  const recentOrganisations = [
+    {
+      name: foundation?.organisation?.name || 'VTRAC Worldwide',
+      plan: 'Owner',
+      status: 'Active',
+      users: activeUsers.length,
+      interviews: totalSamples,
+      joined: 'Current workspace'
+    },
+    ...activeClients.slice(0, 4).map((client) => ({
+      name: client.displayName || client.username,
+      plan: (client.projectIds || []).length > 1 ? 'Enterprise' : 'Project',
+      status: client.isActive === false ? 'Inactive' : 'Active',
+      users: 1,
+      interviews: client.projectIds?.reduce((sum, projectId) => {
+        const project = portfolioProjects.find((item) => String(item.id) === String(projectId));
+        return sum + Number(project?.responseCount || 0);
+      }, 0) || 0,
+      joined: 'Client access'
+    }))
+  ];
+  const platformUsage = [
+    { label: 'Interviews', value: formatStatNumber(totalSamples) + ' / ' + formatStatNumber(interviewTarget), pct: Math.min(100, Math.round((totalSamples / Math.max(interviewTarget, 1)) * 100)), tone: 'purple' },
+    { label: 'Mapped GPS samples', value: formatStatNumber(mappedSamples) + ' / ' + formatStatNumber(totalSamples), pct: Math.min(100, Math.round((mappedSamples / Math.max(totalSamples, 1)) * 100)), tone: 'blue' },
+    { label: 'Storage estimate', value: storageUsedGb.toFixed(storageUsedGb >= 1 ? 1 : 2) + ' GB / ' + storageTarget + ' GB', pct: Math.min(100, Math.round((storageUsedGb / storageTarget) * 100)), tone: 'teal' },
+    { label: 'API activity estimate', value: formatStatNumber(apiCalls) + ' / ' + formatStatNumber(apiTarget), pct: Math.min(100, Math.round((apiCalls / Math.max(apiTarget, 1)) * 100)), tone: 'orange' }
+  ];
+  const systemAlerts = [
+    { level: flaggedResponses > 0 ? 'critical' : 'good', text: flaggedResponses > 0 ? 'Quality flags need review' : 'Quality checks running', meta: flaggedResponses > 0 ? formatStatNumber(flaggedResponses) + ' flagged' : 'Healthy' },
+    { level: reviewQueue > 0 ? 'warning' : 'good', text: reviewQueue > 0 ? 'Responses pending supervisor review' : 'Review queue clear', meta: reviewQueue > 0 ? formatStatNumber(reviewQueue) + ' pending' : 'Ready' },
+    { level: storageUsedGb > 8 ? 'warning' : 'good', text: 'Storage usage estimate', meta: storageUsedGb.toFixed(storageUsedGb >= 1 ? 1 : 2) + ' GB' },
+    { level: 'good', text: 'Latest data refresh available', meta: samplesToday + ' today' }
+  ];
+  const auditRows = [
+    { user: 'Admin', action: 'Opened platform dashboard', entity: 'SurveyOS', detail: 'Super admin overview', time: 'Now' },
+    { user: 'System', action: 'Loaded project metrics', entity: 'Projects', detail: formatStatNumber(portfolioProjects.length) + ' projects indexed', time: 'Live' },
+    { user: 'System', action: 'Checked quality queue', entity: 'Responses', detail: formatStatNumber(reviewQueue) + ' pending review', time: 'Live' },
+    { user: 'System', action: 'Mapped field coverage', entity: 'Locations', detail: formatStatNumber(mappedSamples) + ' GPS records', time: 'Live' }
+  ];
+  const workspaceName = foundation?.workspace?.name || 'Platform workspace';
+  const organisationName = foundation?.organisation?.name || 'VTRAC Worldwide';
+  const topClientLabel = activeClients[0]?.displayName || activeClients[0]?.username || 'No client yet';
+
+  function openProjectTab(tab = 'summary') {
+    if (portfolioProjects.length === 0) {
+      onOpenProjects();
+      return;
+    }
+    onOpenProjectWorkspace(tab);
+  }
+
+  function sidebarButton(label, icon, action, active = false) {
+    return (
+      <button type="button" className={active ? 'active' : ''} onClick={action || (() => {})}>
+        {icon}
+        <span>{label}</span>
+      </button>
+    );
+  }
+
+  function kpiCard(icon, label, value, detail, tone) {
+    return (
+      <div className={'superadmin-kpi-card ' + tone}>
+        <div className="superadmin-kpi-icon">{icon}</div>
+        <div>
+          <span>{label}</span>
+          <strong title={String(value)}>{value}</strong>
+          <small>{detail}</small>
+        </div>
+      </div>
+    );
+  }
+
+  function renderUsageRow(item) {
+    return (
+      <div className={'superadmin-usage-row ' + item.tone} key={item.label}>
+        <div>
+          <span>{item.label}</span>
+          <strong>{item.value}</strong>
+          <em>{item.pct}%</em>
+        </div>
+        <i><b style={{ width: item.pct + '%' }} /></i>
+      </div>
+    );
+  }
+
+  function renderProgressRow(row, index) {
+    return (
+      <div className="superadmin-progress-row" key={row.value || row.label || index}>
+        <span title={row.value}>{truncateText(row.value, 30)}</span>
+        <i><b style={{ width: Math.max(3, Number(row.percentage || 0)) + '%' }} /></i>
+        <strong>{formatStatNumber(row.frequency)}</strong>
+      </div>
+    );
+  }
+
+  return (
+    <section id="surveyos-overview" className="admin-section surveyos-super-admin">
+      <div className="superadmin-stage-label">1. Platform Super Admin Dashboard</div>
+      <div className="superadmin-shell">
+        <aside className="superadmin-sidebar">
+          <div className="superadmin-brand">
+            <img src="/vtrac-logo.jpg" alt="VTRAC Intelligent Traffic Solutions" />
+            <div>
+              <strong>SurveyOS</strong>
+              <span>Field Intelligence Platform</span>
+            </div>
+          </div>
+          <nav className="superadmin-nav" aria-label="Platform navigation">
+            {sidebarButton('Platform Overview', <Layers size={15} />, undefined, true)}
+            <p>Platform</p>
+            {sidebarButton('Organisations', <UserRound size={15} />, onOpenOrganisation)}
+            {sidebarButton('Subscriptions', <ClipboardList size={15} />, onOpenClients)}
+            {sidebarButton('Plans', <FileText size={15} />, onOpenProjects)}
+            {sidebarButton('Revenue', <TrendingUp size={15} />, onOpenAnalytics)}
+            {sidebarButton('AI Usage', <Flame size={15} />, onOpenAnalytics)}
+            {sidebarButton('System Health', <ShieldCheck size={15} />, onRefresh)}
+            {sidebarButton('Audit Logs', <Eye size={15} />, onOpenUsers)}
+            {sidebarButton('Feature Flags', <Settings size={15} />, onOpenOrganisation)}
+            {sidebarButton('Integrations', <Share2 size={15} />, onOpenVendors)}
+            <p>Settings</p>
+            {sidebarButton('Users', <UserSearch size={15} />, onOpenUsers)}
+            {sidebarButton('Roles & Permissions', <ShieldCheck size={15} />, onOpenUsers)}
+            {sidebarButton('Email Templates', <FileText size={15} />, onOpenOrganisation)}
+            {sidebarButton('Settings', <Settings size={15} />, onOpenOrganisation)}
+          </nav>
+          <div className="superadmin-health-card">
+            <ShieldCheck size={22} />
+            <strong>System Health</strong>
+            <span>{loading ? 'Refreshing metrics...' : 'All visible services operational'}</span>
+            <button type="button" onClick={onRefresh}>View status</button>
+          </div>
+        </aside>
+
+        <div className="superadmin-main">
+          <header className="superadmin-header">
+            <div>
+              <h2>Platform Super Admin</h2>
+              <span>Super Admin</span>
+            </div>
+            <div className="superadmin-header-actions">
+              <button type="button" className="superadmin-date">{dateRangeLabel} <CalendarClock size={14} /></button>
+              <button type="button" aria-label="Search projects"><Search size={17} /></button>
+              <button type="button" aria-label="Refresh platform data" onClick={onRefresh}><RefreshCw size={17} /></button>
+              <button type="button" aria-label="Open projects" onClick={onOpenProjects}><ClipboardList size={17} /></button>
+              <div className="superadmin-avatar">A<i /></div>
+            </div>
+          </header>
+
+          <div className="superadmin-kpi-grid">
+            {kpiCard(<UserRound size={22} />, 'Total Organisations', formatStatNumber(totalOrganisations), '+ ' + formatStatNumber(activeClients.length) + ' client orgs', 'purple')}
+            {kpiCard(<CalendarClock size={22} />, 'Active Subscriptions', formatStatNumber(activeSubscriptions), '+ ' + formatStatNumber(deployedProjects.length) + ' deployed projects', 'purple')}
+            {kpiCard(<TrendingUp size={22} />, 'Monthly Recurring Revenue', 'Not linked', 'Billing module pending', 'pink')}
+            {kpiCard(<UserSearch size={22} />, 'Total Users', formatStatNumber(totalUsers), '+ ' + formatStatNumber(activeUsers.length) + ' staff users', 'blue')}
+            {kpiCard(<ClipboardList size={22} />, 'Total Interviews', formatStatNumber(totalSamples), '+ ' + formatStatNumber(samplesToday) + ' today', 'blue')}
+            {kpiCard(<Flame size={22} />, 'AI Credits Used', '0', 'AI module not connected', 'purple')}
+            {kpiCard(<Layers size={22} />, 'Storage Used', storageUsedGb.toFixed(storageUsedGb >= 1 ? 1 : 2) + ' GB', formatStatNumber(mappedSamples) + ' mapped samples', 'teal')}
+          </div>
+
+          <div className="superadmin-dashboard-grid">
+            <div className="superadmin-panel superadmin-chart-panel">
+              <div className="superadmin-card-head">
+                <div>
+                  <span>Interview volume overview</span>
+                  <strong>{formatStatNumber(totalSamples)}</strong>
+                  <small>Current filtered platform data</small>
+                </div>
+                <button type="button">This Month</button>
+              </div>
+              <TrendLineChart rows={dateRows} labelKey="date" valueKey="samples" />
+            </div>
+
+            <div className="superadmin-panel superadmin-donut-panel">
+              <div className="superadmin-card-head">
+                <div>
+                  <span>Subscriptions by Plan</span>
+                  <strong>{formatStatNumber(activeSubscriptions)}</strong>
+                  <small>Total assigned access plans</small>
+                </div>
+              </div>
+              <DonutQuestionChart rows={subscriptionRows} />
+            </div>
+
+            <div className="superadmin-panel superadmin-chart-panel">
+              <div className="superadmin-card-head">
+                <div>
+                  <span>AI Usage Trend</span>
+                  <strong>0</strong>
+                  <small>AI credits not connected yet</small>
+                </div>
+                <button type="button">This Month</button>
+              </div>
+              <TrendLineChart rows={dateRows.map((row) => ({ ...row, samples: 0 }))} labelKey="date" valueKey="samples" />
+            </div>
+
+            <div className="superadmin-panel superadmin-table-panel">
+              <div className="superadmin-card-head compact">
+                <span>Recent Organisations</span>
+                <button type="button" onClick={onOpenClients}>View all organisations</button>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Organisation</th>
+                    <th>Plan</th>
+                    <th>Status</th>
+                    <th>Users</th>
+                    <th>Interviews</th>
+                    <th>Joined On</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentOrganisations.map((row) => (
+                    <tr key={row.name}>
+                      <td>{truncateText(row.name, 28)}</td>
+                      <td>{row.plan}</td>
+                      <td><span className={'superadmin-status-pill ' + row.status.toLowerCase()}>{row.status}</span></td>
+                      <td>{formatStatNumber(row.users)}</td>
+                      <td>{formatStatNumber(row.interviews)}</td>
+                      <td>{row.joined}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="superadmin-panel superadmin-alert-panel">
+              <div className="superadmin-card-head compact">
+                <span>System Alerts</span>
+                <button type="button" onClick={onRefresh}>View all alerts</button>
+              </div>
+              <div className="superadmin-alert-list">
+                {systemAlerts.map((alert) => (
+                  <div className={'superadmin-alert-row ' + alert.level} key={alert.text}>
+                    <i />
+                    <span>{alert.text}</span>
+                    <strong>{alert.meta}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="superadmin-panel superadmin-usage-panel">
+              <div className="superadmin-card-head compact">
+                <span>Platform Usage</span>
+                <button type="button" onClick={onOpenAnalytics}>Usage details</button>
+              </div>
+              {platformUsage.map(renderUsageRow)}
+            </div>
+
+            <div className="superadmin-panel superadmin-geo-panel">
+              <div className="superadmin-card-head compact">
+                <span>Geographical Distribution</span>
+                <button type="button" onClick={() => { if (onOpenProjectMap) onOpenProjectMap(); else openProjectTab('data'); }}>Open map</button>
+              </div>
+              <div className="superadmin-coverage-map">
+                <div className="superadmin-map-orbit">
+                  <span>{formatStatNumber(locations.length)}</span>
+                  <small>locations</small>
+                </div>
+                <div className="superadmin-map-list">
+                  {(locationRows.length ? locationRows : [{ value: 'No field locations yet', frequency: 0, percentage: '0.00' }]).map(renderProgressRow)}
+                </div>
+              </div>
+            </div>
+
+            <div className="superadmin-panel superadmin-audit-panel">
+              <div className="superadmin-card-head compact">
+                <span>Audit Log</span>
+                <button type="button" onClick={onOpenUsers}>View audit logs</button>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Action</th>
+                    <th>Entity</th>
+                    <th>Details</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditRows.map((row) => (
+                    <tr key={row.user + row.action}>
+                      <td>{row.user}</td>
+                      <td>{row.action}</td>
+                      <td>{row.entity}</td>
+                      <td>{row.detail}</td>
+                      <td>{row.time}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <footer className="superadmin-footer-strip">
+            <span>{workspaceName}</span>
+            <span>{organisationName}</span>
+            <span>{topClientLabel}</span>
+            <span>{topProject ? truncateText(topProject.label, 36) : 'No active project yet'}</span>
+            <span>Quality score {formatStatNumber(averageQualityScore)}</span>
+          </footer>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function PortfolioDashboard({
   clients,
   clientProjectRows,
@@ -4264,6 +5492,7 @@ function PortfolioDashboard({
   const projectRows = toReportChartRows(projectRowsSource, 'project', 'samples', 8);
   const locationRows = toReportChartRows(data?.byLocation || [], 'location', 'samples', 8);
   const enumeratorRows = toReportChartRows(data?.byEnumerator || [], 'enumerator_name', 'samples', 8);
+  const reviewRows = toReportChartRows(data?.byReviewStatus || [], 'review_status', 'samples', 4);
   const clientAccessRows = toReportChartRows(clientProjectRows || [], 'label', 'samples', 8);
   const statusRows = toReportChartRows([
     { status: 'Deployed', samples: portfolioCounts.deployed },
@@ -4353,6 +5582,17 @@ function PortfolioDashboard({
         </div>
 
         <SummaryRankCard title="Samples by project" rows={projectRows} icon={<ClipboardList size={17} />} />
+        <div className="panel summary-card summary-mix-card" data-export-graph data-export-title="review-disposition">
+          <div className="summary-card-head">
+            <div>
+              <span>Quality</span>
+              <h3><ShieldCheck size={17} /> Review disposition</h3>
+            </div>
+            <GraphDownloadButtons filename="vtrac-summary-review-disposition" />
+          </div>
+          {reviewRows.length ? <DonutQuestionChart rows={reviewRows} /> : <p className="empty">No review status data yet.</p>}
+        </div>
+
         <SummaryRankCard title="Top survey locations" rows={locationRows} icon={<MapPin size={17} />} />
         <SummaryRankCard title="Enumerator contribution" rows={enumeratorRows} icon={<UserRound size={17} />} />
         <SummaryRankCard title="Client project access" rows={clientAccessRows} icon={<ShieldCheck size={17} />} />
@@ -4374,8 +5614,13 @@ function SummaryPerformance({ data }) {
   const topEnumerator = leadingRow(enumerators, 'enumerator_name');
   const terminalRows = toReportChartRows(data?.byTerminal || [], 'terminal', 'samples', 4);
   const movementRows = toReportChartRows(data?.byMovement || [], 'movement', 'samples', 4);
+  const reviewRows = toReportChartRows(data?.byReviewStatus || [], 'review_status', 'samples', 4);
   const locationRows = toReportChartRows(locations, 'location', 'samples', 8);
   const enumeratorRows = toReportChartRows(enumerators, 'enumerator_name', 'samples', 9);
+  const qualitySummary = data?.qualitySummary || {};
+  const averageQualityScore = Number(qualitySummary.average_quality_score ?? 100);
+  const reviewQueue = Number(qualitySummary.review_count || 0) + Number(qualitySummary.reject_count || 0);
+  const flaggedResponses = Number(qualitySummary.flagged_count || 0);
 
   return (
     <div className="summary-performance">
@@ -4428,6 +5673,20 @@ function SummaryPerformance({ data }) {
           value={`${formatPercent(gpsSamples, totalSamples)}`}
           detail={`${formatStatNumber(gpsSamples)} mapped samples`}
           accent="pink"
+        />
+        <SummaryKpiCard
+          icon={<ShieldCheck size={18} />}
+          label="Quality score"
+          value={formatStatNumber(averageQualityScore)}
+          detail={`${formatStatNumber(flaggedResponses)} flagged responses`}
+          accent="teal"
+        />
+        <SummaryKpiCard
+          icon={<Eye size={18} />}
+          label="Review queue"
+          value={formatStatNumber(reviewQueue)}
+          detail={`${formatPercent(reviewQueue, totalSamples)} need supervisor review`}
+          accent="amber"
         />
       </div>
 

@@ -2356,10 +2356,11 @@ function AdminDashboard({ token, session, onLogout }) {
   const [audioPreview, setAudioPreview] = useState(null);
   const [projectSearch, setProjectSearch] = useState('');
   const [projectStatusFilter, setProjectStatusFilter] = useState('deployed');
-  const [activeAdminSection, setActiveAdminSection] = useState('overview');
+  const isInitialSurveyDesigner = normalizeAdminRoleKey(session?.role) === 'surveyDesigner';
+  const [activeAdminSection, setActiveAdminSection] = useState(isInitialSurveyDesigner ? 'projectWorkspace' : 'overview');
   const [menuCollapsed, setMenuCollapsed] = useState(false);
   const [selectedProjectIds, setSelectedProjectIds] = useState([]);
-  const [projectWorkspaceTab, setProjectWorkspaceTab] = useState('summary');
+  const [projectWorkspaceTab, setProjectWorkspaceTab] = useState(isInitialSurveyDesigner ? 'form' : 'summary');
   const [projectDataTab, setProjectDataTab] = useState('table');
   const [projectSettingsTab, setProjectSettingsTab] = useState('general');
   const [filters, setFilters] = useState({ enumerator: '', location: '', dateFrom: '', dateTo: '' });
@@ -2432,6 +2433,7 @@ function AdminDashboard({ token, session, onLogout }) {
   const currentRoleKey = normalizeAdminRoleKey(session?.role || 'admin');
   const currentPermissions = rolePermissionsFor(session?.role || currentRoleKey, foundation.roles);
   const currentRoleLabel = displayRoleName(session?.role || currentRoleKey, foundation.roles);
+  const isSurveyDesignerMode = currentRoleKey === 'surveyDesigner';
   const currentRoleInfo = foundation.roles.find((role) => role.key === currentRoleKey || role.key === session?.role) || {
     key: currentRoleKey,
     name: currentRoleLabel,
@@ -2445,6 +2447,7 @@ function AdminDashboard({ token, session, onLogout }) {
   }
 
   function canAccessAdminSection(section) {
+    if (isSurveyDesignerMode && ['overview', 'organisation', 'users', 'clients', 'vendors', 'library'].includes(section)) return false;
     return canAccessSection(section, currentPermissions);
   }
 
@@ -2463,6 +2466,16 @@ function AdminDashboard({ token, session, onLogout }) {
       country: selectedProject.settings?.country || 'India'
     });
   }, [selectedProject?.id, selectedProject?.name, selectedProject?.description, selectedProject?.settings?.sector, selectedProject?.settings?.country]);
+
+  useEffect(() => {
+    if (!isSurveyDesignerMode || !projects.length) return;
+    const designerProject = selectedProject || projects[0];
+    if (!designerProject) return;
+    if (selectedId !== designerProject.id) changeSelectedProject(designerProject.id);
+    if (activeAdminSection !== 'projectWorkspace') setActiveAdminSection('projectWorkspace');
+    if (projectWorkspaceTab !== 'form') setProjectWorkspaceTab('form');
+    if (!editing || editing.id !== designerProject.id) setEditing(projectToEditingDraft(designerProject));
+  }, [isSurveyDesignerMode, projects.length, selectedProject?.id, selectedId, activeAdminSection, projectWorkspaceTab, editing?.id]);
 
   useEffect(() => {
     if (!visibleSettingsTabIds.includes(projectSettingsTab)) setProjectSettingsTab('general');
@@ -2605,11 +2618,11 @@ function AdminDashboard({ token, session, onLogout }) {
     });
   }
 
-  function openProjectWorkspace(project, tab = 'summary') {
+  function openProjectWorkspace(project, tab = isSurveyDesignerMode ? 'form' : 'summary') {
     changeSelectedProject(project.id);
     setActiveAdminSection('projectWorkspace');
     setProjectWorkspaceTab(tab);
-    setEditing(null);
+    setEditing(tab === 'form' && isSurveyDesignerMode ? projectToEditingDraft(project) : null);
     setEditingClient(null);
     setEditingResponse(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2703,16 +2716,20 @@ function AdminDashboard({ token, session, onLogout }) {
     });
   }
 
-  function editProject(project) {
-    setEditing({
+  function projectToEditingDraft(project) {
+    return {
       ...project,
-      locations: project.locations.join('\n'),
+      locations: Array.isArray(project.locations) ? project.locations.join('\n') : project.locations || '',
       settings: normalizeSurveySettings(project.settings, project.slug),
-      questions: project.questions.map((question) => ({
+      questions: (project.questions || []).map((question) => ({
         ...question,
-        options: (question.options || []).join('\n')
+        options: Array.isArray(question.options) ? question.options.join('\n') : question.options || ''
       }))
-    });
+    };
+  }
+
+  function editProject(project) {
+    setEditing(projectToEditingDraft(project));
   }
 
   async function saveProject(project, successMessage = 'Project saved.') {
@@ -3089,23 +3106,30 @@ function AdminDashboard({ token, session, onLogout }) {
     }
   }
 
-  const platformNavItems = [
+  const platformNavItems = (isSurveyDesignerMode ? [
+    { key: 'designer', label: 'Survey Designer', section: 'projectWorkspace', permission: 'surveys.design', icon: <FileText size={17} />, action: () => selectedProject ? openProjectWorkspace(selectedProject, 'form') : openAdminSection('projects'), active: activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'form' },
+    { key: 'projects', label: 'Assigned Projects', section: 'projects', permission: 'surveys.design', icon: <ClipboardList size={17} />, action: () => openAdminSection('projects'), active: activeAdminSection === 'projects' }
+  ] : [
     { key: 'overview', label: 'Executive Dashboard', section: 'overview', icon: <Layers size={17} />, action: () => openAdminSection('overview'), active: activeAdminSection === 'overview' },
     { key: 'projects', label: 'Projects', section: 'projects', icon: <ClipboardList size={17} />, action: () => openAdminSection('projects'), active: activeAdminSection === 'projects' || activeAdminSection === 'projectWorkspace' },
     { key: 'library', label: 'Portfolio Analytics', section: 'library', icon: <BarChart3 size={17} />, action: () => openAdminSection('library'), active: activeAdminSection === 'library' }
-  ].filter(isNavItemAllowed);
-  const governanceNavItems = [
+  ]).filter(isNavItemAllowed);
+  const governanceNavItems = (isSurveyDesignerMode ? [] : [
     { key: 'organisation', label: 'Organisation Context', section: 'organisation', icon: <UserRound size={17} />, action: () => openAdminSection('organisation'), active: activeAdminSection === 'organisation' },
     { key: 'users', label: 'Users & RBAC', section: 'users', icon: <UserSearch size={17} />, action: () => openAdminSection('users'), active: activeAdminSection === 'users' },
     { key: 'clients', label: 'Clients', section: 'clients', icon: <ShieldCheck size={17} />, action: () => openAdminSection('clients'), active: activeAdminSection === 'clients' },
     { key: 'vendors', label: 'Vendors', section: 'vendors', icon: <Share2 size={17} />, action: () => openAdminSection('vendors'), active: activeAdminSection === 'vendors' }
-  ].filter(isNavItemAllowed);
-  const settingsNavItems = [
+  ]).filter(isNavItemAllowed);
+  const settingsNavItems = (isSurveyDesignerMode ? [
+    { key: 'builder', label: 'Builder', section: 'projectWorkspace', permission: 'surveys.design', icon: <Layers size={17} />, action: () => selectedProject ? openProjectWorkspace(selectedProject, 'form') : openAdminSection('projects'), active: activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'form' },
+    { key: 'preview', label: 'Preview Form', section: 'projectWorkspace', permission: 'surveys.design', icon: <Eye size={17} />, action: () => selectedProject && window.open(selectedProject.publicUrl, '_blank'), active: false },
+    { key: 'copy-link', label: 'Copy Survey Link', section: 'projectWorkspace', permission: 'surveys.design', icon: <Link2 size={17} />, action: copyPublicLink, active: false }
+  ] : [
     { key: 'data-table', label: 'Response Table', section: 'projectWorkspace', icon: <Table2 size={17} />, action: () => { if (selectedProject) { setProjectDataTab('table'); openProjectWorkspace(selectedProject, 'data'); } else openAdminSection('projects'); }, active: activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'data' && projectDataTab === 'table' },
     { key: 'downloads', label: 'Downloads', section: 'projectWorkspace', icon: <Download size={17} />, action: () => { if (selectedProject) { setProjectDataTab('downloads'); openProjectWorkspace(selectedProject, 'data'); } else openAdminSection('projects'); }, active: activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'data' && projectDataTab === 'downloads' },
     { key: 'map', label: 'Map', section: 'projectWorkspace', icon: <MapPin size={17} />, action: () => { if (selectedProject) { setProjectDataTab('map'); openProjectWorkspace(selectedProject, 'data'); } else openAdminSection('projects'); }, active: activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'data' && projectDataTab === 'map' },
     { key: 'project-settings', label: 'Project Settings', section: 'projectWorkspace', permission: 'projects.manage', icon: <Settings size={17} />, action: () => selectedProject ? openProjectWorkspace(selectedProject, 'settings') : openAdminSection('projects'), active: activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'settings' }
-  ].filter(isNavItemAllowed);
+  ]).filter(isNavItemAllowed);
   const projectStatusItems = [
     { key: 'all', label: 'All projects', count: projectCounts.all },
     { key: 'deployed', label: 'Deployed', count: projectCounts.deployed },
@@ -3359,12 +3383,14 @@ function AdminDashboard({ token, session, onLogout }) {
               </div>
 
               <div className="project-tabs" role="tablist" aria-label="Project workspace">
-                {[
-                  ['summary', 'Summary'],
-                  ['form', 'Form'],
-                  ['data', 'Data'],
-                  ['settings', 'Settings']
-                ].map(([tab, label]) => (
+                {(isSurveyDesignerMode
+                  ? [['form', 'Survey Designer']]
+                  : [
+                    ['summary', 'Summary'],
+                    ['form', 'Form'],
+                    ['data', 'Data'],
+                    ['settings', 'Settings']
+                  ]).map(([tab, label]) => (
                   <button
                     className={projectWorkspaceTab === tab ? 'active' : ''}
                     key={tab}
@@ -3431,33 +3457,37 @@ function AdminDashboard({ token, session, onLogout }) {
               )}
 
               {projectWorkspaceTab === 'form' && (
-                <div className="project-form-workspace">
-                  <div className="form-version-card">
-                    <div>
-                      <h2>Current version</h2>
-                      <p><strong>v1</strong> Last modified: {formatProjectDate(selectedProject.updatedAt)} · {selectedProjectQuestions} questions</p>
-                    </div>
-                    <button className="primary" onClick={() => editProject(selectedProject)}><Pencil size={18} /> Edit Form</button>
-                  </div>
-                  <div className="collect-card">
-                    <div>
-                      <h2>Collect data</h2>
-                      <p>Online and offline-enabled public survey link for field data collection.</p>
-                    </div>
-                    <div className="collect-actions">
-                      <button className="secondary" onClick={copyPublicLink}><Copy size={17} /> Copy</button>
-                      <button className="primary" onClick={() => window.open(selectedProject.publicUrl, '_blank')}><ExternalLink size={17} /> Open</button>
-                    </div>
-                  </div>
-                  <label className="check-row form-access-row">
-                    <input type="checkbox" checked readOnly />
-                    Allow submissions to this form without username and password
-                  </label>
-                  {editing && (
+                <div className={`project-form-workspace ${isSurveyDesignerMode ? 'designer-direct-workspace' : ''}`}>
+                  {!isSurveyDesignerMode && (
+                    <>
+                      <div className="form-version-card">
+                        <div>
+                          <h2>Current version</h2>
+                          <p><strong>v1</strong> Last modified: {formatProjectDate(selectedProject.updatedAt)} · {selectedProjectQuestions} questions</p>
+                        </div>
+                        <button className="primary" onClick={() => editProject(selectedProject)}><Pencil size={18} /> Edit Form</button>
+                      </div>
+                      <div className="collect-card">
+                        <div>
+                          <h2>Collect data</h2>
+                          <p>Online and offline-enabled public survey link for field data collection.</p>
+                        </div>
+                        <div className="collect-actions">
+                          <button className="secondary" onClick={copyPublicLink}><Copy size={17} /> Copy</button>
+                          <button className="primary" onClick={() => window.open(selectedProject.publicUrl, '_blank')}><ExternalLink size={17} /> Open</button>
+                        </div>
+                      </div>
+                      <label className="check-row form-access-row">
+                        <input type="checkbox" checked readOnly />
+                        Allow submissions to this form without username and password
+                      </label>
+                    </>
+                  )}
+                  {(editing || isSurveyDesignerMode) && (
                     <ProjectEditor
-                      project={editing}
+                      project={editing || projectToEditingDraft(selectedProject)}
                       onChange={setEditing}
-                      onCancel={() => setEditing(null)}
+                      onCancel={() => isSurveyDesignerMode ? openAdminSection('projects') : setEditing(null)}
                       onSave={saveProject}
                     />
                   )}

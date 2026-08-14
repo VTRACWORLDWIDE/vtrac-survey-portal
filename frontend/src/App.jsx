@@ -85,6 +85,96 @@ const mapBaseLayers = {
     maxZoom: 19
   }
 };
+const adminSectionPermissions = {
+  overview: ['platform.overview.view', 'analytics.view', 'projects.manage'],
+  projects: ['projects.manage', 'surveys.design', 'responses.view', 'responses.export', 'analytics.view'],
+  projectWorkspace: ['projects.manage', 'surveys.design', 'responses.view', 'responses.edit', 'responses.export', 'quality.manage', 'analytics.view'],
+  organisation: ['organisation.manage'],
+  users: ['users.manage'],
+  clients: ['clients.manage'],
+  vendors: ['vendors.manage'],
+  library: ['analytics.view', 'responses.export']
+};
+
+const legacyRolePermissionMap = {
+  admin: ['*'],
+  teamLead: ['platform.overview.view', 'responses.view', 'quality.manage'],
+  floorManager: ['platform.overview.view', 'projects.manage', 'responses.view', 'responses.export', 'analytics.view'],
+  qaQc: ['platform.overview.view', 'responses.view', 'responses.edit', 'quality.manage', 'audit.view']
+};
+
+const adminRoleAliases = {
+  admin: 'platformSuperAdmin',
+  teamLead: 'supervisor',
+  floorManager: 'projectManager',
+  qaQc: 'qaManager'
+};
+
+function normalizeAdminRoleKey(role) {
+  const value = String(role || 'analyst').trim();
+  return adminRoleAliases[value] || value || 'analyst';
+}
+
+function decodeTokenClaims(token) {
+  if (!token || !token.includes('.')) return null;
+  try {
+    const [body] = token.split('.');
+    const base64 = body.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+    return JSON.parse(window.atob(padded));
+  } catch {
+    return null;
+  }
+}
+
+function rolePermissionsFor(roleKey, roles = []) {
+  const normalizedRole = normalizeAdminRoleKey(roleKey);
+  if (normalizedRole === 'platformSuperAdmin' || roleKey === 'admin') return new Set(['*']);
+  const role = roles.find((item) => item.key === normalizedRole || item.key === roleKey);
+  return new Set(role?.permissions || legacyRolePermissionMap[roleKey] || []);
+}
+
+function hasPermissionInSet(permissions, permission) {
+  return permissions.has('*') || permissions.has(permission);
+}
+
+function canAccessSection(section, permissions) {
+  const requiredPermissions = adminSectionPermissions[section] || [];
+  return requiredPermissions.length === 0 || requiredPermissions.some((permission) => hasPermissionInSet(permissions, permission));
+}
+
+function displayRoleName(roleKey, roles = []) {
+  const normalizedRole = normalizeAdminRoleKey(roleKey);
+  const role = roles.find((item) => item.key === normalizedRole || item.key === roleKey);
+  if (role) return role.name;
+  if (normalizedRole === 'platformSuperAdmin') return 'Platform Super Admin';
+  return roleDisplayName(roleKey, roles);
+}
+
+function parseBulkUserRows(text, defaultRole = 'analyst') {
+  return String(text || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'))
+    .map((line) => {
+      const cells = line.includes('\t') ? line.split('\t') : line.split(',');
+      const [displayName = '', email = '', username = '', role = '', password = ''] = cells.map((cell) => cell.trim());
+      const generatedUsername = (username || email.split('@')[0] || displayName)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '.')
+        .replace(/^\.+|\.+$/g, '');
+      return {
+        displayName: displayName || generatedUsername,
+        email,
+        username: generatedUsername,
+        role: role || defaultRole,
+        password,
+        isActive: true
+      };
+    })
+    .filter((user) => user.username && user.displayName);
+}
+
 const markerPalettes = {
   vtrac: ['#0aa7a4', '#133e98', '#2f80ed', '#7b61ff', '#e0a12f', '#ef476f', '#2fbf71'],
   qualitative: ['#ff8c7a', '#a8f080', '#a678de', '#7ee0a1', '#7a85df', '#f0d36b', '#ea7fce', '#79c7c2'],
@@ -2008,6 +2098,7 @@ function ClientDashboard({ token, onLogout }) {
 
 function AdminApp() {
   const [token, setToken] = useState(localStorage.getItem('vtracAdminToken') || '');
+  const session = useMemo(() => decodeTokenClaims(token), [token]);
 
   function handleLogin(nextToken) {
     localStorage.setItem('vtracAdminToken', nextToken);
@@ -2020,7 +2111,7 @@ function AdminApp() {
   }
 
   if (!token) return <AdminLogin onLogin={handleLogin} />;
-  return <AdminDashboard token={token} onLogout={logout} />;
+  return <AdminDashboard token={token} session={session} onLogout={logout} />;
 }
 
 function AdminLogin({ onLogin }) {
@@ -2244,7 +2335,7 @@ function AdminLogin({ onLogin }) {
   );
 }
 
-function AdminDashboard({ token, onLogout }) {
+function AdminDashboard({ token, session, onLogout }) {
   const [projects, setProjects] = useState([]);
   const [clients, setClients] = useState([]);
   const [foundation, setFoundation] = useState({ organisation: null, workspace: null, roles: [], permissions: [], navigation: [], counts: {} });
@@ -2256,6 +2347,8 @@ function AdminDashboard({ token, onLogout }) {
   const [editing, setEditing] = useState(null);
   const [editingClient, setEditingClient] = useState(null);
   const [editingUser, setEditingUser] = useState(null);
+  const [bulkUserText, setBulkUserText] = useState('');
+  const [bulkUserWorking, setBulkUserWorking] = useState(false);
   const [editingVendor, setEditingVendor] = useState(null);
   const [organisationDraft, setOrganisationDraft] = useState(null);
   const [editingResponse, setEditingResponse] = useState(null);
@@ -2336,6 +2429,30 @@ function AdminDashboard({ token, onLogout }) {
                 ? 'SurveyOS - Vendors'
                 : 'SurveyOS - Project Library';
   const authHeaders = { Authorization: `Bearer ${token}` };
+  const currentRoleKey = normalizeAdminRoleKey(session?.role || 'admin');
+  const currentPermissions = rolePermissionsFor(session?.role || currentRoleKey, foundation.roles);
+  const currentRoleLabel = displayRoleName(session?.role || currentRoleKey, foundation.roles);
+  const currentRoleInfo = foundation.roles.find((role) => role.key === currentRoleKey || role.key === session?.role) || {
+    key: currentRoleKey,
+    name: currentRoleLabel,
+    scope: currentRoleKey === 'platformSuperAdmin' ? 'platform' : 'workspace',
+    permissions: [...currentPermissions]
+  };
+  const currentUserLabel = session?.displayName || session?.username || 'Admin';
+
+  function hasAdminPermission(permission) {
+    return hasPermissionInSet(currentPermissions, permission);
+  }
+
+  function canAccessAdminSection(section) {
+    return canAccessSection(section, currentPermissions);
+  }
+
+  function isNavItemAllowed(item) {
+    const sectionAllowed = item.section ? canAccessAdminSection(item.section) : true;
+    const permissionAllowed = item.permission ? hasAdminPermission(item.permission) : true;
+    return sectionAllowed && permissionAllowed;
+  }
 
   useEffect(() => {
     if (!selectedProject) return;
@@ -2457,6 +2574,10 @@ function AdminDashboard({ token, onLogout }) {
   }
 
   function openAdminSection(section) {
+    if (!canAccessAdminSection(section)) {
+      setStatus(`Your role (${currentRoleLabel}) does not include access to this page.`);
+      return;
+    }
     setActiveAdminSection(section);
     setEditing(null);
     setEditingClient(null);
@@ -2467,8 +2588,12 @@ function AdminDashboard({ token, onLogout }) {
   }
 
   function filterProjects(statusFilter) {
+    if (!canAccessAdminSection('projects')) {
+      setStatus(`Your role (${currentRoleLabel}) does not include access to project lists.`);
+      return;
+    }
     setProjectStatusFilter(statusFilter);
-    setActiveAdminSection('projects');
+    openAdminSection('projects');
   }
 
   function toggleProjectSelection(projectId, checked) {
@@ -2750,6 +2875,36 @@ function AdminDashboard({ token, onLogout }) {
     await loadFoundation();
   }
 
+  async function bulkCreateUsers() {
+    const usersToCreate = parseBulkUserRows(bulkUserText);
+    if (usersToCreate.length === 0) {
+      setStatus('Paste at least one user row: Display Name, email, username, role, temporary password.');
+      return;
+    }
+    setBulkUserWorking(true);
+    setStatus('');
+    let createdCount = 0;
+    const errors = [];
+    try {
+      for (const user of usersToCreate) {
+        const response = await fetch(`${apiBase}/api/admin/users`, {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify(user)
+        });
+        if (response.status === 401) return onLogout();
+        const payload = await response.json().catch(() => ({}));
+        if (response.ok) createdCount += 1;
+        else errors.push(`${user.username}: ${payload.error || 'not created'}`);
+      }
+      await loadFoundation();
+      if (createdCount && errors.length === 0) setBulkUserText('');
+      setStatus(`${createdCount} user ID${createdCount === 1 ? '' : 's'} created.${errors.length ? ' Review: ' + errors.slice(0, 3).join('; ') : ''}`);
+    } finally {
+      setBulkUserWorking(false);
+    }
+  }
+
   function startNewVendor() {
     setEditingVendor({
       name: '',
@@ -2935,25 +3090,22 @@ function AdminDashboard({ token, onLogout }) {
   }
 
   const platformNavItems = [
-    { key: 'overview', label: 'Platform Overview', icon: <Layers size={17} />, action: () => openAdminSection('overview'), active: activeAdminSection === 'overview' },
-    { key: 'organisations', label: 'Organisations', icon: <UserRound size={17} />, action: () => openAdminSection('organisation'), active: activeAdminSection === 'organisation' },
-    { key: 'subscriptions', label: 'Subscriptions', icon: <ClipboardList size={17} />, action: () => openAdminSection('clients'), active: activeAdminSection === 'clients' },
-    { key: 'plans', label: 'Plans', icon: <FileText size={17} />, action: () => openAdminSection('projects'), active: activeAdminSection === 'projects' || activeAdminSection === 'projectWorkspace' },
-    { key: 'revenue', label: 'Revenue', icon: <TrendingUp size={17} />, action: () => openAdminSection('library'), active: activeAdminSection === 'library' },
-    { key: 'ai-usage', label: 'AI Usage', icon: <Flame size={17} />, action: () => openAdminSection('library'), active: false },
-    { key: 'system-health', label: 'System Health', icon: <ShieldCheck size={17} />, action: refreshAdminData, active: false },
-    { key: 'audit-logs', label: 'Audit Logs', icon: <Eye size={17} />, action: () => openAdminSection('users'), active: false },
-    { key: 'feature-flags', label: 'Feature Flags', icon: <Settings size={17} />, action: () => openAdminSection('organisation'), active: false },
-    { key: 'integrations', label: 'Integrations', icon: <Share2 size={17} />, action: () => openAdminSection('vendors'), active: activeAdminSection === 'vendors' }
-  ];
+    { key: 'overview', label: 'Executive Dashboard', section: 'overview', icon: <Layers size={17} />, action: () => openAdminSection('overview'), active: activeAdminSection === 'overview' },
+    { key: 'projects', label: 'Projects', section: 'projects', icon: <ClipboardList size={17} />, action: () => openAdminSection('projects'), active: activeAdminSection === 'projects' || activeAdminSection === 'projectWorkspace' },
+    { key: 'library', label: 'Portfolio Analytics', section: 'library', icon: <BarChart3 size={17} />, action: () => openAdminSection('library'), active: activeAdminSection === 'library' }
+  ].filter(isNavItemAllowed);
+  const governanceNavItems = [
+    { key: 'organisation', label: 'Organisation Context', section: 'organisation', icon: <UserRound size={17} />, action: () => openAdminSection('organisation'), active: activeAdminSection === 'organisation' },
+    { key: 'users', label: 'Users & RBAC', section: 'users', icon: <UserSearch size={17} />, action: () => openAdminSection('users'), active: activeAdminSection === 'users' },
+    { key: 'clients', label: 'Clients', section: 'clients', icon: <ShieldCheck size={17} />, action: () => openAdminSection('clients'), active: activeAdminSection === 'clients' },
+    { key: 'vendors', label: 'Vendors', section: 'vendors', icon: <Share2 size={17} />, action: () => openAdminSection('vendors'), active: activeAdminSection === 'vendors' }
+  ].filter(isNavItemAllowed);
   const settingsNavItems = [
-    { key: 'users', label: 'Users', icon: <UserSearch size={17} />, action: () => openAdminSection('users'), active: activeAdminSection === 'users' },
-    { key: 'roles', label: 'Roles & Permissions', icon: <ShieldCheck size={17} />, action: () => openAdminSection('users'), active: false },
-    { key: 'email-templates', label: 'Email Templates', icon: <FileText size={17} />, action: () => openAdminSection('organisation'), active: false },
-    { key: 'settings', label: 'Settings', icon: <Settings size={17} />, action: () => openAdminSection('organisation'), active: false },
-    { key: 'downloads', label: 'Downloads', icon: <Download size={17} />, action: () => { if (selectedProject) { setProjectDataTab('downloads'); openProjectWorkspace(selectedProject, 'data'); } else openAdminSection('projects'); }, active: activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'data' && projectDataTab === 'downloads' },
-    { key: 'map', label: 'Map', icon: <MapPin size={17} />, action: () => { if (selectedProject) { setProjectDataTab('map'); openProjectWorkspace(selectedProject, 'data'); } else openAdminSection('projects'); }, active: activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'data' && projectDataTab === 'map' }
-  ];
+    { key: 'data-table', label: 'Response Table', section: 'projectWorkspace', icon: <Table2 size={17} />, action: () => { if (selectedProject) { setProjectDataTab('table'); openProjectWorkspace(selectedProject, 'data'); } else openAdminSection('projects'); }, active: activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'data' && projectDataTab === 'table' },
+    { key: 'downloads', label: 'Downloads', section: 'projectWorkspace', icon: <Download size={17} />, action: () => { if (selectedProject) { setProjectDataTab('downloads'); openProjectWorkspace(selectedProject, 'data'); } else openAdminSection('projects'); }, active: activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'data' && projectDataTab === 'downloads' },
+    { key: 'map', label: 'Map', section: 'projectWorkspace', icon: <MapPin size={17} />, action: () => { if (selectedProject) { setProjectDataTab('map'); openProjectWorkspace(selectedProject, 'data'); } else openAdminSection('projects'); }, active: activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'data' && projectDataTab === 'map' },
+    { key: 'project-settings', label: 'Project Settings', section: 'projectWorkspace', permission: 'projects.manage', icon: <Settings size={17} />, action: () => selectedProject ? openProjectWorkspace(selectedProject, 'settings') : openAdminSection('projects'), active: activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'settings' }
+  ].filter(isNavItemAllowed);
   const projectStatusItems = [
     { key: 'all', label: 'All projects', count: projectCounts.all },
     { key: 'deployed', label: 'Deployed', count: projectCounts.deployed },
@@ -2971,8 +3123,8 @@ function AdminDashboard({ token, onLogout }) {
           </span>
         </div>
         <div className="admin-topbar-context">
-          <span>Phase 1 Foundation</span>
-          <strong>Command Center</strong>
+          <span>{currentRoleLabel}</span>
+          <strong>{currentUserLabel}</strong>
         </div>
         <label className="admin-search">
           <Search size={22} />
@@ -2999,13 +3151,15 @@ function AdminDashboard({ token, onLogout }) {
             </button>
           </div>
 
-          <button className="admin-new-button surveyos-new-button" onClick={startNewProject}>
-            <Plus size={16} />
-            <span>New Form</span>
-          </button>
+          {hasAdminPermission('projects.manage') && (
+            <button className="admin-new-button surveyos-new-button" onClick={startNewProject}>
+              <Plus size={16} />
+              <span>New Form</span>
+            </button>
+          )}
 
           <nav className="surveyos-sidebar-nav" aria-label="Platform sections">
-            <p className="surveyos-nav-section-title">Platform</p>
+            <p className="surveyos-nav-section-title">Workspace</p>
             {platformNavItems.map((item) => (
               <button type="button" className={item.active ? 'active' : ''} key={item.key} onClick={item.action} title={item.label}>
                 {item.icon}
@@ -3022,7 +3176,15 @@ function AdminDashboard({ token, onLogout }) {
               </button>
             ))}
 
-            <p className="surveyos-nav-section-title">Settings</p>
+            {governanceNavItems.length > 0 && <p className="surveyos-nav-section-title">Governance</p>}
+            {governanceNavItems.map((item) => (
+              <button type="button" className={item.active ? 'active' : ''} key={item.key} onClick={item.action} title={item.label}>
+                {item.icon}
+                <span>{item.label}</span>
+              </button>
+            ))}
+
+            {settingsNavItems.length > 0 && <p className="surveyos-nav-section-title">Project Tools</p>}
             {settingsNavItems.map((item) => (
               <button type="button" className={item.active ? 'active' : ''} key={item.key} onClick={item.action} title={item.label}>
                 {item.icon}
@@ -3059,13 +3221,19 @@ function AdminDashboard({ token, onLogout }) {
         </aside>
 
         <div className="admin-main">
-          {activeAdminSection === 'overview' && (
+          {!canAccessAdminSection(activeAdminSection) && (
+            <AccessRestrictedPanel roleLabel={currentRoleLabel} section={activeAdminSection} />
+          )}
+
+          {canAccessAdminSection('overview') && activeAdminSection === 'overview' && (
             <SurveyOSFoundationDashboard
               clients={clients}
               data={data}
               download={download}
               loading={loading}
               foundation={foundation}
+              session={session}
+              roleInfo={currentRoleInfo}
               users={users}
               vendors={vendors}
               onOpenAnalytics={() => openAdminSection('library')}
@@ -3089,7 +3257,7 @@ function AdminDashboard({ token, onLogout }) {
             />
           )}
 
-          {activeAdminSection === 'projects' && (
+          {canAccessAdminSection('projects') && activeAdminSection === 'projects' && (
             <>
               <div className="admin-project-toolbar">
                 <div>
@@ -3174,7 +3342,7 @@ function AdminDashboard({ token, onLogout }) {
             </>
           )}
 
-          {activeAdminSection === 'projectWorkspace' && selectedProject && (
+          {canAccessAdminSection('projectWorkspace') && activeAdminSection === 'projectWorkspace' && selectedProject && (
             <section className="project-workspace">
               <div className="project-workspace-header">
                 <div>
@@ -3592,7 +3760,7 @@ function AdminDashboard({ token, onLogout }) {
           )}
 
 
-          {activeAdminSection === 'organisation' && (
+          {canAccessAdminSection('organisation') && activeAdminSection === 'organisation' && (
             <OrganisationContextPanel
               foundation={foundation}
               draft={organisationDraft}
@@ -3601,10 +3769,15 @@ function AdminDashboard({ token, onLogout }) {
             />
           )}
 
-          {activeAdminSection === 'users' && (
+          {canAccessAdminSection('users') && activeAdminSection === 'users' && (
             <UserManagementPanel
               users={users}
               roles={foundation.roles}
+              permissions={foundation.permissions}
+              bulkUserText={bulkUserText}
+              bulkUserWorking={bulkUserWorking}
+              onBulkUserTextChange={setBulkUserText}
+              onBulkCreate={bulkCreateUsers}
               editingUser={editingUser}
               onStartNew={startNewUser}
               onEdit={editUser}
@@ -3614,7 +3787,7 @@ function AdminDashboard({ token, onLogout }) {
             />
           )}
 
-          {activeAdminSection === 'clients' && (
+          {canAccessAdminSection('clients') && activeAdminSection === 'clients' && (
             <section id="client-access">
               <ClientAccessManager
                 clients={clients}
@@ -3631,7 +3804,7 @@ function AdminDashboard({ token, onLogout }) {
             </section>
           )}
 
-          {activeAdminSection === 'vendors' && (
+          {canAccessAdminSection('vendors') && activeAdminSection === 'vendors' && (
             <VendorManagementPanel
               vendors={vendors}
               projects={projects}
@@ -3644,7 +3817,7 @@ function AdminDashboard({ token, onLogout }) {
             />
           )}
 
-          {activeAdminSection === 'library' && (
+          {canAccessAdminSection('library') && activeAdminSection === 'library' && (
             <PortfolioDashboard
               clients={clients}
               clientProjectRows={clientProjectRows}
@@ -4243,6 +4416,21 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
   );
 }
 
+function AccessRestrictedPanel({ roleLabel, section }) {
+  return (
+    <section className="phase1-shell">
+      <div className="panel access-restricted-panel">
+        <ShieldCheck size={34} />
+        <div>
+          <p className="eyebrow">Access controlled</p>
+          <h2>This page is not enabled for your role</h2>
+          <p>{roleLabel} does not currently include access to the {section} workspace. A Platform Super Admin or Organisation Owner can change this from Users & RBAC.</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function OrganisationContextPanel({ foundation, draft, onChange, onSave }) {
   const organisation = foundation.organisation || {};
   const workspace = foundation.workspace || {};
@@ -4353,7 +4541,21 @@ function RolePermissionMatrix({ roles, permissions }) {
   );
 }
 
-function UserManagementPanel({ users, roles, editingUser, onStartNew, onEdit, onChange, onCancel, onSave }) {
+function UserManagementPanel({
+  users,
+  roles,
+  permissions = [],
+  bulkUserText,
+  bulkUserWorking,
+  onBulkUserTextChange,
+  onBulkCreate,
+  editingUser,
+  onStartNew,
+  onEdit,
+  onChange,
+  onCancel,
+  onSave
+}) {
   function update(field, value) {
     onChange({ ...editingUser, [field]: value });
   }
@@ -4367,6 +4569,29 @@ function UserManagementPanel({ users, roles, editingUser, onStartNew, onEdit, on
           <p>Create staff access, map emails, and assign Phase 1 roles.</p>
         </div>
         <button className="primary" onClick={onStartNew}><Plus size={17} /> New User</button>
+      </div>
+      <div className="phase1-overview-grid">
+        <SummaryKpiCard icon={<UserSearch size={18} />} label="Staff user IDs" value={users.length} detail="Internal portal accounts" accent="blue" />
+        <SummaryKpiCard icon={<ShieldCheck size={18} />} label="Role templates" value={roles.length} detail="RBAC catalog" accent="teal" />
+        <SummaryKpiCard icon={<CheckCircle2 size={18} />} label="Active users" value={users.filter((user) => user.isActive !== false).length} detail="Can sign in today" accent="sky" />
+        <SummaryKpiCard icon={<KeyRound size={18} />} label="Login method" value="Email/ID" detail="Username or mapped email" accent="amber" />
+      </div>
+      <div className="panel phase1-editor-card bulk-user-import-card">
+        <div className="bulk-user-head">
+          <div>
+            <p className="eyebrow">Bulk user creation</p>
+            <h3>Create staff IDs from a pasted list</h3>
+            <p>Use one row per user: Display Name, email, username, role, temporary password. Passwords must be at least 8 characters.</p>
+          </div>
+          <button className="secondary" disabled={bulkUserWorking || !bulkUserText?.trim()} onClick={onBulkCreate}>
+            <Upload size={16} /> {bulkUserWorking ? 'Creating...' : 'Create IDs'}
+          </button>
+        </div>
+        <textarea
+          value={bulkUserText || ''}
+          onChange={(event) => onBulkUserTextChange(event.target.value)}
+          placeholder={'Nagendra Reddy,nagendra@vtracworldwide.com,nagendra,organisationAdmin,TempPass123\nField Supervisor,supervisor@vtracworldwide.com,supervisor,supervisor,TempPass123'}
+        />
       </div>
       {editingUser && (
         <div className="panel phase1-editor-card">
@@ -4429,6 +4654,7 @@ function UserManagementPanel({ users, roles, editingUser, onStartNew, onEdit, on
         ))}
         {users.length === 0 && <p className="empty">No internal users yet.</p>}
       </div>
+      <RolePermissionMatrix roles={roles} permissions={permissions} />
     </section>
   );
 }
@@ -5091,6 +5317,8 @@ function SurveyOSFoundationDashboard({
   download,
   foundation,
   loading,
+  session,
+  roleInfo,
   onOpenAnalytics,
   onOpenClients,
   onOpenOrganisation,
@@ -5107,6 +5335,9 @@ function SurveyOSFoundationDashboard({
   vendors = []
 }) {
   const portfolioProjects = projects.filter((project) => project.slug !== 'pilot-survey');
+  const dashboardRoleName = roleInfo?.name || displayRoleName(session?.role || 'admin', foundation?.roles || []);
+  const dashboardScope = roleInfo?.scope || 'workspace';
+  const dashboardUserName = session?.displayName || session?.username || 'Admin';
   const deployedProjects = portfolioProjects.filter((project) => getProjectStatus(project) === 'deployed');
   const draftProjects = portfolioProjects.filter((project) => getProjectStatus(project) === 'draft');
   const activeClients = clients.filter((client) => client.isActive !== false);
@@ -5250,7 +5481,7 @@ function SurveyOSFoundationDashboard({
 
   return (
     <section id="surveyos-overview" className="admin-section surveyos-super-admin">
-      <div className="superadmin-stage-label">1. Platform Super Admin Dashboard</div>
+      <div className="superadmin-stage-label">1. {dashboardRoleName} Dashboard</div>
       <div className="superadmin-shell">
         <aside className="superadmin-sidebar">
           <div className="superadmin-brand">
@@ -5289,15 +5520,15 @@ function SurveyOSFoundationDashboard({
         <div className="superadmin-main">
           <header className="superadmin-header">
             <div>
-              <h2>Platform Super Admin</h2>
-              <span>Super Admin</span>
+              <h2>{dashboardRoleName}</h2>
+              <span>{dashboardScope}</span>
             </div>
             <div className="superadmin-header-actions">
               <button type="button" className="superadmin-date">{dateRangeLabel} <CalendarClock size={14} /></button>
               <button type="button" aria-label="Search projects"><Search size={17} /></button>
               <button type="button" aria-label="Refresh platform data" onClick={onRefresh}><RefreshCw size={17} /></button>
               <button type="button" aria-label="Open projects" onClick={onOpenProjects}><ClipboardList size={17} /></button>
-              <div className="superadmin-avatar">A<i /></div>
+              <div className="superadmin-avatar">{dashboardUserName.charAt(0).toUpperCase()}<i /></div>
             </div>
           </header>
 

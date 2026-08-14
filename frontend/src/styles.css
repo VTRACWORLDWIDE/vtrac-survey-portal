@@ -9751,3 +9751,63 @@ body:has(.admin-console) {
 /* End non-cropping correction */
 
 /* End Reference-inspired VTRAC landing page with separate login modal */
+
+
+/* Phase 1 access management refinements */
+.access-restricted-panel {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  padding: 28px;
+}
+
+.access-restricted-panel svg {
+  color: #0aa7a4;
+  flex: 0 0 auto;
+}
+
+.access-restricted-panel h2 {
+  color: #17243f;
+  margin: 0 0 6px;
+}
+
+.access-restricted-panel p {
+  color: #65718b;
+  margin: 0;
+}
+
+.bulk-user-import-card {
+  background: linear-gradient(135deg, #f8fbff, #f7fffe);
+}
+
+.bulk-user-head {
+  align-items: start;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.bulk-user-head h3 {
+  color: #17243f;
+  font-size: 1rem;
+  margin: 2px 0 4px;
+}
+
+.bulk-user-head p {
+  color: #65718b;
+  margin: 0;
+}
+
+.bulk-user-import-card textarea {
+  font-family: inherit;
+  min-height: 96px;
+  resize: vertical;
+}
+
+@media (max-width: 760px) {
+  .bulk-user-head,
+  .access-restricted-panel {
+    align-items: stretch;
+    display: grid;
+  }
+}

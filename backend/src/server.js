@@ -33,7 +33,16 @@ const clientPassword = process.env.CLIENT_PASSWORD || 'client123';
 const tokenSecret = process.env.ADMIN_TOKEN_SECRET || 'change-this-local-secret';
 const defaultStaffPassword = process.env.STAFF_DEFAULT_PASSWORD || 'password';
 const defaultProjectSlug = 'bengaluru-second-airport-feasibility';
+const componentModes = new Set(['off', 'optional', 'mandatory']);
+const defaultComponentPolicy = {
+  airportLocationFlow: 'off',
+  gps: 'off',
+  audio: 'off',
+  respondentPhone: 'optional',
+  householdId: 'off'
+};
 const defaultProjectSettings = {
+  componentPolicy: { ...defaultComponentPolicy },
   airportLocationMode: false,
   captureGps: false,
   captureAudio: false,
@@ -42,6 +51,60 @@ const defaultProjectSettings = {
   status: 'deployed',
   archivedAt: ''
 };
+const defaultOrganisationSlug = 'vtrac-worldwide';
+const defaultWorkspaceSlug = 'vtrac-field-intelligence';
+const defaultOrganisationProfile = {
+  name: 'VTRAC Worldwide',
+  legalName: 'VTRAC Worldwide',
+  website: 'https://vtracworldwide.com',
+  primaryContactName: adminDisplayName,
+  primaryContactEmail: adminEmail || recoveryNotifyEmail,
+  primaryContactPhone: ''
+};
+const phaseOnePermissions = [
+  { key: 'platform.overview.view', group: 'Platform', label: 'View platform overview' },
+  { key: 'organisation.manage', group: 'Organisation', label: 'Manage organisation context' },
+  { key: 'projects.manage', group: 'Projects', label: 'Create and manage projects' },
+  { key: 'surveys.design', group: 'Surveys', label: 'Design survey forms and components' },
+  { key: 'responses.view', group: 'Data', label: 'View submitted responses' },
+  { key: 'responses.edit', group: 'Data', label: 'Correct submitted responses' },
+  { key: 'responses.export', group: 'Data', label: 'Download data exports' },
+  { key: 'quality.manage', group: 'Quality', label: 'Review quality findings' },
+  { key: 'clients.manage', group: 'Access', label: 'Create client users and assign projects' },
+  { key: 'users.manage', group: 'Access', label: 'Create internal users and assign roles' },
+  { key: 'vendors.manage', group: 'Operations', label: 'Manage field vendors' },
+  { key: 'analytics.view', group: 'Analytics', label: 'View reports and dashboards' },
+  { key: 'audit.view', group: 'Governance', label: 'View audit activity' }
+];
+const phaseOneRoles = [
+  { key: 'platformSuperAdmin', name: 'Platform Super Admin', scope: 'platform', description: 'Full platform, tenant, RBAC, and system administration.', permissions: ['*'] },
+  { key: 'organisationOwner', name: 'Organisation Owner', scope: 'organisation', description: 'Owns organisation configuration, users, clients, vendors, and projects.', permissions: ['organisation.manage', 'projects.manage', 'surveys.design', 'responses.view', 'responses.edit', 'responses.export', 'quality.manage', 'clients.manage', 'users.manage', 'vendors.manage', 'analytics.view', 'audit.view'] },
+  { key: 'organisationAdmin', name: 'Organisation Admin', scope: 'organisation', description: 'Day-to-day admin for projects, users, clients, vendors, and exports.', permissions: ['platform.overview.view', 'projects.manage', 'surveys.design', 'responses.view', 'responses.edit', 'responses.export', 'quality.manage', 'clients.manage', 'users.manage', 'vendors.manage', 'analytics.view'] },
+  { key: 'projectManager', name: 'Project Manager', scope: 'project', description: 'Manages assigned projects, form configuration, fieldwork, and exports.', permissions: ['platform.overview.view', 'projects.manage', 'surveys.design', 'responses.view', 'responses.edit', 'responses.export', 'quality.manage', 'analytics.view'] },
+  { key: 'surveyDesigner', name: 'Survey Designer', scope: 'project', description: 'Builds questionnaires and reusable survey components.', permissions: ['platform.overview.view', 'surveys.design', 'responses.view'] },
+  { key: 'qaManager', name: 'QA Manager', scope: 'project', description: 'Reviews data quality, response corrections, and audit findings.', permissions: ['platform.overview.view', 'responses.view', 'responses.edit', 'quality.manage', 'analytics.view', 'audit.view'] },
+  { key: 'analyst', name: 'Analyst', scope: 'project', description: 'Views dashboards, tables, exports, and reports.', permissions: ['platform.overview.view', 'responses.view', 'responses.export', 'analytics.view'] },
+  { key: 'vendorAdmin', name: 'Vendor Admin', scope: 'vendor', description: 'Tracks vendor-level field operations and assigned work.', permissions: ['platform.overview.view', 'responses.view', 'analytics.view'] },
+  { key: 'supervisor', name: 'Supervisor', scope: 'project', description: 'Supervises enumerators and live field collection.', permissions: ['platform.overview.view', 'responses.view', 'quality.manage'] },
+  { key: 'clientViewer', name: 'Client Viewer', scope: 'client', description: 'Client-safe project dashboard access.', permissions: ['analytics.view'] },
+  { key: 'auditor', name: 'Auditor', scope: 'organisation', description: 'Read-only governance and audit visibility.', permissions: ['platform.overview.view', 'responses.view', 'audit.view'] }
+];
+const legacyRolePermissionMap = {
+  admin: ['*'],
+  teamLead: ['platform.overview.view', 'responses.view', 'quality.manage'],
+  floorManager: ['platform.overview.view', 'projects.manage', 'responses.view', 'responses.export', 'analytics.view'],
+  qaQc: ['platform.overview.view', 'responses.view', 'responses.edit', 'quality.manage', 'audit.view']
+};
+
+const phaseOneNavigation = [
+  { key: 'overview', label: 'Executive Dashboard', scope: 'workspace' },
+  { key: 'projects', label: 'Projects', scope: 'workspace' },
+  { key: 'organisation', label: 'Organisation Context', scope: 'organisation' },
+  { key: 'users', label: 'Users & RBAC', scope: 'organisation' },
+  { key: 'clients', label: 'Clients', scope: 'organisation' },
+  { key: 'vendors', label: 'Vendors', scope: 'organisation' },
+  { key: 'library', label: 'Portfolio Analytics', scope: 'workspace' }
+];
 const transportModeOptions = [
   'Private car',
   'App cab / taxi',
@@ -111,6 +174,80 @@ app.get('/api/admin/me', requireAdmin, (req, res) => {
   res.json({ username: req.admin.username, displayName: req.admin.displayName || req.admin.username, email: req.admin.email || null, role: req.admin.role });
 });
 
+app.get('/api/admin/foundation', requireAdmin, async (req, res, next) => {
+  try {
+    res.json(await loadFoundation(req.admin.role));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/admin/rbac', requireAdmin, async (_req, res, next) => {
+  try {
+    res.json({ roles: await loadRoles(), permissions: phaseOnePermissions });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/api/admin/organisation', requireAdmin, requireAnyAdminPermission('organisation.manage'), async (req, res, next) => {
+  try {
+    res.json({ organisation: await saveOrganisation(req.body), message: 'Organisation context saved.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/admin/users', requireAdmin, requireAnyAdminPermission('users.manage'), async (_req, res, next) => {
+  try {
+    res.json({ users: await loadUsers() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/admin/users', requireAdmin, requireAnyAdminPermission('users.manage'), async (req, res, next) => {
+  try {
+    const user = await saveUser(req.body);
+    res.status(201).json({ user, message: 'User access saved.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/api/admin/users/:id', requireAdmin, requireAnyAdminPermission('users.manage'), async (req, res, next) => {
+  try {
+    res.json({ user: await saveUser({ ...req.body, id: req.params.id }), message: 'User access saved.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/admin/vendors', requireAdmin, requireAnyAdminPermission('vendors.manage'), async (_req, res, next) => {
+  try {
+    res.json({ vendors: await loadVendors() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/admin/vendors', requireAdmin, requireAnyAdminPermission('vendors.manage'), async (req, res, next) => {
+  try {
+    const vendor = await saveVendor(req.body);
+    res.status(201).json({ vendor, message: 'Vendor saved.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/api/admin/vendors/:id', requireAdmin, requireAnyAdminPermission('vendors.manage'), async (req, res, next) => {
+  try {
+    res.json({ vendor: await saveVendor({ ...req.body, id: req.params.id }), message: 'Vendor saved.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post('/api/auth/recovery-request', async (req, res, next) => {
   try {
     const recovery = await createRecoveryRequest(req.body);
@@ -167,7 +304,7 @@ app.get('/api/client/projects', requireClient, async (req, res, next) => {
   }
 });
 
-app.get('/api/admin/clients', requireAdmin, async (_req, res, next) => {
+app.get('/api/admin/clients', requireAdmin, requireAnyAdminPermission('clients.manage'), async (_req, res, next) => {
   try {
     res.json({ clients: await loadClients() });
   } catch (error) {
@@ -175,7 +312,7 @@ app.get('/api/admin/clients', requireAdmin, async (_req, res, next) => {
   }
 });
 
-app.post('/api/admin/clients', requireAdmin, async (req, res, next) => {
+app.post('/api/admin/clients', requireAdmin, requireAnyAdminPermission('clients.manage'), async (req, res, next) => {
   try {
     const client = await saveClient(req.body);
     res.status(201).json({ client, message: client.emailNotice || 'Client access saved.' });
@@ -184,7 +321,7 @@ app.post('/api/admin/clients', requireAdmin, async (req, res, next) => {
   }
 });
 
-app.put('/api/admin/clients/:id', requireAdmin, async (req, res, next) => {
+app.put('/api/admin/clients/:id', requireAdmin, requireAnyAdminPermission('clients.manage'), async (req, res, next) => {
   try {
     const client = await saveClient({ ...req.body, id: req.params.id });
     res.json({ client, message: client.emailNotice || 'Client access saved.' });
@@ -193,7 +330,7 @@ app.put('/api/admin/clients/:id', requireAdmin, async (req, res, next) => {
   }
 });
 
-app.get('/api/admin/recovery-requests', requireAdmin, async (_req, res, next) => {
+app.get('/api/admin/recovery-requests', requireAdmin, requireAnyAdminPermission('users.manage', 'clients.manage'), async (_req, res, next) => {
   try {
     res.json({ requests: await loadRecoveryRequests() });
   } catch (error) {
@@ -201,7 +338,7 @@ app.get('/api/admin/recovery-requests', requireAdmin, async (_req, res, next) =>
   }
 });
 
-app.post('/api/admin/recovery-requests/:id/resolve', requireAdmin, async (req, res, next) => {
+app.post('/api/admin/recovery-requests/:id/resolve', requireAdmin, requireAnyAdminPermission('users.manage', 'clients.manage'), async (req, res, next) => {
   try {
     await resolveRecoveryRequest(req.params.id, req.admin.username);
     res.json({ ok: true });
@@ -210,7 +347,7 @@ app.post('/api/admin/recovery-requests/:id/resolve', requireAdmin, async (req, r
   }
 });
 
-app.get('/api/projects', requireAdmin, async (_req, res, next) => {
+app.get('/api/projects', requireAdmin, requireAnyAdminPermission('projects.manage', 'surveys.design', 'responses.view', 'responses.export', 'analytics.view'), async (_req, res, next) => {
   try {
     const projects = await loadProjects();
     res.json({ projects });
@@ -219,7 +356,7 @@ app.get('/api/projects', requireAdmin, async (_req, res, next) => {
   }
 });
 
-app.post('/api/projects', requireAdmin, async (req, res, next) => {
+app.post('/api/projects', requireAdmin, requireAnyAdminPermission('projects.manage'), async (req, res, next) => {
   try {
     const project = await saveProject(req.body);
     res.status(201).json({ project });
@@ -228,7 +365,7 @@ app.post('/api/projects', requireAdmin, async (req, res, next) => {
   }
 });
 
-app.put('/api/projects/:id', requireAdmin, async (req, res, next) => {
+app.put('/api/projects/:id', requireAdmin, requireAnyAdminPermission('projects.manage', 'surveys.design'), async (req, res, next) => {
   try {
     const project = await saveProject({ ...req.body, id: req.params.id });
     res.json({ project });
@@ -237,7 +374,7 @@ app.put('/api/projects/:id', requireAdmin, async (req, res, next) => {
   }
 });
 
-app.get('/api/projects/:id/response-backups', requireAdmin, async (req, res, next) => {
+app.get('/api/projects/:id/response-backups', requireAdmin, requireAnyAdminPermission('projects.manage'), async (req, res, next) => {
   try {
     await query(`DELETE FROM response_clear_backups WHERE expires_at < NOW()`);
     const result = await query(
@@ -267,7 +404,7 @@ app.get('/api/projects/:id/response-backups', requireAdmin, async (req, res, nex
   }
 });
 
-app.post('/api/projects/:id/response-backups/:backupId/restore', requireAdmin, async (req, res, next) => {
+app.post('/api/projects/:id/response-backups/:backupId/restore', requireAdmin, requireAnyAdminPermission('projects.manage'), async (req, res, next) => {
   const client = await pool.connect();
   try {
     const confirmation = String(req.body?.confirmation || '').trim();
@@ -378,7 +515,7 @@ app.post('/api/projects/:id/response-backups/:backupId/restore', requireAdmin, a
   }
 });
 
-app.delete('/api/projects/:id/responses', requireAdmin, async (req, res, next) => {
+app.delete('/api/projects/:id/responses', requireAdmin, requireAnyAdminPermission('projects.manage'), async (req, res, next) => {
   const client = await pool.connect();
   try {
     const confirmation = String(req.body?.confirmation || '').trim();
@@ -490,7 +627,15 @@ app.post('/api/responses', async (req, res, next) => {
 
     const project = await loadProjectForPublic(projectSlug || projectId);
     if (!project) return res.status(404).json({ error: 'Survey project not found.' });
-    const settings = project.settings || defaultProjectSettings;
+    const settings = normalizeProjectSettings(project.settings, project.slug);
+    const gpsEnabled = isComponentEnabled(settings, 'gps');
+    const gpsRequired = isComponentMandatory(settings, 'gps');
+    const audioEnabled = isComponentEnabled(settings, 'audio');
+    const audioRequired = isComponentMandatory(settings, 'audio');
+    const phoneEnabled = isComponentEnabled(settings, 'respondentPhone');
+    const phoneRequired = isComponentMandatory(settings, 'respondentPhone');
+    const householdEnabled = isComponentEnabled(settings, 'householdId');
+    const householdRequired = isComponentMandatory(settings, 'householdId');
 
     if (!enumeratorName?.trim() || !location?.trim()) {
       return res.status(400).json({ error: 'Enumerator name and location are required.' });
@@ -506,7 +651,24 @@ app.post('/api/responses', async (req, res, next) => {
       return res.status(400).json({ error: `Missing required question: ${missingQuestion.label}` });
     }
 
-    const audioPayload = settings.captureAudio ? normalizeAudioData(audio) : null;
+    const submittedLatitude = normalizeOptionalNumber(latitude);
+    const submittedLongitude = normalizeOptionalNumber(longitude);
+    const submittedGpsAccuracy = normalizeOptionalNumber(gpsAccuracy);
+    const audioPayload = audioEnabled ? normalizeAudioData(audio) : null;
+
+    if (phoneRequired && !respondentPhone?.trim()) {
+      return res.status(400).json({ error: 'Respondent phone is mandatory for this project.' });
+    }
+    if (householdRequired && !householdId?.trim()) {
+      return res.status(400).json({ error: 'Household ID is mandatory for this project.' });
+    }
+    if (gpsRequired && (submittedLatitude === null || submittedLongitude === null)) {
+      return res.status(400).json({ error: 'GPS coordinates are mandatory for this project.' });
+    }
+    if (audioRequired && !audioPayload) {
+      return res.status(400).json({ error: 'Audio recording is mandatory for this project.' });
+    }
+
     const startedAt = parseOptionalDate(surveyStartedAt);
     const endedAt = parseOptionalDate(surveyEndedAt) || new Date();
     const calculatedDuration = startedAt && endedAt
@@ -545,12 +707,12 @@ app.post('/api/responses', async (req, res, next) => {
         enumeratorName.trim(),
         location.trim(),
         respondentName?.trim() || null,
-        settings.showRespondentPhone ? respondentPhone?.trim() || null : null,
-        settings.showHouseholdId ? householdId?.trim() || null : null,
+        phoneEnabled ? respondentPhone?.trim() || null : null,
+        householdEnabled ? householdId?.trim() || null : null,
         answers,
-        settings.captureGps ? normalizeOptionalNumber(latitude) : null,
-        settings.captureGps ? normalizeOptionalNumber(longitude) : null,
-        settings.captureGps ? normalizeOptionalNumber(gpsAccuracy) : null,
+        gpsEnabled ? submittedLatitude : null,
+        gpsEnabled ? submittedLongitude : null,
+        gpsEnabled ? submittedGpsAccuracy : null,
         audioPayload?.data || null,
         audioPayload?.mimeType || null,
         audioPayload?.size || null,
@@ -605,13 +767,13 @@ app.get('/api/public/enumerator-stats', async (req, res, next) => {
   }
 });
 
-app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
+app.get('/api/dashboard', requireAdmin, requireAnyAdminPermission('platform.overview.view', 'responses.view', 'analytics.view'), async (req, res, next) => {
   try {
     const filters = buildFilters(req.query);
     const mapWhere = filters.where
       ? `${filters.where} AND latitude IS NOT NULL AND longitude IS NOT NULL`
       : 'WHERE latitude IS NOT NULL AND longitude IS NOT NULL';
-    const [totals, byDate, byEnumerator, byLocation, byTerminal, byMovement, bySurveyPoint, byProject, recent, reportRows, mapRows] = await Promise.all([
+    const [totals, byDate, byEnumerator, byLocation, byTerminal, byMovement, bySurveyPoint, byProject, qualitySummary, byReviewStatus, recent, reportRows, mapRows] = await Promise.all([
       query(
         `SELECT
           COUNT(*)::int AS total_samples,
@@ -702,7 +864,32 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
         filters.params
       ),
       query(
-        `SELECT id, enumerator_name, location, respondent_name, audio_mime_type, submitted_at, answers
+        `SELECT
+          COUNT(*) FILTER (WHERE COALESCE(review_status, 'Accept') = 'Accept')::int AS accept_count,
+          COUNT(*) FILTER (WHERE COALESCE(review_status, 'Accept') = 'Review')::int AS review_count,
+          COUNT(*) FILTER (WHERE COALESCE(review_status, 'Accept') = 'Reject')::int AS reject_count,
+          COUNT(*) FILTER (WHERE COALESCE(quality_score, 100) < 85 OR COALESCE(review_status, 'Accept') <> 'Accept')::int AS flagged_count,
+          COALESCE(ROUND(AVG(COALESCE(quality_score, 100)))::int, 100) AS average_quality_score
+        FROM survey_responses
+        ${filters.where}`,
+        filters.params
+      ),
+      query(
+        `SELECT COALESCE(review_status, 'Accept') AS review_status, COUNT(*)::int AS samples
+        FROM survey_responses
+        ${filters.where}
+        GROUP BY COALESCE(review_status, 'Accept')
+        ORDER BY
+          CASE COALESCE(review_status, 'Accept')
+            WHEN 'Reject' THEN 1
+            WHEN 'Review' THEN 2
+            WHEN 'Accept' THEN 3
+            ELSE 4
+          END`,
+        filters.params
+      ),
+      query(
+        `SELECT id, enumerator_name, location, respondent_name, audio_mime_type, submitted_at, answers, quality_score, review_status
         FROM survey_responses
         ${filters.where}
         ORDER BY submitted_at DESC
@@ -736,6 +923,8 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
       byMovement: byMovement.rows,
       bySurveyPoint: bySurveyPoint.rows,
       byProject: byProject.rows,
+      qualitySummary: qualitySummary.rows[0],
+      byReviewStatus: byReviewStatus.rows,
       recent: recent.rows,
       reportRows: reportRows.rows,
       mapRows: mapRows.rows
@@ -745,7 +934,7 @@ app.get('/api/dashboard', requireAdmin, async (req, res, next) => {
   }
 });
 
-app.get('/api/dashboard/options', requireAdmin, async (req, res, next) => {
+app.get('/api/dashboard/options', requireAdmin, requireAnyAdminPermission('responses.view', 'analytics.view'), async (req, res, next) => {
   try {
     const filters = buildFilters({ projectId: req.query.projectId });
     const [enumerators, locations] = await Promise.all([
@@ -774,7 +963,7 @@ app.get('/api/dashboard/options', requireAdmin, async (req, res, next) => {
   }
 });
 
-app.get('/api/responses/:id(\\d+)', requireAdmin, async (req, res, next) => {
+app.get('/api/responses/:id(\\d+)', requireAdmin, requireAnyAdminPermission('responses.view'), async (req, res, next) => {
   try {
     const result = await query(
       `SELECT *
@@ -785,13 +974,14 @@ app.get('/api/responses/:id(\\d+)', requireAdmin, async (req, res, next) => {
     );
     const response = result.rows[0];
     if (!response) return res.status(404).json({ error: 'Response not found.' });
-    res.json({ response: normalizeResponse(response) });
+    const reviewDetails = await loadResponseReviewDetails(req.params.id);
+    res.json({ response: normalizeResponse({ ...response, ...reviewDetails }) });
   } catch (error) {
     next(error);
   }
 });
 
-app.get('/api/responses/:id(\\d+)/audio', requireAdmin, async (req, res, next) => {
+app.get('/api/responses/:id(\\d+)/audio', requireAdmin, requireAnyAdminPermission('responses.view'), async (req, res, next) => {
   try {
     const result = await query(
       `SELECT audio_data, audio_mime_type
@@ -813,22 +1003,38 @@ app.get('/api/responses/:id(\\d+)/audio', requireAdmin, async (req, res, next) =
   }
 });
 
-app.put('/api/responses/:id(\\d+)', requireAdmin, async (req, res, next) => {
-  try {
-    const {
-      enumeratorName,
-      location,
-      respondentName,
-      respondentPhone,
-      householdId,
-      answers = {}
-    } = req.body;
+app.put('/api/responses/:id(\\d+)', requireAdmin, requireAnyAdminPermission('responses.edit'), async (req, res, next) => {
+  const {
+    enumeratorName,
+    location,
+    respondentName,
+    respondentPhone,
+    householdId,
+    answers = {}
+  } = req.body;
 
-    if (!enumeratorName?.trim() || !location?.trim()) {
-      return res.status(400).json({ error: 'Enumerator name and location are required.' });
+  if (!enumeratorName?.trim() || !location?.trim()) {
+    return res.status(400).json({ error: 'Enumerator name and location are required.' });
+  }
+
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const currentResult = await client.query(
+      `SELECT *
+      FROM survey_responses
+      WHERE id = $1
+      FOR UPDATE`,
+      [req.params.id]
+    );
+    const before = currentResult.rows[0];
+    if (!before) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Response not found.' });
     }
 
-    const result = await query(
+    const result = await client.query(
       `UPDATE survey_responses
       SET enumerator_name = $1,
         location = $2,
@@ -849,11 +1055,67 @@ app.put('/api/responses/:id(\\d+)', requireAdmin, async (req, res, next) => {
       ]
     );
 
-    const response = result.rows[0];
-    if (!response) return res.status(404).json({ error: 'Response not found.' });
-    res.json({ response: normalizeResponse(response) });
+    const updated = result.rows[0];
+    const findings = buildQualityFindings(updated);
+    const qualityScore = calculateQualityScore(findings);
+    const reviewStatus = reviewStatusForQuality(qualityScore);
+    const scoredResult = await client.query(
+      `UPDATE survey_responses
+      SET quality_score = $1,
+        review_status = $2
+      WHERE id = $3
+      RETURNING *`,
+      [qualityScore, reviewStatus, req.params.id]
+    );
+    const response = scoredResult.rows[0];
+
+    await client.query('DELETE FROM response_quality_findings WHERE response_id = $1', [req.params.id]);
+    for (const finding of findings) {
+      await client.query(
+        `INSERT INTO response_quality_findings (response_id, rule_key, severity, message, score_impact)
+        VALUES ($1,$2,$3,$4,$5)`,
+        [req.params.id, finding.ruleKey, finding.severity, finding.message, finding.scoreImpact]
+      );
+    }
+
+    const beforeSnapshot = responseAuditSnapshot(before);
+    const afterSnapshot = responseAuditSnapshot(response);
+    const changedFields = diffAuditSnapshots(beforeSnapshot, afterSnapshot);
+    if (changedFields.length) {
+      await client.query(
+        `INSERT INTO response_audit_logs (
+          response_id,
+          action,
+          changed_by,
+          changed_by_role,
+          changed_fields,
+          before_snapshot,
+          after_snapshot
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [
+          req.params.id,
+          'admin_edit',
+          req.admin?.username || 'admin',
+          req.admin?.role || 'admin',
+          changedFields,
+          beforeSnapshot,
+          afterSnapshot
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+    const reviewDetails = await loadResponseReviewDetails(req.params.id);
+    res.json({ response: normalizeResponse({ ...response, ...reviewDetails }) });
   } catch (error) {
+    try {
+      if (client) await client.query('ROLLBACK');
+    } catch {
+      // Ignore rollback errors so the original failure is reported.
+    }
     next(error);
+  } finally {
+    if (client) client.release();
   }
 });
 
@@ -962,7 +1224,7 @@ app.get('/api/client/dashboard', requireClient, async (req, res, next) => {
   }
 });
 
-app.get('/api/responses/export.csv', requireAdmin, async (req, res, next) => {
+app.get('/api/responses/export.csv', requireAdmin, requireAnyAdminPermission('responses.export'), async (req, res, next) => {
   try {
     const { rows, questions } = await loadExportRows(req.query);
     const headerFormat = req.query.headerFormat === 'raw' ? 'raw' : 'labels';
@@ -976,7 +1238,7 @@ app.get('/api/responses/export.csv', requireAdmin, async (req, res, next) => {
   }
 });
 
-app.get('/api/responses/export.xlsx', requireAdmin, async (req, res, next) => {
+app.get('/api/responses/export.xlsx', requireAdmin, requireAnyAdminPermission('responses.export'), async (req, res, next) => {
   let exportFilePath = '';
   try {
     const { rows, questions } = await loadExportRows(req.query);
@@ -1017,7 +1279,7 @@ app.get('/api/responses/export.xlsx', requireAdmin, async (req, res, next) => {
   }
 });
 
-app.get('/api/responses/export.geojson', requireAdmin, async (req, res, next) => {
+app.get('/api/responses/export.geojson', requireAdmin, requireAnyAdminPermission('responses.export'), async (req, res, next) => {
   try {
     const { rows } = await loadExportRows(req.query);
     const features = rows
@@ -1045,7 +1307,7 @@ app.get('/api/responses/export.geojson', requireAdmin, async (req, res, next) =>
   }
 });
 
-app.get('/api/responses/export.kml', requireAdmin, async (req, res, next) => {
+app.get('/api/responses/export.kml', requireAdmin, requireAnyAdminPermission('responses.export'), async (req, res, next) => {
   try {
     const { rows } = await loadExportRows(req.query);
     const placemarks = rows
@@ -1091,6 +1353,69 @@ app.listen(port, () => {
 
 async function ensureDatabase() {
   await query(`
+    CREATE TABLE IF NOT EXISTS survey_organisations (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL UNIQUE,
+      legal_name TEXT,
+      website TEXT,
+      primary_contact_name TEXT,
+      primary_contact_email TEXT,
+      primary_contact_phone TEXT,
+      status TEXT NOT NULL DEFAULT 'Active',
+      settings JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS survey_workspaces (
+      id BIGSERIAL PRIMARY KEY,
+      organisation_id BIGINT NOT NULL REFERENCES survey_organisations(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'Active',
+      settings JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (organisation_id, slug)
+    );
+
+    CREATE TABLE IF NOT EXISTS platform_roles (
+      id BIGSERIAL PRIMARY KEY,
+      organisation_id BIGINT REFERENCES survey_organisations(id) ON DELETE CASCADE,
+      role_key TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      description TEXT,
+      scope TEXT NOT NULL DEFAULT 'organisation',
+      is_system BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS platform_role_permissions (
+      role_id BIGINT NOT NULL REFERENCES platform_roles(id) ON DELETE CASCADE,
+      permission_key TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (role_id, permission_key)
+    );
+
+    CREATE TABLE IF NOT EXISTS vendors (
+      id BIGSERIAL PRIMARY KEY,
+      organisation_id BIGINT REFERENCES survey_organisations(id) ON DELETE SET NULL,
+      workspace_id BIGINT REFERENCES survey_workspaces(id) ON DELETE SET NULL,
+      name TEXT NOT NULL,
+      contact_name TEXT,
+      contact_email TEXT,
+      contact_phone TEXT,
+      service_area TEXT,
+      status TEXT NOT NULL DEFAULT 'Active',
+      assigned_project_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS employees (
       id BIGSERIAL PRIMARY KEY,
       employee_code TEXT NOT NULL UNIQUE,
@@ -1208,8 +1533,32 @@ async function ensureDatabase() {
       survey_started_at TIMESTAMPTZ,
       survey_ended_at TIMESTAMPTZ,
       survey_duration_seconds INT,
+      quality_score INT NOT NULL DEFAULT 100,
+      review_status TEXT NOT NULL DEFAULT 'Accept',
       client_submission_id TEXT UNIQUE,
       submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS response_audit_logs (
+      id BIGSERIAL PRIMARY KEY,
+      response_id BIGINT NOT NULL REFERENCES survey_responses(id) ON DELETE CASCADE,
+      action TEXT NOT NULL,
+      changed_by TEXT NOT NULL,
+      changed_by_role TEXT,
+      changed_fields TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+      before_snapshot JSONB,
+      after_snapshot JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS response_quality_findings (
+      id BIGSERIAL PRIMARY KEY,
+      response_id BIGINT NOT NULL REFERENCES survey_responses(id) ON DELETE CASCADE,
+      rule_key TEXT NOT NULL,
+      severity TEXT NOT NULL,
+      message TEXT NOT NULL,
+      score_impact INT NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
@@ -1271,7 +1620,12 @@ async function ensureDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    ALTER TABLE survey_projects ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES survey_organisations(id);
+    ALTER TABLE survey_projects ADD COLUMN IF NOT EXISTS workspace_id BIGINT REFERENCES survey_workspaces(id);
+    ALTER TABLE survey_projects ADD COLUMN IF NOT EXISTS owner_username TEXT;
     ALTER TABLE survey_projects ADD COLUMN IF NOT EXISTS settings JSONB NOT NULL DEFAULT '{}'::jsonb;
+    ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES survey_organisations(id);
+    ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS workspace_id BIGINT REFERENCES survey_workspaces(id);
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS project_id BIGINT REFERENCES survey_projects(id);
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS audio_data TEXT;
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS audio_mime_type TEXT;
@@ -1279,19 +1633,34 @@ async function ensureDatabase() {
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS survey_started_at TIMESTAMPTZ;
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS survey_ended_at TIMESTAMPTZ;
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS survey_duration_seconds INT;
+    ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS quality_score INT NOT NULL DEFAULT 100;
+    ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS review_status TEXT NOT NULL DEFAULT 'Accept';
     ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS client_submission_id TEXT UNIQUE;
     ALTER TABLE response_clear_backups ADD COLUMN IF NOT EXISTS restored_at TIMESTAMPTZ;
     ALTER TABLE response_clear_backups ADD COLUMN IF NOT EXISTS restored_by TEXT;
     ALTER TABLE response_clear_backups ADD COLUMN IF NOT EXISTS restored_count INT;
     ALTER TABLE staff_accounts ADD COLUMN IF NOT EXISTS email TEXT;
+    ALTER TABLE staff_accounts ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES survey_organisations(id);
+    ALTER TABLE staff_accounts ADD COLUMN IF NOT EXISTS workspace_id BIGINT REFERENCES survey_workspaces(id);
     ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS email TEXT;
+    ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES survey_organisations(id);
+    ALTER TABLE account_recovery_requests ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES survey_organisations(id);
     ALTER TABLE account_recovery_requests ADD COLUMN IF NOT EXISTS matched_display_name TEXT;
+    ALTER TABLE account_access_tokens ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES survey_organisations(id);
 
+    CREATE INDEX IF NOT EXISTS idx_survey_projects_organisation ON survey_projects (organisation_id, workspace_id);
+    CREATE INDEX IF NOT EXISTS idx_survey_responses_organisation ON survey_responses (organisation_id, workspace_id);
+    CREATE INDEX IF NOT EXISTS idx_staff_accounts_organisation ON staff_accounts (organisation_id, workspace_id);
+    CREATE INDEX IF NOT EXISTS idx_client_accounts_organisation ON client_accounts (organisation_id);
+    CREATE INDEX IF NOT EXISTS idx_vendors_organisation ON vendors (organisation_id, workspace_id);
     CREATE INDEX IF NOT EXISTS idx_survey_responses_project ON survey_responses (project_id);
     CREATE INDEX IF NOT EXISTS idx_survey_responses_submitted_at ON survey_responses (submitted_at DESC);
     CREATE INDEX IF NOT EXISTS idx_survey_responses_enumerator ON survey_responses (LOWER(enumerator_name));
     CREATE INDEX IF NOT EXISTS idx_survey_responses_location ON survey_responses (location);
     CREATE INDEX IF NOT EXISTS idx_survey_responses_answers ON survey_responses USING GIN (answers);
+    CREATE INDEX IF NOT EXISTS idx_survey_responses_quality ON survey_responses (review_status, quality_score);
+    CREATE INDEX IF NOT EXISTS idx_response_audit_logs_response ON response_audit_logs (response_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_response_quality_findings_response ON response_quality_findings (response_id, severity);
     CREATE INDEX IF NOT EXISTS idx_client_project_access_client ON client_project_access (client_id);
     CREATE INDEX IF NOT EXISTS idx_client_project_access_project ON client_project_access (project_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_client_accounts_email_unique ON client_accounts (LOWER(email)) WHERE email IS NOT NULL AND email <> '';
@@ -1310,15 +1679,19 @@ async function ensureDatabase() {
     CREATE INDEX IF NOT EXISTS idx_employee_notifications_recipient ON employee_notifications (recipient_username, is_read, created_at DESC);
   `);
 
+  const foundationContext = await ensureDefaultOrganisationContext();
+  await ensurePhaseOneRoles(foundationContext.organisationId);
+  await backfillOrganisationContext(foundationContext);
+
   const existing = await query(`SELECT id FROM survey_projects WHERE slug = 'pilot-survey' LIMIT 1`);
   let projectId = existing.rows[0]?.id;
 
   if (!projectId) {
     const created = await query(
-      `INSERT INTO survey_projects (name, slug, description, locations)
-      VALUES ($1, $2, $3, $4)
+      `INSERT INTO survey_projects (organisation_id, workspace_id, owner_username, name, slug, description, locations)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING id`,
-      ['Pilot Survey', 'pilot-survey', 'Default VTRAC pilot survey', defaultLocations]
+      [foundationContext.organisationId, foundationContext.workspaceId, adminUsername, 'Pilot Survey', 'pilot-survey', 'Default VTRAC pilot survey', defaultLocations]
     );
     projectId = created.rows[0].id;
   }
@@ -1339,6 +1712,7 @@ async function ensureDatabase() {
   await ensureDefaultClientAccount();
   await ensureEnvironmentAdminAccount();
   await ensureStaffAccountsFromEmployees();
+  await backfillOrganisationContext(foundationContext);
 }
 
 async function ensureBengaluruTransportQuestions() {
@@ -1404,6 +1778,438 @@ async function ensureQuestionAfter(projectId, afterQuestionKey, question) {
   );
 }
 
+
+async function getDefaultFoundationContext() {
+  const context = await query(
+    `SELECT o.id AS organisation_id, w.id AS workspace_id
+    FROM survey_organisations o
+    JOIN survey_workspaces w ON w.organisation_id = o.id
+    WHERE o.slug = $1
+      AND w.slug = $2
+    LIMIT 1`,
+    [defaultOrganisationSlug, defaultWorkspaceSlug]
+  );
+  if (context.rows[0]) {
+    return {
+      organisationId: context.rows[0].organisation_id,
+      workspaceId: context.rows[0].workspace_id
+    };
+  }
+  return ensureDefaultOrganisationContext();
+}
+
+async function ensureDefaultOrganisationContext() {
+  const organisation = await query(
+    `INSERT INTO survey_organisations (
+      name,
+      slug,
+      legal_name,
+      website,
+      primary_contact_name,
+      primary_contact_email,
+      primary_contact_phone,
+      settings
+    )
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+    ON CONFLICT (slug) DO UPDATE SET
+      name = COALESCE(NULLIF(survey_organisations.name, ''), EXCLUDED.name),
+      legal_name = COALESCE(survey_organisations.legal_name, EXCLUDED.legal_name),
+      website = COALESCE(survey_organisations.website, EXCLUDED.website),
+      primary_contact_name = COALESCE(survey_organisations.primary_contact_name, EXCLUDED.primary_contact_name),
+      primary_contact_email = COALESCE(survey_organisations.primary_contact_email, EXCLUDED.primary_contact_email),
+      primary_contact_phone = COALESCE(survey_organisations.primary_contact_phone, EXCLUDED.primary_contact_phone),
+      updated_at = NOW()
+    RETURNING *`,
+    [
+      defaultOrganisationProfile.name,
+      defaultOrganisationSlug,
+      defaultOrganisationProfile.legalName,
+      defaultOrganisationProfile.website,
+      defaultOrganisationProfile.primaryContactName,
+      defaultOrganisationProfile.primaryContactEmail,
+      defaultOrganisationProfile.primaryContactPhone,
+      JSON.stringify({ tenantType: 'internal', stage: 'phase-1-foundation' })
+    ]
+  );
+  const organisationId = organisation.rows[0].id;
+  const workspace = await query(
+    `INSERT INTO survey_workspaces (organisation_id, name, slug, description, settings)
+    VALUES ($1,$2,$3,$4,$5)
+    ON CONFLICT (organisation_id, slug) DO UPDATE SET
+      name = EXCLUDED.name,
+      description = COALESCE(survey_workspaces.description, EXCLUDED.description),
+      updated_at = NOW()
+    RETURNING *`,
+    [
+      organisationId,
+      'VTRAC Field Intelligence Workspace',
+      defaultWorkspaceSlug,
+      'Default SurveyOS workspace for VTRAC field research, mobility studies, and survey operations.',
+      JSON.stringify({ defaultWorkspace: true })
+    ]
+  );
+  return {
+    organisationId,
+    workspaceId: workspace.rows[0].id
+  };
+}
+
+async function ensurePhaseOneRoles(organisationId) {
+  for (const role of phaseOneRoles) {
+    const savedRole = await query(
+      `INSERT INTO platform_roles (organisation_id, role_key, name, description, scope, is_system)
+      VALUES ($1,$2,$3,$4,$5,TRUE)
+      ON CONFLICT (role_key) DO UPDATE SET
+        name = EXCLUDED.name,
+        description = EXCLUDED.description,
+        scope = EXCLUDED.scope,
+        updated_at = NOW()
+      RETURNING id`,
+      [organisationId, role.key, role.name, role.description, role.scope]
+    );
+    const roleId = savedRole.rows[0].id;
+    await query(`DELETE FROM platform_role_permissions WHERE role_id = $1`, [roleId]);
+    for (const permission of role.permissions) {
+      await query(
+        `INSERT INTO platform_role_permissions (role_id, permission_key)
+        VALUES ($1,$2)
+        ON CONFLICT DO NOTHING`,
+        [roleId, permission]
+      );
+    }
+  }
+}
+
+async function backfillOrganisationContext({ organisationId, workspaceId }) {
+  await query(`UPDATE survey_projects SET organisation_id = $1, workspace_id = $2 WHERE organisation_id IS NULL OR workspace_id IS NULL`, [organisationId, workspaceId]);
+  await query(
+    `UPDATE survey_responses r
+    SET organisation_id = COALESCE(r.organisation_id, p.organisation_id, $1),
+      workspace_id = COALESCE(r.workspace_id, p.workspace_id, $2)
+    FROM survey_projects p
+    WHERE r.project_id = p.id
+      AND (r.organisation_id IS NULL OR r.workspace_id IS NULL)`,
+    [organisationId, workspaceId]
+  );
+  await query(`UPDATE survey_responses SET organisation_id = $1, workspace_id = $2 WHERE organisation_id IS NULL OR workspace_id IS NULL`, [organisationId, workspaceId]);
+  await query(`UPDATE staff_accounts SET organisation_id = $1, workspace_id = $2 WHERE organisation_id IS NULL OR workspace_id IS NULL`, [organisationId, workspaceId]);
+  await query(`UPDATE client_accounts SET organisation_id = $1 WHERE organisation_id IS NULL`, [organisationId]);
+  await query(`UPDATE vendors SET organisation_id = $1, workspace_id = $2 WHERE organisation_id IS NULL OR workspace_id IS NULL`, [organisationId, workspaceId]);
+  await query(`UPDATE account_recovery_requests SET organisation_id = $1 WHERE organisation_id IS NULL`, [organisationId]);
+  await query(`UPDATE account_access_tokens SET organisation_id = $1 WHERE organisation_id IS NULL`, [organisationId]);
+}
+
+async function loadOrganisationContext() {
+  const context = await getDefaultFoundationContext();
+  const organisation = await query(`SELECT * FROM survey_organisations WHERE id = $1 LIMIT 1`, [context.organisationId]);
+  const workspace = await query(`SELECT * FROM survey_workspaces WHERE id = $1 LIMIT 1`, [context.workspaceId]);
+  return {
+    organisation: normalizeOrganisation(organisation.rows[0]),
+    workspace: normalizeWorkspace(workspace.rows[0])
+  };
+}
+
+async function loadFoundation(adminRole = 'admin') {
+  const context = await getDefaultFoundationContext();
+  await ensurePhaseOneRoles(context.organisationId);
+  await backfillOrganisationContext(context);
+  const canManageUsers = roleHasPermission(adminRole, 'users.manage');
+  const canManageVendors = roleHasPermission(adminRole, 'vendors.manage');
+  const canManageClients = roleHasPermission(adminRole, 'clients.manage');
+  const [{ organisation, workspace }, roles, users, vendors, clients, projects, counts] = await Promise.all([
+    loadOrganisationContext(),
+    loadRoles(),
+    canManageUsers ? loadUsers() : Promise.resolve([]),
+    canManageVendors ? loadVendors() : Promise.resolve([]),
+    canManageClients ? loadClients() : Promise.resolve([]),
+    loadProjects(),
+    loadFoundationCounts()
+  ]);
+  return {
+    organisation,
+    workspace,
+    roles,
+    permissions: phaseOnePermissions,
+    navigation: phaseOneNavigation,
+    users,
+    vendors,
+    clients,
+    counts: {
+      projects: projects.length,
+      activeProjects: projects.filter((project) => project.isActive).length,
+      users: counts.users,
+      clients: counts.clients,
+      vendors: counts.vendors
+    }
+  };
+}
+
+async function loadFoundationCounts() {
+  const [users, clients, vendors] = await Promise.all([
+    query(`SELECT COUNT(*)::int AS count FROM staff_accounts`),
+    query(`SELECT COUNT(*)::int AS count FROM client_accounts`),
+    query(`SELECT COUNT(*)::int AS count FROM vendors`)
+  ]);
+  return {
+    users: users.rows[0]?.count || 0,
+    clients: clients.rows[0]?.count || 0,
+    vendors: vendors.rows[0]?.count || 0
+  };
+}
+
+async function loadRoles() {
+  const roles = await query(`
+    SELECT *
+    FROM platform_roles
+    ORDER BY is_system DESC, name ASC
+  `);
+  const permissions = await query(`
+    SELECT pr.role_key, prp.permission_key
+    FROM platform_roles pr
+    LEFT JOIN platform_role_permissions prp ON prp.role_id = pr.id
+    ORDER BY pr.role_key, prp.permission_key
+  `);
+  return roles.rows.map((role) => ({
+    id: String(role.id),
+    key: role.role_key,
+    name: role.name,
+    description: role.description || '',
+    scope: role.scope,
+    isSystem: role.is_system,
+    permissions: permissions.rows
+      .filter((permission) => permission.role_key === role.role_key && permission.permission_key)
+      .map((permission) => permission.permission_key)
+  }));
+}
+
+async function saveOrganisation(payload = {}) {
+  const context = await getDefaultFoundationContext();
+  const name = String(payload.name || defaultOrganisationProfile.name).trim();
+  if (!name) {
+    const error = new Error('Organisation name is required.');
+    error.status = 400;
+    throw error;
+  }
+  const email = normalizeEmail(payload.primaryContactEmail || '');
+  if (email && !isLikelyEmail(email)) {
+    const error = new Error('Enter a valid primary contact email.');
+    error.status = 400;
+    throw error;
+  }
+  await query(
+    `UPDATE survey_organisations
+    SET name = $1,
+      legal_name = $2,
+      website = $3,
+      primary_contact_name = $4,
+      primary_contact_email = $5,
+      primary_contact_phone = $6,
+      updated_at = NOW()
+    WHERE id = $7`,
+    [
+      name,
+      String(payload.legalName || '').trim() || null,
+      String(payload.website || '').trim() || null,
+      String(payload.primaryContactName || '').trim() || null,
+      email || null,
+      String(payload.primaryContactPhone || '').trim() || null,
+      context.organisationId
+    ]
+  );
+  if (payload.workspaceName || payload.workspaceDescription) {
+    await query(
+      `UPDATE survey_workspaces
+      SET name = $1,
+        description = $2,
+        updated_at = NOW()
+      WHERE id = $3`,
+      [
+        String(payload.workspaceName || 'VTRAC Field Intelligence Workspace').trim(),
+        String(payload.workspaceDescription || '').trim() || null,
+        context.workspaceId
+      ]
+    );
+  }
+  return (await loadOrganisationContext()).organisation;
+}
+
+async function loadUsers() {
+  const users = await query(`
+    SELECT *
+    FROM staff_accounts
+    ORDER BY created_at DESC
+  `);
+  return users.rows.map(normalizeUser);
+}
+
+async function saveUser(payload = {}) {
+  const context = await getDefaultFoundationContext();
+  const username = String(payload.username || '').trim().toLowerCase();
+  const displayName = String(payload.displayName || payload.display_name || username).trim();
+  const email = normalizeEmail(payload.email || '');
+  const role = normalizePlatformRoleKey(payload.role || 'analyst');
+  const password = String(payload.password || '');
+  if (!username || !displayName) {
+    const error = new Error('Username and display name are required.');
+    error.status = 400;
+    throw error;
+  }
+  if (email && !isLikelyEmail(email)) {
+    const error = new Error('Enter a valid user email address.');
+    error.status = 400;
+    throw error;
+  }
+  if (!payload.id && password.length < 8) {
+    const error = new Error('New user password must be at least 8 characters.');
+    error.status = 400;
+    throw error;
+  }
+  const result = payload.id
+    ? password
+      ? await query(
+        `UPDATE staff_accounts
+        SET username = $1, email = $2, display_name = $3, role = $4, branch = $5, team = $6, password_hash = $7, is_active = $8, organisation_id = $9, workspace_id = $10, updated_at = NOW()
+        WHERE id = $11
+        RETURNING *`,
+        [username, email || null, displayName, role, payload.branch || null, payload.team || null, hashPassword(password), payload.isActive !== false, context.organisationId, context.workspaceId, payload.id]
+      )
+      : await query(
+        `UPDATE staff_accounts
+        SET username = $1, email = $2, display_name = $3, role = $4, branch = $5, team = $6, is_active = $7, organisation_id = $8, workspace_id = $9, updated_at = NOW()
+        WHERE id = $10
+        RETURNING *`,
+        [username, email || null, displayName, role, payload.branch || null, payload.team || null, payload.isActive !== false, context.organisationId, context.workspaceId, payload.id]
+      )
+    : await query(
+      `INSERT INTO staff_accounts (organisation_id, workspace_id, username, email, display_name, role, branch, team, password_hash, must_change_password, is_active)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,FALSE,$10)
+      RETURNING *`,
+      [context.organisationId, context.workspaceId, username, email || null, displayName, role, payload.branch || null, payload.team || null, hashPassword(password), payload.isActive !== false]
+    );
+  const row = result.rows[0];
+  if (!row) {
+    const error = new Error('User not found.');
+    error.status = 404;
+    throw error;
+  }
+  return normalizeUser(row);
+}
+
+async function loadVendors() {
+  const vendors = await query(`
+    SELECT *
+    FROM vendors
+    ORDER BY created_at DESC
+  `);
+  return vendors.rows.map(normalizeVendor);
+}
+
+async function saveVendor(payload = {}) {
+  const context = await getDefaultFoundationContext();
+  const name = String(payload.name || '').trim();
+  const contactEmail = normalizeEmail(payload.contactEmail || '');
+  const projectIds = Array.isArray(payload.assignedProjectIds) ? payload.assignedProjectIds.map(String) : [];
+  if (!name) {
+    const error = new Error('Vendor name is required.');
+    error.status = 400;
+    throw error;
+  }
+  if (contactEmail && !isLikelyEmail(contactEmail)) {
+    const error = new Error('Enter a valid vendor email address.');
+    error.status = 400;
+    throw error;
+  }
+  const result = payload.id
+    ? await query(
+      `UPDATE vendors
+      SET organisation_id = $1, workspace_id = $2, name = $3, contact_name = $4, contact_email = $5, contact_phone = $6, service_area = $7, status = $8, assigned_project_ids = $9, notes = $10, updated_at = NOW()
+      WHERE id = $11
+      RETURNING *`,
+      [context.organisationId, context.workspaceId, name, payload.contactName || null, contactEmail || null, payload.contactPhone || null, payload.serviceArea || null, payload.status || 'Active', projectIds, payload.notes || null, payload.id]
+    )
+    : await query(
+      `INSERT INTO vendors (organisation_id, workspace_id, name, contact_name, contact_email, contact_phone, service_area, status, assigned_project_ids, notes)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      RETURNING *`,
+      [context.organisationId, context.workspaceId, name, payload.contactName || null, contactEmail || null, payload.contactPhone || null, payload.serviceArea || null, payload.status || 'Active', projectIds, payload.notes || null]
+    );
+  return normalizeVendor(result.rows[0]);
+}
+
+function normalizeOrganisation(row = {}) {
+  return {
+    id: row.id ? String(row.id) : '',
+    name: row.name || defaultOrganisationProfile.name,
+    slug: row.slug || defaultOrganisationSlug,
+    legalName: row.legal_name || '',
+    website: row.website || '',
+    primaryContactName: row.primary_contact_name || '',
+    primaryContactEmail: row.primary_contact_email || '',
+    primaryContactPhone: row.primary_contact_phone || '',
+    status: row.status || 'Active',
+    settings: row.settings || {}
+  };
+}
+
+function normalizeWorkspace(row = {}) {
+  return {
+    id: row.id ? String(row.id) : '',
+    organisationId: row.organisation_id ? String(row.organisation_id) : '',
+    name: row.name || 'VTRAC Field Intelligence Workspace',
+    slug: row.slug || defaultWorkspaceSlug,
+    description: row.description || '',
+    status: row.status || 'Active',
+    settings: row.settings || {}
+  };
+}
+
+function normalizeUser(row = {}) {
+  return {
+    id: String(row.id),
+    organisationId: row.organisation_id ? String(row.organisation_id) : '',
+    workspaceId: row.workspace_id ? String(row.workspace_id) : '',
+    employeeId: row.employee_id ? String(row.employee_id) : '',
+    username: row.username,
+    email: row.email || '',
+    displayName: row.display_name,
+    role: row.role,
+    branch: row.branch || '',
+    team: row.team || '',
+    isActive: row.is_active,
+    mustChangePassword: row.must_change_password,
+    createdAt: formatTimestamp(row.created_at),
+    updatedAt: formatTimestamp(row.updated_at)
+  };
+}
+
+function normalizeVendor(row = {}) {
+  return {
+    id: String(row.id),
+    organisationId: row.organisation_id ? String(row.organisation_id) : '',
+    workspaceId: row.workspace_id ? String(row.workspace_id) : '',
+    name: row.name || '',
+    contactName: row.contact_name || '',
+    contactEmail: row.contact_email || '',
+    contactPhone: row.contact_phone || '',
+    serviceArea: row.service_area || '',
+    status: row.status || 'Active',
+    assignedProjectIds: row.assigned_project_ids || [],
+    notes: row.notes || '',
+    createdAt: formatTimestamp(row.created_at),
+    updatedAt: formatTimestamp(row.updated_at)
+  };
+}
+
+function normalizePlatformRoleKey(role) {
+  const value = String(role || '').trim();
+  if (!value) return 'analyst';
+  const lower = value.toLowerCase();
+  const found = phaseOneRoles.find((item) => item.key.toLowerCase() === lower || item.name.toLowerCase() === lower);
+  if (found) return found.key;
+  if (['admin', 'analyst', 'teamLead', 'floorManager', 'qaQc'].includes(value)) return value;
+  return normalizeStaffRole(value);
+}
+
 async function loadProjects() {
   const projects = await query(`
     SELECT p.*,
@@ -1455,15 +2261,16 @@ async function loadProjectForPublic(identifier) {
 }
 
 async function ensureDefaultClientAccount() {
+  const foundationContext = await getDefaultFoundationContext();
   const existing = await query(`SELECT id FROM client_accounts WHERE username = $1 LIMIT 1`, [clientUsername]);
   let clientId = existing.rows[0]?.id;
 
   if (!clientId) {
     const created = await query(
-      `INSERT INTO client_accounts (username, display_name, password_hash)
-      VALUES ($1, $2, $3)
+      `INSERT INTO client_accounts (organisation_id, username, display_name, password_hash)
+      VALUES ($1, $2, $3, $4)
       RETURNING id`,
-      [clientUsername, 'Client Viewer', hashPassword(clientPassword)]
+      [foundationContext.organisationId, clientUsername, 'Client Viewer', hashPassword(clientPassword)]
     );
     clientId = created.rows[0].id;
   }
@@ -1480,10 +2287,13 @@ async function ensureDefaultClientAccount() {
 async function ensureEnvironmentAdminAccount() {
   const username = String(adminUsername || 'admin').trim().toLowerCase();
   if (!username || !adminPassword) return;
+  const foundationContext = await getDefaultFoundationContext();
   await query(
-    `INSERT INTO staff_accounts (username, email, display_name, role, password_hash, must_change_password, is_active)
-    VALUES ($1, $2, $3, 'admin', $4, FALSE, TRUE)
+    `INSERT INTO staff_accounts (organisation_id, workspace_id, username, email, display_name, role, password_hash, must_change_password, is_active)
+    VALUES ($1, $2, $3, $4, $5, 'admin', $6, FALSE, TRUE)
     ON CONFLICT (username) DO UPDATE SET
+      organisation_id = COALESCE(staff_accounts.organisation_id, EXCLUDED.organisation_id),
+      workspace_id = COALESCE(staff_accounts.workspace_id, EXCLUDED.workspace_id),
       email = COALESCE(EXCLUDED.email, staff_accounts.email),
       display_name = EXCLUDED.display_name,
       role = 'admin',
@@ -1491,7 +2301,7 @@ async function ensureEnvironmentAdminAccount() {
       must_change_password = FALSE,
       is_active = TRUE,
       updated_at = NOW()`,
-    [username, adminEmail || null, adminDisplayName, hashPassword(adminPassword)]
+    [foundationContext.organisationId, foundationContext.workspaceId, username, adminEmail || null, adminDisplayName, hashPassword(adminPassword)]
   );
 }
 
@@ -1655,6 +2465,7 @@ async function loadClients() {
 }
 
 async function saveClient(payload) {
+  const foundationContext = await getDefaultFoundationContext();
   const username = String(payload.username || '').trim();
   const email = normalizeEmail(payload.email || '');
   const displayName = String(payload.displayName || payload.username || '').trim();
@@ -1697,10 +2508,10 @@ async function saveClient(payload) {
         [username, email || null, displayName, payload.isActive !== false, payload.id]
       )
     : await query(
-      `INSERT INTO client_accounts (username, email, display_name, password_hash, is_active)
-      VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO client_accounts (organisation_id, username, email, display_name, password_hash, is_active)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *`,
-      [username, email || null, displayName, hashPassword(password), payload.isActive !== false]
+      [foundationContext.organisationId, username, email || null, displayName, hashPassword(password), payload.isActive !== false]
     );
 
   const client = result.rows[0];
@@ -1860,6 +2671,7 @@ async function findStaffForRecovery(identifier, email) {
 }
 
 async function saveProject(payload) {
+  const foundationContext = await getDefaultFoundationContext();
   const name = payload.name?.trim();
   const slug = slugify(payload.slug || payload.name);
   const locations = normalizeLines(payload.locations);
@@ -1885,16 +2697,16 @@ async function saveProject(payload) {
   const result = payload.id
     ? await query(
       `UPDATE survey_projects
-      SET name = $1, slug = $2, description = $3, locations = $4, settings = $5, is_active = $6, updated_at = NOW()
-      WHERE id = $7
+      SET name = $1, slug = $2, description = $3, locations = $4, settings = $5, is_active = $6, organisation_id = COALESCE(organisation_id, $7), workspace_id = COALESCE(workspace_id, $8), updated_at = NOW()
+      WHERE id = $9
       RETURNING *`,
-      [name, slug, payload.description?.trim() || null, locations, JSON.stringify(settings), payload.isActive !== false, payload.id]
+      [name, slug, payload.description?.trim() || null, locations, JSON.stringify(settings), payload.isActive !== false, foundationContext.organisationId, foundationContext.workspaceId, payload.id]
     )
     : await query(
-      `INSERT INTO survey_projects (name, slug, description, locations, settings, is_active)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO survey_projects (organisation_id, workspace_id, owner_username, name, slug, description, locations, settings, is_active)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *`,
-      [name, slug, payload.description?.trim() || null, locations, JSON.stringify(settings), payload.isActive !== false]
+      [foundationContext.organisationId, foundationContext.workspaceId, payload.ownerUsername || adminUsername, name, slug, payload.description?.trim() || null, locations, JSON.stringify(settings), payload.isActive !== false]
     );
 
   const project = result.rows[0];
@@ -2024,7 +2836,9 @@ async function loadExportRows(queryParams) {
       client_submission_id,
       survey_started_at,
       survey_ended_at,
-      survey_duration_seconds
+      survey_duration_seconds,
+      quality_score,
+      review_status
     FROM survey_responses
     ${filters.where}
     ORDER BY submitted_at DESC`,
@@ -2042,6 +2856,8 @@ function flattenResponse(row, questions, headerFormat = 'labels') {
     survey_ended_at: formatExportTimestamp(row.survey_ended_at),
     survey_duration_seconds: row.survey_duration_seconds ?? '',
     survey_duration: formatDuration(row.survey_duration_seconds),
+    quality_score: row.quality_score ?? '',
+    review_status: row.review_status || '',
     enumerator_name: row.enumerator_name || '',
     location: row.location || '',
     respondent_name: row.respondent_name || '',
@@ -2062,6 +2878,96 @@ function flattenResponse(row, questions, headerFormat = 'labels') {
   return base;
 }
 
+async function loadResponseReviewDetails(responseId) {
+  const [findings, auditLogs] = await Promise.all([
+    query(
+      `SELECT rule_key, severity, message, score_impact, created_at
+      FROM response_quality_findings
+      WHERE response_id = $1
+      ORDER BY score_impact DESC, created_at DESC`,
+      [responseId]
+    ),
+    query(
+      `SELECT id, action, changed_by, changed_by_role, changed_fields, before_snapshot, after_snapshot, created_at
+      FROM response_audit_logs
+      WHERE response_id = $1
+      ORDER BY created_at DESC
+      LIMIT 25`,
+      [responseId]
+    )
+  ]);
+
+  return {
+    quality_findings: findings.rows,
+    audit_logs: auditLogs.rows
+  };
+}
+
+function responseAuditSnapshot(row) {
+  return {
+    enumeratorName: row.enumerator_name || '',
+    location: row.location || '',
+    respondentName: row.respondent_name || '',
+    respondentPhone: row.respondent_phone || '',
+    householdId: row.household_id || '',
+    answers: row.answers || {},
+    qualityScore: row.quality_score ?? null,
+    reviewStatus: row.review_status || ''
+  };
+}
+
+function diffAuditSnapshots(before, after) {
+  return Object.keys(after).filter((key) => JSON.stringify(before[key] ?? null) !== JSON.stringify(after[key] ?? null));
+}
+
+function buildQualityFindings(row) {
+  const findings = [];
+  const add = (ruleKey, severity, message, scoreImpact) => findings.push({ ruleKey, severity, message, scoreImpact });
+  const answers = row.answers && typeof row.answers === 'object' ? row.answers : {};
+  const meaningfulAnswers = Object.entries(answers)
+    .filter(([key, value]) => !String(key).includes('validation') && String(value || '').trim() !== '');
+
+  if (!String(row.respondent_name || '').trim()) {
+    add('missing_respondent_name', 'low', 'Respondent name is blank. Confirm whether this was intentional.', 5);
+  }
+
+  if (!meaningfulAnswers.length) {
+    add('empty_answers', 'high', 'No substantive question answers were captured.', 30);
+  }
+
+  const duration = Number(row.survey_duration_seconds);
+  if (Number.isFinite(duration) && duration > 0) {
+    if (duration < 60) add('duration_too_short', 'high', 'Interview duration is below 1 minute. Verify whether the interview was genuine.', 25);
+    else if (duration < 120) add('duration_short', 'medium', 'Interview duration is below 2 minutes. Review for rushed collection.', 12);
+    else if (duration > 7200) add('duration_too_long', 'medium', 'Interview duration is above 2 hours. Check for idle time or delayed submission.', 10);
+  }
+
+  for (const key of ['travel_time_validation', 'final_destination_time_validation']) {
+    const value = String(answers[key] || '');
+    if (value.toLowerCase().includes('too low') || value.toLowerCase().includes('too high')) {
+      add(key, 'medium', `${value}. Travel time entry needs supervisor review.`, 12);
+    }
+  }
+
+  const location = String(row.location || '');
+  if (location.includes('Kempegowda International Airport') && (!/Terminal [12]/.test(location) || !/(Arrivals|Departures)/.test(location))) {
+    add('airport_location_incomplete', 'medium', 'Airport location does not include terminal and movement branch.', 10);
+  }
+
+  return findings;
+}
+
+function calculateQualityScore(findings) {
+  const impact = findings.reduce((total, finding) => total + Number(finding.scoreImpact || 0), 0);
+  return Math.max(0, Math.min(100, 100 - impact));
+}
+
+function reviewStatusForQuality(score) {
+  if (score < 60) return 'Reject';
+  if (score < 85) return 'Review';
+  return 'Accept';
+}
+
 function normalizeResponse(row) {
   return {
     id: String(row.id),
@@ -2078,6 +2984,25 @@ function normalizeResponse(row) {
     surveyStartedAt: formatTimestamp(row.survey_started_at),
     surveyEndedAt: formatTimestamp(row.survey_ended_at),
     surveyDurationSeconds: row.survey_duration_seconds ?? null,
+    qualityScore: row.quality_score ?? 100,
+    reviewStatus: row.review_status || 'Accept',
+    qualityFindings: (row.quality_findings || []).map((finding) => ({
+      ruleKey: finding.rule_key,
+      severity: finding.severity,
+      message: finding.message,
+      scoreImpact: finding.score_impact,
+      createdAt: formatTimestamp(finding.created_at)
+    })),
+    auditLogs: (row.audit_logs || []).map((log) => ({
+      id: String(log.id),
+      action: log.action,
+      changedBy: log.changed_by,
+      changedByRole: log.changed_by_role,
+      changedFields: log.changed_fields || [],
+      beforeSnapshot: log.before_snapshot || {},
+      afterSnapshot: log.after_snapshot || {},
+      createdAt: formatTimestamp(log.created_at)
+    })),
     hasAudio: Boolean(row.audio_data),
     audioMimeType: row.audio_mime_type || '',
     submittedAt: formatTimestamp(row.submitted_at)
@@ -2243,10 +3168,34 @@ function verifyToken(token) {
   return payload;
 }
 
+function rolePermissionsFor(role) {
+  const normalizedRole = normalizePlatformRoleKey(role);
+  if (role === 'admin' || normalizedRole === 'platformSuperAdmin') return new Set(['*']);
+  const roleDefinition = phaseOneRoles.find((item) => item.key === normalizedRole || item.key === role);
+  return new Set(roleDefinition?.permissions || legacyRolePermissionMap[role] || []);
+}
+
+function roleHasPermission(role, permission) {
+  const permissions = rolePermissionsFor(role);
+  return permissions.has('*') || permissions.has(permission);
+}
+
+function requireAnyAdminPermission(...permissions) {
+  return (req, res, next) => {
+    const role = req.admin?.role;
+    if (!role) return res.status(401).json({ error: 'Staff login required.' });
+    if (permissions.length === 0 || permissions.some((permission) => roleHasPermission(role, permission))) return next();
+    return res.status(403).json({
+      error: 'Your role does not have permission to perform this action.',
+      requiredPermissions: permissions
+    });
+  };
+}
+
 function requireAdmin(req, res, next) {
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
   const admin = verifyToken(token);
-  const allowedRoles = new Set(['admin', 'analyst', 'teamLead', 'floorManager']);
+  const allowedRoles = new Set(['admin', 'analyst', 'teamLead', 'floorManager', 'qaQc', ...phaseOneRoles.map((role) => role.key)]);
   if (!admin || !allowedRoles.has(admin.role)) return res.status(401).json({ error: 'Staff login required.' });
   req.admin = admin;
   next();
@@ -2569,6 +3518,8 @@ function normalizeRecoveryType(value) {
 
 function normalizeStaffRole(role) {
   const normalized = String(role || '').trim().toLowerCase();
+  const phaseRole = phaseOneRoles.find((item) => item.key.toLowerCase() === normalized || item.name.toLowerCase() === normalized);
+  if (phaseRole) return phaseRole.key;
   if (normalized === 'team lead' || normalized === 'tl') return 'teamLead';
   if (normalized === 'floor manager' || normalized === 'fm') return 'floorManager';
   if (normalized === 'admin') return 'admin';
@@ -2585,6 +3536,9 @@ function normalizeProject(project) {
     locations: project.locations || [],
     settings: normalizeProjectSettings(project.settings, project.slug),
     isActive: project.is_active,
+    organisationId: project.organisation_id ? String(project.organisation_id) : '',
+    workspaceId: project.workspace_id ? String(project.workspace_id) : '',
+    ownerUsername: project.owner_username || '',
     responseCount: project.response_count || 0,
     createdAt: formatTimestamp(project.created_at),
     updatedAt: formatTimestamp(project.updated_at),
@@ -2595,18 +3549,56 @@ function normalizeProject(project) {
 function normalizeProjectSettings(settings = {}, slug = '') {
   const parsed = typeof settings === 'string' ? safeJsonParse(settings, {}) : settings || {};
   const status = parsed.status === 'archived' ? 'archived' : (parsed.status === 'draft' ? 'draft' : 'deployed');
+  const componentPolicy = normalizeComponentPolicy(parsed, slug);
   return {
     ...defaultProjectSettings,
-    airportLocationMode: parsed.airportLocationMode === undefined ? slug === defaultProjectSlug : Boolean(parsed.airportLocationMode),
-    captureGps: Boolean(parsed.captureGps),
-    captureAudio: Boolean(parsed.captureAudio),
-    showRespondentPhone: parsed.showRespondentPhone !== false,
-    showHouseholdId: Boolean(parsed.showHouseholdId),
+    ...parsed,
+    componentPolicy,
+    airportLocationMode: componentPolicy.airportLocationFlow !== 'off',
+    captureGps: componentPolicy.gps !== 'off',
+    captureAudio: componentPolicy.audio !== 'off',
+    showRespondentPhone: componentPolicy.respondentPhone !== 'off',
+    showHouseholdId: componentPolicy.householdId !== 'off',
     sector: parsed.sector?.trim?.() || 'Other',
     country: parsed.country?.trim?.() || 'India',
     status,
     archivedAt: status === 'archived' ? String(parsed.archivedAt || '') : ''
   };
+}
+
+function normalizeComponentPolicy(settings = {}, slug = '') {
+  const providedPolicy = settings.componentPolicy || {};
+  return {
+    airportLocationFlow: normalizeComponentMode(
+      providedPolicy.airportLocationFlow,
+      settings.airportLocationMode === undefined
+        ? (slug === defaultProjectSlug ? 'mandatory' : defaultComponentPolicy.airportLocationFlow)
+        : (settings.airportLocationMode ? 'mandatory' : 'off')
+    ),
+    gps: normalizeComponentMode(providedPolicy.gps, settings.captureGps ? 'optional' : defaultComponentPolicy.gps),
+    audio: normalizeComponentMode(providedPolicy.audio, settings.captureAudio ? 'optional' : defaultComponentPolicy.audio),
+    respondentPhone: normalizeComponentMode(
+      providedPolicy.respondentPhone,
+      settings.showRespondentPhone === false ? 'off' : defaultComponentPolicy.respondentPhone
+    ),
+    householdId: normalizeComponentMode(providedPolicy.householdId, settings.showHouseholdId ? 'optional' : defaultComponentPolicy.householdId)
+  };
+}
+
+function normalizeComponentMode(value, fallback = 'off') {
+  return componentModes.has(value) ? value : fallback;
+}
+
+function getComponentMode(settings, key) {
+  return normalizeComponentMode(settings?.componentPolicy?.[key], defaultComponentPolicy[key] || 'off');
+}
+
+function isComponentEnabled(settings, key) {
+  return getComponentMode(settings, key) !== 'off';
+}
+
+function isComponentMandatory(settings, key) {
+  return getComponentMode(settings, key) === 'mandatory';
 }
 
 function safeJsonParse(value, fallback) {

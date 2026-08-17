@@ -11526,3 +11526,137 @@ body:has(.admin-console) {
 .admin-console .surveyos-selected-project.admin-selected-card strong {
   color: #ffffff;
 }
+
+/* Light theme correction for access management surfaces */
+.admin-console .rbac-role-grid,
+.admin-console .phase1-table-grid,
+.admin-console .phase1-vendor-grid {
+  gap: 12px;
+}
+
+.admin-console .rbac-role-card,
+.admin-console .phase1-access-row,
+.admin-console .phase1-vendor-card,
+.admin-console .client-list-row,
+.admin-console .recovery-request-row {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid #d7e4ef;
+  border-radius: 14px;
+  box-shadow: 0 14px 30px rgba(15, 48, 92, 0.08);
+  color: #081f44;
+}
+
+.admin-console .rbac-role-card {
+  align-content: start;
+  min-height: 172px;
+  padding: 16px;
+}
+
+.admin-console .rbac-role-card > div:first-child {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.admin-console .rbac-role-card strong,
+.admin-console .phase1-access-row strong,
+.admin-console .phase1-vendor-card strong,
+.admin-console .client-list-row strong,
+.admin-console .recovery-request-row strong {
+  color: #061b3d;
+  font-weight: 900;
+}
+
+.admin-console .rbac-role-card strong {
+  font-size: 1.02rem;
+  line-height: 1.12;
+}
+
+.admin-console .rbac-role-card p,
+.admin-console .phase1-access-row small,
+.admin-console .phase1-access-row em,
+.admin-console .phase1-vendor-card small,
+.admin-console .phase1-vendor-card em,
+.admin-console .client-list-row small,
+.admin-console .recovery-request-row small,
+.admin-console .recovery-request-row em {
+  color: #647391;
+}
+
+.admin-console .rbac-role-card p {
+  font-size: 0.88rem;
+  font-weight: 750;
+  line-height: 1.42;
+}
+
+.admin-console .rbac-role-card small,
+.admin-console .phase1-vendor-card span {
+  background: #e7f7f5;
+  color: #087b78;
+}
+
+.admin-console .permission-chip-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.admin-console .permission-chip-row span {
+  background: #eef6ff;
+  color: #164493;
+}
+
+.admin-console .phase1-access-row {
+  min-height: 74px;
+  padding: 14px 16px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.admin-console .phase1-access-row:hover,
+.admin-console .client-list-row:hover,
+.admin-console .recovery-request-row:hover {
+  border-color: #9ec6ef;
+  box-shadow: 0 18px 34px rgba(22, 68, 147, 0.12);
+  transform: translateY(-1px);
+}
+
+.admin-console .phase1-access-row em {
+  color: #697995;
+  font-weight: 850;
+  justify-self: end;
+}
+
+.admin-console .phase1-access-row i,
+.admin-console .client-list-row i {
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 900;
+  padding: 7px 12px;
+}
+
+.admin-console .phase1-access-row i.active,
+.admin-console .client-list-row i.active {
+  background: #e4fbf8;
+  color: #087b78;
+}
+
+.admin-console .phase1-access-row i.inactive,
+.admin-console .client-list-row i.inactive {
+  background: #eff3f8;
+  color: #62708a;
+}
+
+@media (max-width: 760px) {
+  .admin-console .phase1-access-row,
+  .admin-console .recovery-request-row {
+    align-items: start;
+    grid-template-columns: 1fr;
+  }
+
+  .admin-console .phase1-access-row em {
+    justify-self: start;
+  }
+}

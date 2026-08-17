@@ -2355,6 +2355,7 @@ function AdminDashboard({ token, session, onLogout }) {
   const [responseMode, setResponseMode] = useState('edit');
   const [audioPreview, setAudioPreview] = useState(null);
   const [projectSearch, setProjectSearch] = useState('');
+  const projectSearchInputRef = useRef(null);
   const [projectStatusFilter, setProjectStatusFilter] = useState('deployed');
   const isInitialSurveyDesigner = normalizeAdminRoleKey(session?.role) === 'surveyDesigner';
   const [activeAdminSection, setActiveAdminSection] = useState(isInitialSurveyDesigner ? 'projectWorkspace' : 'overview');
@@ -3152,7 +3153,7 @@ function AdminDashboard({ token, session, onLogout }) {
         </div>
         <label className="admin-search">
           <Search size={22} />
-          <input value={projectSearch} onChange={(event) => setProjectSearch(event.target.value)} placeholder="Search projects" />
+          <input ref={projectSearchInputRef} value={projectSearch} onChange={(event) => setProjectSearch(event.target.value)} placeholder="Search projects" />
         </label>
         <button className="admin-avatar" onClick={onLogout} title="Logout" aria-label="Logout"><LogOut size={20} /></button>
       </div>
@@ -3275,6 +3276,7 @@ function AdminDashboard({ token, session, onLogout }) {
                 }
               }}
               onOpenProjects={() => openAdminSection('projects')}
+              onFocusSearch={() => projectSearchInputRef.current?.focus()}
               onRefresh={refreshAdminData}
               projects={projects}
               totalProjectSubmissions={totalProjectSubmissions}
@@ -5833,6 +5835,7 @@ function SurveyOSFoundationDashboard({
   onOpenProjectWorkspace,
   onOpenProjectMap,
   onOpenProjects,
+  onFocusSearch,
   onOpenRefresh,
   onOpenUsers,
   onOpenVendors,
@@ -6032,8 +6035,8 @@ function SurveyOSFoundationDashboard({
               <span>{dashboardScope}</span>
             </div>
             <div className="superadmin-header-actions">
-              <button type="button" className="superadmin-date">{dateRangeLabel} <CalendarClock size={14} /></button>
-              <button type="button" aria-label="Search projects"><Search size={17} /></button>
+              <button type="button" className="superadmin-date" onClick={onRefresh}>{dateRangeLabel} <CalendarClock size={14} /></button>
+              <button type="button" aria-label="Search projects" onClick={onFocusSearch}><Search size={17} /></button>
               <button type="button" aria-label="Refresh platform data" onClick={onRefresh}><RefreshCw size={17} /></button>
               <button type="button" aria-label="Open projects" onClick={onOpenProjects}><ClipboardList size={17} /></button>
               <div className="superadmin-avatar">{dashboardUserName.charAt(0).toUpperCase()}<i /></div>
@@ -6058,7 +6061,7 @@ function SurveyOSFoundationDashboard({
                   <strong>{formatStatNumber(totalSamples)}</strong>
                   <small>Current filtered platform data</small>
                 </div>
-                <button type="button">This Month</button>
+                <button type="button" onClick={onRefresh}>This Month</button>
               </div>
               <TrendLineChart rows={dateRows} labelKey="date" valueKey="samples" />
             </div>
@@ -6081,7 +6084,7 @@ function SurveyOSFoundationDashboard({
                   <strong>0</strong>
                   <small>AI credits not connected yet</small>
                 </div>
-                <button type="button">This Month</button>
+                <button type="button" onClick={onRefresh}>This Month</button>
               </div>
               <TrendLineChart rows={dateRows.map((row) => ({ ...row, samples: 0 }))} labelKey="date" valueKey="samples" />
             </div>

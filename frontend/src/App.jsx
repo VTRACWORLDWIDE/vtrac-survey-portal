@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Component, useEffect, useMemo, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -3829,18 +3829,23 @@ function AdminDashboard({ token, session, onLogout }) {
 
           {canAccessAdminSection('clients') && activeAdminSection === 'clients' && (
             <section id="client-access">
-              <ClientAccessManager
-                clients={clients}
-                projects={projects}
-                editingClient={editingClient}
-                recoveryRequests={recoveryRequests}
-                onStartNew={startNewClient}
-                onEdit={editClient}
-                onChange={setEditingClient}
-                onCancel={() => setEditingClient(null)}
-                onSave={saveClient}
-                onResolveRecovery={resolveRecoveryRequest}
-              />
+              <AdminSectionErrorBoundary
+                resetKey={`clients-${Array.isArray(clients) ? clients.length : 'x'}-${Array.isArray(recoveryRequests) ? recoveryRequests.length : 'x'}-${editingClient?.id || 'none'}`}
+                onBack={() => openAdminSection('projects')}
+              >
+                <ClientAccessManager
+                  clients={clients}
+                  projects={projects}
+                  editingClient={editingClient}
+                  recoveryRequests={recoveryRequests}
+                  onStartNew={startNewClient}
+                  onEdit={editClient}
+                  onChange={setEditingClient}
+                  onCancel={() => setEditingClient(null)}
+                  onSave={saveClient}
+                  onResolveRecovery={resolveRecoveryRequest}
+                />
+              </AdminSectionErrorBoundary>
             </section>
           )}
 
@@ -4932,6 +4937,51 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
       </div>
     </div>
   );
+}
+
+class AdminSectionErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, message: '' };
+  }
+
+  static getDerivedStateFromError(error) {
+    return {
+      hasError: true,
+      message: error?.message || 'Unexpected display error'
+    };
+  }
+
+  componentDidUpdate(previousProps) {
+    if (previousProps.resetKey !== this.props.resetKey && this.state.hasError) {
+      this.setState({ hasError: false, message: '' });
+    }
+  }
+
+  componentDidCatch(error, info) {
+    console.error('Admin section render failed', error, info);
+  }
+
+  render() {
+    if (!this.state.hasError) return this.props.children;
+
+    return (
+      <section className="phase1-shell">
+        <div className="panel access-restricted-panel">
+          <ShieldCheck size={34} />
+          <div>
+            <p className="eyebrow">Display recovered</p>
+            <h2>This page hit a display error</h2>
+            <p>{this.state.message}. Go back to projects or reload the page to continue.</p>
+            <div className="actions">
+              <button className="secondary" onClick={this.props.onBack}>Back to projects</button>
+              <button className="primary" onClick={() => window.location.reload()}>Reload page</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
 }
 
 function AccessRestrictedPanel({ roleLabel, section }) {

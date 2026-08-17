@@ -2514,7 +2514,12 @@ function AdminDashboard({ token, session, onLogout }) {
     });
     setUsers(payload.users || []);
     setVendors(payload.vendors || []);
-    if (payload.clients) setClients(payload.clients);
+    if (payload.clients) {
+      setClients(payload.clients.map((client) => ({
+        ...client,
+        projectIds: Array.isArray(client.projectIds) ? client.projectIds : []
+      })));
+    }
     const organisation = payload.organisation || {};
     const workspace = payload.workspace || {};
     setOrganisationDraft({
@@ -2533,7 +2538,10 @@ function AdminDashboard({ token, session, onLogout }) {
     const response = await fetch(`${apiBase}/api/admin/clients`, { headers: authHeaders });
     if (response.status === 401) return onLogout();
     const payload = await response.json();
-    setClients(payload.clients || []);
+    setClients((payload.clients || []).map((client) => ({
+      ...client,
+      projectIds: Array.isArray(client.projectIds) ? client.projectIds : []
+    })));
   }
 
   async function loadRecoveryRequests() {
@@ -5345,15 +5353,18 @@ function ClientAccessManager({ clients, projects, editingClient, recoveryRequest
 
       <div className="client-list">
         {clients.length === 0 && <p className="empty">No client logins yet.</p>}
-        {clients.map((client) => (
-          <button className="client-list-row" key={client.id} onClick={() => onEdit(client)}>
-            <span>
-              <strong>{client.displayName}</strong>
-              <small>{client.username}{client.email ? ' · ' + client.email : ''} · {client.isActive ? 'Active' : 'Inactive'}</small>
-            </span>
-            <em>{client.projectIds.length} project{client.projectIds.length === 1 ? '' : 's'}</em>
-          </button>
-        ))}
+        {clients.map((client) => {
+          const assignedProjectIds = Array.isArray(client.projectIds) ? client.projectIds : [];
+          return (
+            <button className="client-list-row" key={client.id} onClick={() => onEdit({ ...client, projectIds: assignedProjectIds })}>
+              <span>
+                <strong>{client.displayName || client.username || 'Client user'}</strong>
+                <small>{client.username}{client.email ? ' · ' + client.email : ''} · {client.isActive !== false ? 'Active' : 'Inactive'}</small>
+              </span>
+              <em>{assignedProjectIds.length} project{assignedProjectIds.length === 1 ? '' : 's'}</em>
+            </button>
+          );
+        })}
       </div>
 
       <div className="recovery-admin-card">

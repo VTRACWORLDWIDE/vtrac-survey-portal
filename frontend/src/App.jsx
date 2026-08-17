@@ -5286,12 +5286,17 @@ function permissionLabel(permissionKey, permissions = []) {
 }
 
 function ClientAccessManager({ clients, projects, editingClient, recoveryRequests = [], onStartNew, onEdit, onChange, onCancel, onSave, onResolveRecovery }) {
+  const safeClients = Array.isArray(clients) ? clients : [];
+  const safeProjects = Array.isArray(projects) ? projects : [];
+  const safeRecoveryRequests = Array.isArray(recoveryRequests) ? recoveryRequests : [];
+  const editingProjectIds = Array.isArray(editingClient?.projectIds) ? editingClient.projectIds : [];
+
   function update(field, value) {
-    onChange({ ...editingClient, [field]: value });
+    onChange({ ...(editingClient || {}), projectIds: editingProjectIds, [field]: value });
   }
 
   function toggleProject(projectId) {
-    const current = new Set(editingClient.projectIds || []);
+    const current = new Set(editingProjectIds);
     if (current.has(projectId)) current.delete(projectId);
     else current.add(projectId);
     update('projectIds', [...current]);
@@ -5312,11 +5317,11 @@ function ClientAccessManager({ clients, projects, editingClient, recoveryRequest
           <div className="inline-grid">
             <label>
               Display name
-              <input value={editingClient.displayName} onChange={(event) => update('displayName', event.target.value)} />
+              <input value={editingClient.displayName || ''} onChange={(event) => update('displayName', event.target.value)} />
             </label>
             <label>
               Username
-              <input value={editingClient.username} onChange={(event) => update('username', event.target.value)} />
+              <input value={editingClient.username || ''} onChange={(event) => update('username', event.target.value)} />
             </label>
             <label>
               Email
@@ -5329,11 +5334,11 @@ function ClientAccessManager({ clients, projects, editingClient, recoveryRequest
             <span className="hint-text">{editingClient.email ? 'Email sends a secure setup/reset link. Password is not emailed.' : 'Without email, share this password manually.'}</span>
           </label>
           <div className="project-check-list">
-            {projects.map((project) => (
+            {safeProjects.map((project) => (
               <label className="check-row" key={project.id}>
                 <input
                   type="checkbox"
-                  checked={(editingClient.projectIds || []).includes(project.id)}
+                  checked={editingProjectIds.includes(project.id)}
                   onChange={() => toggleProject(project.id)}
                 />
                 {project.name}
@@ -5352,8 +5357,8 @@ function ClientAccessManager({ clients, projects, editingClient, recoveryRequest
       )}
 
       <div className="client-list">
-        {clients.length === 0 && <p className="empty">No client logins yet.</p>}
-        {clients.map((client) => {
+        {safeClients.length === 0 && <p className="empty">No client logins yet.</p>}
+        {safeClients.map((client) => {
           const assignedProjectIds = Array.isArray(client.projectIds) ? client.projectIds : [];
           return (
             <button className="client-list-row" key={client.id} onClick={() => onEdit({ ...client, projectIds: assignedProjectIds })}>
@@ -5373,10 +5378,10 @@ function ClientAccessManager({ clients, projects, editingClient, recoveryRequest
             <p className="eyebrow">Account recovery</p>
             <h3>Forgot username / password requests</h3>
           </div>
-          <span className="recovery-count-chip">{recoveryRequests.filter((request) => request.status !== 'Resolved').length} pending</span>
+          <span className="recovery-count-chip">{safeRecoveryRequests.filter((request) => request.status !== 'Resolved').length} pending</span>
         </div>
-        {recoveryRequests.length === 0 && <p className="empty">No recovery requests yet.</p>}
-        {recoveryRequests.map((request) => {
+        {safeRecoveryRequests.length === 0 && <p className="empty">No recovery requests yet.</p>}
+        {safeRecoveryRequests.map((request) => {
           const isResolved = request.status === 'Resolved';
           return (
             <div className="recovery-request-row" key={request.id}>

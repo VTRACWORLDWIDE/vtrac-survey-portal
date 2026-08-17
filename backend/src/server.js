@@ -156,13 +156,15 @@ app.post('/api/admin/login', (req, res) => {
   return authenticateStaffLogin(identifier, password)
     .then((staff) => {
       if (!staff) return res.status(401).json({ error: 'Invalid staff login.' });
+      const assignedProjectIds = Array.isArray(staff.assigned_project_ids) ? staff.assigned_project_ids.map(String) : [];
       res.json({
-        token: createToken(staff.username, staff.role, null, { displayName: staff.display_name, email: staff.email, employeeCode: staff.employee_code }),
+        token: createToken(staff.username, staff.role, null, { displayName: staff.display_name, email: staff.email, employeeCode: staff.employee_code, assignedProjectIds }),
         username: staff.username,
         role: staff.role,
         displayName: staff.display_name,
         email: staff.email,
-        employeeCode: staff.employee_code
+        employeeCode: staff.employee_code,
+        assignedProjectIds
       });
     })
     .catch((error) => {
@@ -171,7 +173,13 @@ app.post('/api/admin/login', (req, res) => {
 });
 
 app.get('/api/admin/me', requireAdmin, (req, res) => {
-  res.json({ username: req.admin.username, displayName: req.admin.displayName || req.admin.username, email: req.admin.email || null, role: req.admin.role });
+  res.json({
+    username: req.admin.username,
+    displayName: req.admin.displayName || req.admin.username,
+    email: req.admin.email || null,
+    role: req.admin.role,
+    assignedProjectIds: Array.isArray(req.admin.assignedProjectIds) ? req.admin.assignedProjectIds : []
+  });
 });
 
 app.get('/api/admin/foundation', requireAdmin, async (req, res, next) => {
@@ -347,10 +355,10 @@ app.post('/api/admin/recovery-requests/:id/resolve', requireAdmin, requireAnyAdm
   }
 });
 
-app.get('/api/projects', requireAdmin, requireAnyAdminPermission('projects.manage', 'surveys.design', 'responses.view', 'responses.export', 'analytics.view'), async (_req, res, next) => {
+app.get('/api/projects', requireAdmin, requireAnyAdminPermission('projects.manage', 'surveys.design', 'responses.view', 'responses.export', 'analytics.view'), async (req, res, next) => {
   try {
     const projects = await loadProjects();
-    res.json({ projects });
+    res.json({ projects: filterProjectsForAdmin(req.admin, projects) });
   } catch (error) {
     next(error);
   }
@@ -367,6 +375,7 @@ app.post('/api/projects', requireAdmin, requireAnyAdminPermission('projects.mana
 
 app.put('/api/projects/:id', requireAdmin, requireAnyAdminPermission('projects.manage', 'surveys.design'), async (req, res, next) => {
   try {
+    if (!adminCanAccessProject(req.admin, req.params.id)) return res.status(403).json({ error: 'This project is not assigned to your account.' });
     const project = await saveProject({ ...req.body, id: req.params.id });
     res.json({ project });
   } catch (error) {
@@ -376,6 +385,7 @@ app.put('/api/projects/:id', requireAdmin, requireAnyAdminPermission('projects.m
 
 app.get('/api/projects/:id/response-backups', requireAdmin, requireAnyAdminPermission('projects.manage'), async (req, res, next) => {
   try {
+    if (!adminCanAccessProject(req.admin, req.params.id)) return res.status(403).json({ error: 'This project is not assigned to your account.' });
     await query(`DELETE FROM response_clear_backups WHERE expires_at < NOW()`);
     const result = await query(
       `SELECT id, project_id, project_name, response_count, created_by, created_at, expires_at, restored_at, restored_by, restored_count
@@ -407,6 +417,7 @@ app.get('/api/projects/:id/response-backups', requireAdmin, requireAnyAdminPermi
 app.post('/api/projects/:id/response-backups/:backupId/restore', requireAdmin, requireAnyAdminPermission('projects.manage'), async (req, res, next) => {
   const client = await pool.connect();
   try {
+    if (!adminCanAccessProject(req.admin, req.params.id)) return res.status(403).json({ error: 'This project is not assigned to your account.' });
     const confirmation = String(req.body?.confirmation || '').trim();
     if (confirmation !== 'RESTORE DATA') {
       return res.status(400).json({ error: 'Type RESTORE DATA to confirm restoring the backup.' });
@@ -518,6 +529,7 @@ app.post('/api/projects/:id/response-backups/:backupId/restore', requireAdmin, r
 app.delete('/api/projects/:id/responses', requireAdmin, requireAnyAdminPermission('projects.manage'), async (req, res, next) => {
   const client = await pool.connect();
   try {
+    if (!adminCanAccessProject(req.admin, req.params.id)) return res.status(403).json({ error: 'This project is not assigned to your account.' });
     const confirmation = String(req.body?.confirmation || '').trim();
     if (confirmation !== 'CLEAR DATA') {
       return res.status(400).json({ error: 'Type CLEAR DATA to confirm clearing submitted responses.' });
@@ -769,7 +781,7 @@ app.get('/api/public/enumerator-stats', async (req, res, next) => {
 
 app.get('/api/dashboard', requireAdmin, requireAnyAdminPermission('platform.overview.view', 'responses.view', 'analytics.view'), async (req, res, next) => {
   try {
-    const filters = buildFilters(req.query);
+    const filters = buildFilters(req.query, assignedProjectIdsForAdmin(req.admin));
     const mapWhere = filters.where
       ? `${filters.where} AND latitude IS NOT NULL AND longitude IS NOT NULL`
       : 'WHERE latitude IS NOT NULL AND longitude IS NOT NULL';
@@ -936,7 +948,7 @@ app.get('/api/dashboard', requireAdmin, requireAnyAdminPermission('platform.over
 
 app.get('/api/dashboard/options', requireAdmin, requireAnyAdminPermission('responses.view', 'analytics.view'), async (req, res, next) => {
   try {
-    const filters = buildFilters({ projectId: req.query.projectId });
+    const filters = buildFilters({ projectId: req.query.projectId }, assignedProjectIdsForAdmin(req.admin));
     const [enumerators, locations] = await Promise.all([
       query(
         `SELECT DISTINCT enumerator_name
@@ -974,6 +986,7 @@ app.get('/api/responses/:id(\\d+)', requireAdmin, requireAnyAdminPermission('res
     );
     const response = result.rows[0];
     if (!response) return res.status(404).json({ error: 'Response not found.' });
+    if (!adminCanAccessProject(req.admin, response.project_id)) return res.status(403).json({ error: 'This response is not assigned to your account.' });
     const reviewDetails = await loadResponseReviewDetails(req.params.id);
     res.json({ response: normalizeResponse({ ...response, ...reviewDetails }) });
   } catch (error) {
@@ -984,13 +997,14 @@ app.get('/api/responses/:id(\\d+)', requireAdmin, requireAnyAdminPermission('res
 app.get('/api/responses/:id(\\d+)/audio', requireAdmin, requireAnyAdminPermission('responses.view'), async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT audio_data, audio_mime_type
+      `SELECT project_id, audio_data, audio_mime_type
       FROM survey_responses
       WHERE id = $1
       LIMIT 1`,
       [req.params.id]
     );
     const row = result.rows[0];
+    if (row?.project_id && !adminCanAccessProject(req.admin, row.project_id)) return res.status(403).json({ error: 'This response is not assigned to your account.' });
     if (!row?.audio_data) return res.status(404).json({ error: 'Audio recording not found.' });
     const audioBuffer = Buffer.from(row.audio_data, 'base64');
     const audioMimeType = normalizeStoredAudioMimeType(row.audio_mime_type);
@@ -1032,6 +1046,10 @@ app.put('/api/responses/:id(\\d+)', requireAdmin, requireAnyAdminPermission('res
     if (!before) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Response not found.' });
+    }
+    if (!adminCanAccessProject(req.admin, before.project_id)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'This response is not assigned to your account.' });
     }
 
     const result = await client.query(
@@ -1226,7 +1244,7 @@ app.get('/api/client/dashboard', requireClient, async (req, res, next) => {
 
 app.get('/api/responses/export.csv', requireAdmin, requireAnyAdminPermission('responses.export'), async (req, res, next) => {
   try {
-    const { rows, questions } = await loadExportRows(req.query);
+    const { rows, questions } = await loadExportRows(req.query, assignedProjectIdsForAdmin(req.admin));
     const headerFormat = req.query.headerFormat === 'raw' ? 'raw' : 'labels';
     const records = rows.map((row) => flattenResponse(row, questions, headerFormat));
     const csv = stringify(records, { header: true, columns: Object.keys(records[0] || defaultExportRow(questions, headerFormat)) });
@@ -1241,7 +1259,7 @@ app.get('/api/responses/export.csv', requireAdmin, requireAnyAdminPermission('re
 app.get('/api/responses/export.xlsx', requireAdmin, requireAnyAdminPermission('responses.export'), async (req, res, next) => {
   let exportFilePath = '';
   try {
-    const { rows, questions } = await loadExportRows(req.query);
+    const { rows, questions } = await loadExportRows(req.query, assignedProjectIdsForAdmin(req.admin));
     const headerFormat = req.query.headerFormat === 'raw' ? 'raw' : 'labels';
     exportFilePath = path.join(os.tmpdir(), `vtrac-responses-${Date.now()}-${crypto.randomUUID()}.xlsx`);
     const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
@@ -1281,7 +1299,7 @@ app.get('/api/responses/export.xlsx', requireAdmin, requireAnyAdminPermission('r
 
 app.get('/api/responses/export.geojson', requireAdmin, requireAnyAdminPermission('responses.export'), async (req, res, next) => {
   try {
-    const { rows } = await loadExportRows(req.query);
+    const { rows } = await loadExportRows(req.query, assignedProjectIdsForAdmin(req.admin));
     const features = rows
       .filter((row) => row.latitude !== null && row.longitude !== null)
       .map((row) => ({
@@ -1309,7 +1327,7 @@ app.get('/api/responses/export.geojson', requireAdmin, requireAnyAdminPermission
 
 app.get('/api/responses/export.kml', requireAdmin, requireAnyAdminPermission('responses.export'), async (req, res, next) => {
   try {
-    const { rows } = await loadExportRows(req.query);
+    const { rows } = await loadExportRows(req.query, assignedProjectIdsForAdmin(req.admin));
     const placemarks = rows
       .filter((row) => row.latitude !== null && row.longitude !== null)
       .map((row) => `
@@ -1454,6 +1472,7 @@ async function ensureDatabase() {
       reporting_team_lead_email TEXT,
       reporting_floor_manager TEXT,
       reporting_floor_manager_email TEXT,
+      assigned_project_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
       password_hash TEXT NOT NULL,
       must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -1642,6 +1661,7 @@ async function ensureDatabase() {
     ALTER TABLE staff_accounts ADD COLUMN IF NOT EXISTS email TEXT;
     ALTER TABLE staff_accounts ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES survey_organisations(id);
     ALTER TABLE staff_accounts ADD COLUMN IF NOT EXISTS workspace_id BIGINT REFERENCES survey_workspaces(id);
+    ALTER TABLE staff_accounts ADD COLUMN IF NOT EXISTS assigned_project_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
     ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS email TEXT;
     ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES survey_organisations(id);
     ALTER TABLE account_recovery_requests ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES survey_organisations(id);
@@ -2049,6 +2069,11 @@ async function saveUser(payload = {}) {
   const email = normalizeEmail(payload.email || '');
   const role = normalizePlatformRoleKey(payload.role || 'analyst');
   const password = String(payload.password || '');
+  const assignedProjectIds = Array.isArray(payload.assignedProjectIds)
+    ? payload.assignedProjectIds.map(String).filter(Boolean)
+    : Array.isArray(payload.projectIds)
+      ? payload.projectIds.map(String).filter(Boolean)
+      : [];
   if (!username || !displayName) {
     const error = new Error('Username and display name are required.');
     error.status = 400;
@@ -2068,23 +2093,23 @@ async function saveUser(payload = {}) {
     ? password
       ? await query(
         `UPDATE staff_accounts
-        SET username = $1, email = $2, display_name = $3, role = $4, branch = $5, team = $6, password_hash = $7, is_active = $8, organisation_id = $9, workspace_id = $10, updated_at = NOW()
-        WHERE id = $11
+        SET username = $1, email = $2, display_name = $3, role = $4, branch = $5, team = $6, password_hash = $7, is_active = $8, organisation_id = $9, workspace_id = $10, assigned_project_ids = $11, updated_at = NOW()
+        WHERE id = $12
         RETURNING *`,
-        [username, email || null, displayName, role, payload.branch || null, payload.team || null, hashPassword(password), payload.isActive !== false, context.organisationId, context.workspaceId, payload.id]
+        [username, email || null, displayName, role, payload.branch || null, payload.team || null, hashPassword(password), payload.isActive !== false, context.organisationId, context.workspaceId, assignedProjectIds, payload.id]
       )
       : await query(
         `UPDATE staff_accounts
-        SET username = $1, email = $2, display_name = $3, role = $4, branch = $5, team = $6, is_active = $7, organisation_id = $8, workspace_id = $9, updated_at = NOW()
-        WHERE id = $10
+        SET username = $1, email = $2, display_name = $3, role = $4, branch = $5, team = $6, is_active = $7, organisation_id = $8, workspace_id = $9, assigned_project_ids = $10, updated_at = NOW()
+        WHERE id = $11
         RETURNING *`,
-        [username, email || null, displayName, role, payload.branch || null, payload.team || null, payload.isActive !== false, context.organisationId, context.workspaceId, payload.id]
+        [username, email || null, displayName, role, payload.branch || null, payload.team || null, payload.isActive !== false, context.organisationId, context.workspaceId, assignedProjectIds, payload.id]
       )
     : await query(
-      `INSERT INTO staff_accounts (organisation_id, workspace_id, username, email, display_name, role, branch, team, password_hash, must_change_password, is_active)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,FALSE,$10)
+      `INSERT INTO staff_accounts (organisation_id, workspace_id, username, email, display_name, role, branch, team, assigned_project_ids, password_hash, must_change_password, is_active)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,FALSE,$11)
       RETURNING *`,
-      [context.organisationId, context.workspaceId, username, email || null, displayName, role, payload.branch || null, payload.team || null, hashPassword(password), payload.isActive !== false]
+      [context.organisationId, context.workspaceId, username, email || null, displayName, role, payload.branch || null, payload.team || null, assignedProjectIds, hashPassword(password), payload.isActive !== false]
     );
   const row = result.rows[0];
   if (!row) {
@@ -2175,6 +2200,7 @@ function normalizeUser(row = {}) {
     role: row.role,
     branch: row.branch || '',
     team: row.team || '',
+    assignedProjectIds: Array.isArray(row.assigned_project_ids) ? row.assigned_project_ids.map(String) : [],
     isActive: row.is_active,
     mustChangePassword: row.must_change_password,
     createdAt: formatTimestamp(row.created_at),
@@ -2728,13 +2754,22 @@ async function saveProject(payload) {
   return loadProjectForPublic(project.id);
 }
 
-function buildFilters(queryParams) {
+function buildFilters(queryParams, assignedProjectIds = null) {
   const conditions = [];
   const params = [];
 
+  if (Array.isArray(assignedProjectIds)) {
+    if (assignedProjectIds.length === 0) {
+      conditions.push('FALSE');
+    } else {
+      params.push(assignedProjectIds);
+      conditions.push(`project_id = ANY($${params.length}::bigint[])`);
+    }
+  }
+
   if (queryParams.projectId) {
     params.push(queryParams.projectId);
-    conditions.push(`project_id = $${params.length}`);
+    conditions.push(`project_id = $${params.length}::bigint`);
   }
 
   if (queryParams.excludePilot === '1') {
@@ -2812,8 +2847,8 @@ function buildClientFilters(queryParams) {
   };
 }
 
-async function loadExportRows(queryParams) {
-  const filters = buildFilters(queryParams);
+async function loadExportRows(queryParams, assignedProjectIds = null) {
+  const filters = buildFilters(queryParams, assignedProjectIds);
   const project = queryParams.projectId ? await loadProjectForPublic(queryParams.projectId) : null;
   const questions = project?.questions || defaultQuestions;
   const result = await query(
@@ -3178,6 +3213,27 @@ function rolePermissionsFor(role) {
 function roleHasPermission(role, permission) {
   const permissions = rolePermissionsFor(role);
   return permissions.has('*') || permissions.has(permission);
+}
+
+function assignedProjectIdsForAdmin(admin = {}) {
+  const normalizedRole = normalizePlatformRoleKey(admin.role);
+  if (admin.role === 'admin' || normalizedRole === 'platformSuperAdmin') return null;
+  const roleDefinition = phaseOneRoles.find((item) => item.key === normalizedRole || item.key === admin.role);
+  if (!['project', 'vendor', 'client'].includes(roleDefinition?.scope)) return null;
+  return Array.isArray(admin.assignedProjectIds) ? admin.assignedProjectIds.map(String).filter(Boolean) : [];
+}
+
+function adminCanAccessProject(admin = {}, projectId) {
+  const assignedProjectIds = assignedProjectIdsForAdmin(admin);
+  if (!Array.isArray(assignedProjectIds)) return true;
+  return assignedProjectIds.includes(String(projectId));
+}
+
+function filterProjectsForAdmin(admin = {}, projects = []) {
+  const assignedProjectIds = assignedProjectIdsForAdmin(admin);
+  if (!Array.isArray(assignedProjectIds)) return projects;
+  const allowed = new Set(assignedProjectIds);
+  return projects.filter((project) => allowed.has(String(project.id)));
 }
 
 function requireAnyAdminPermission(...permissions) {

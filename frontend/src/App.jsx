@@ -2512,8 +2512,14 @@ function AdminDashboard({ token, session, onLogout }) {
       navigation: payload.navigation || [],
       counts: payload.counts || {}
     });
-    setUsers(payload.users || []);
-    setVendors(payload.vendors || []);
+    setUsers((payload.users || []).map((user) => ({
+      ...user,
+      assignedProjectIds: Array.isArray(user.assignedProjectIds) ? user.assignedProjectIds : []
+    })));
+    setVendors((payload.vendors || []).map((vendor) => ({
+      ...vendor,
+      assignedProjectIds: Array.isArray(vendor.assignedProjectIds) ? vendor.assignedProjectIds : []
+    })));
     if (payload.clients) {
       setClients(payload.clients.map((client) => ({
         ...client,
@@ -2873,12 +2879,17 @@ function AdminDashboard({ token, session, onLogout }) {
       branch: '',
       team: '',
       password: '',
-      isActive: true
+      isActive: true,
+      assignedProjectIds: selectedProject?.id ? [selectedProject.id] : []
     });
   }
 
   function editUser(user) {
-    setEditingUser({ ...user, password: '' });
+    setEditingUser({
+      ...user,
+      assignedProjectIds: Array.isArray(user.assignedProjectIds) ? user.assignedProjectIds : [],
+      password: ''
+    });
   }
 
   async function saveUserAccess(user) {
@@ -3814,6 +3825,7 @@ function AdminDashboard({ token, session, onLogout }) {
               users={users}
               roles={foundation.roles}
               permissions={foundation.permissions}
+              projects={projects}
               bulkUserText={bulkUserText}
               bulkUserWorking={bulkUserWorking}
               onBulkUserTextChange={setBulkUserText}
@@ -4442,29 +4454,24 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
 
   const componentControls = [
     {
-      key: 'airportLocationFlow',
-      title: 'Airport terminal location flow',
-      description: 'Terminal, movement, and survey point branching for airport intercept surveys.'
-    },
-    {
       key: 'gps',
       title: 'GPS coordinates',
-      description: 'Capture latitude, longitude, and accuracy when browser permission is allowed.'
+      description: 'Capture latitude, longitude, and accuracy for field quality checks.'
     },
     {
       key: 'audio',
-      title: 'Audio recording',
-      description: 'Attach a compressed browser audio recording to each response when required.'
+      title: 'Audio verification',
+      description: 'Attach compressed browser audio when required for audit or QA.'
     },
     {
       key: 'respondentPhone',
       title: 'Respondent phone field',
-      description: 'Show, require, or hide phone collection for this project.'
+      description: 'Show, require, or hide phone collection for callbacks and validation.'
     },
     {
       key: 'householdId',
-      title: 'Household ID field',
-      description: 'Use only for household surveys where an ID is required.'
+      title: 'Household / sample ID',
+      description: 'Use when a survey needs a unique household, respondent, or sample reference.'
     }
   ];
   const questionBankGroups = [
@@ -4542,7 +4549,7 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
   ];
   const surveyHealth = Math.min(98, Math.max(58, 70 + Math.round(questions.length * 1.8) + (questions.some((question) => question.required) ? 8 : 0)));
   const logicRuleCount = questions.filter((question) => question.type === 'select').length;
-  const qualityRuleCount = Object.values(settings.componentPolicy || {}).filter((mode) => mode !== 'off').length;
+  const qualityRuleCount = componentControls.filter((component) => getComponentMode(settings, component.key) !== 'off').length;
   const estimatedMinutes = Math.max(4, Math.round(questions.length * 1.35));
   const optionRows = optionRowsFor(selectedQuestion);
 
@@ -5113,6 +5120,7 @@ function UserManagementPanel({
   users,
   roles,
   permissions = [],
+  projects = [],
   bulkUserText,
   bulkUserWorking,
   onBulkUserTextChange,
@@ -5124,8 +5132,36 @@ function UserManagementPanel({
   onCancel,
   onSave
 }) {
+  const safeUsers = Array.isArray(users) ? users : [];
+  const safeRoles = Array.isArray(roles) ? roles : [];
+  const safeProjects = Array.isArray(projects) ? projects : [];
+  const editingProjectIds = Array.isArray(editingUser?.assignedProjectIds) ? editingUser.assignedProjectIds : [];
+  const editingProjectIdSet = new Set(editingProjectIds.map(String));
+  const editingRoleDefinition = safeRoles.find((role) => role.key === editingUser?.role);
+  const legacyProjectScopedRoles = new Set(['analyst', 'teamLead', 'floorManager', 'qaQc']);
+  const isProjectScopedRole = Boolean(
+    editingUser
+    && (
+      ['project', 'vendor', 'client'].includes(editingRoleDefinition?.scope)
+      || legacyProjectScopedRoles.has(editingUser.role)
+    )
+  );
+
   function update(field, value) {
-    onChange({ ...editingUser, [field]: value });
+    onChange({ ...editingUser, assignedProjectIds: editingProjectIds, [field]: value });
+  }
+
+  function toggleProject(projectId) {
+    const current = new Set(editingProjectIds.map(String));
+    const normalizedProjectId = String(projectId);
+    if (current.has(normalizedProjectId)) current.delete(normalizedProjectId);
+    else current.add(normalizedProjectId);
+    update('assignedProjectIds', [...current]);
+  }
+
+  function projectNamesFor(projectIds = []) {
+    const ids = new Set((Array.isArray(projectIds) ? projectIds : []).map(String));
+    return safeProjects.filter((project) => ids.has(String(project.id))).map((project) => project.name);
   }
 
   return (
@@ -5134,14 +5170,14 @@ function UserManagementPanel({
         <div>
           <p className="eyebrow">Access Control</p>
           <h2>Users & RBAC</h2>
-          <p>Create staff access, map emails, and assign Phase 1 roles.</p>
+          <p>Create staff access, map emails, assign roles, and scope project/vendor users to the surveys they can see.</p>
         </div>
         <button className="primary" onClick={onStartNew}><Plus size={17} /> New User</button>
       </div>
       <div className="phase1-overview-grid">
-        <SummaryKpiCard icon={<UserSearch size={18} />} label="Staff user IDs" value={users.length} detail="Internal portal accounts" accent="blue" />
-        <SummaryKpiCard icon={<ShieldCheck size={18} />} label="Role templates" value={roles.length} detail="RBAC catalog" accent="teal" />
-        <SummaryKpiCard icon={<CheckCircle2 size={18} />} label="Active users" value={users.filter((user) => user.isActive !== false).length} detail="Can sign in today" accent="sky" />
+        <SummaryKpiCard icon={<UserSearch size={18} />} label="Staff user IDs" value={safeUsers.length} detail="Internal portal accounts" accent="blue" />
+        <SummaryKpiCard icon={<ShieldCheck size={18} />} label="Role templates" value={safeRoles.length} detail="RBAC catalog" accent="teal" />
+        <SummaryKpiCard icon={<CheckCircle2 size={18} />} label="Active users" value={safeUsers.filter((user) => user.isActive !== false).length} detail="Can sign in today" accent="sky" />
         <SummaryKpiCard icon={<KeyRound size={18} />} label="Login method" value="Email/ID" detail="Username or mapped email" accent="amber" />
       </div>
       <div className="panel phase1-editor-card bulk-user-import-card">
@@ -5181,7 +5217,7 @@ function UserManagementPanel({
             <label>
               Role
               <select value={editingUser.role} onChange={(event) => update('role', event.target.value)}>
-                {roles.map((role) => <option key={role.key} value={role.key}>{role.name}</option>)}
+                {safeRoles.map((role) => <option key={role.key} value={role.key}>{role.name}</option>)}
                 <option value="admin">Legacy Admin</option>
                 <option value="analyst">Legacy Analyst</option>
               </select>
@@ -5203,6 +5239,30 @@ function UserManagementPanel({
             <input type="checkbox" checked={editingUser.isActive !== false} onChange={(event) => update('isActive', event.target.checked)} />
             Active user
           </label>
+          {isProjectScopedRole && (
+            <div className="access-scope-panel">
+              <div className="project-check-list-head">
+                <span>
+                  <strong>Project scope</strong>
+                  <small>Project, vendor, supervisor, designer, QA, and analyst users see only assigned surveys and response data.</small>
+                </span>
+                <em>{editingProjectIds.length} assigned</em>
+              </div>
+              <div className="project-check-list">
+                {safeProjects.map((project) => (
+                  <label className="check-row" key={project.id}>
+                    <input
+                      type="checkbox"
+                      checked={editingProjectIdSet.has(String(project.id))}
+                      onChange={() => toggleProject(project.id)}
+                    />
+                    {project.name}
+                  </label>
+                ))}
+                {safeProjects.length === 0 && <p className="empty">Create a project before assigning access.</p>}
+              </div>
+            </div>
+          )}
           <div className="actions">
             <button className="secondary" onClick={onCancel}>Cancel</button>
             <button className="primary" onClick={() => onSave(editingUser)}><Save size={18} /> Save User</button>
@@ -5210,33 +5270,51 @@ function UserManagementPanel({
         </div>
       )}
       <div className="phase1-table-grid">
-        {users.map((user) => (
-          <button className="phase1-access-row" key={user.id} onClick={() => onEdit(user)}>
-            <span>
-              <strong>{user.displayName}</strong>
-              <small>{user.username}{user.email ? ' · ' + user.email : ''}</small>
-            </span>
-            <em>{roleDisplayName(user.role, roles)}</em>
-            <i className={user.isActive ? 'active' : 'inactive'}>{user.isActive ? 'Active' : 'Inactive'}</i>
-          </button>
-        ))}
-        {users.length === 0 && <p className="empty">No internal users yet.</p>}
+        {safeUsers.map((user) => {
+          const assignedProjectIds = Array.isArray(user.assignedProjectIds) ? user.assignedProjectIds : [];
+          const assignedProjectNames = projectNamesFor(assignedProjectIds);
+          return (
+            <button className="phase1-access-row" key={user.id} onClick={() => onEdit(user)}>
+              <span>
+                <strong>{user.displayName}</strong>
+                <small>
+                  {user.username}{user.email ? ' · ' + user.email : ''}
+                  {assignedProjectNames.length ? ` · ${assignedProjectNames.length} scoped project${assignedProjectNames.length === 1 ? '' : 's'}` : ''}
+                </small>
+              </span>
+              <em>{roleDisplayName(user.role, safeRoles)}</em>
+              <i className={user.isActive ? 'active' : 'inactive'}>{user.isActive ? 'Active' : 'Inactive'}</i>
+            </button>
+          );
+        })}
+        {safeUsers.length === 0 && <p className="empty">No internal users yet.</p>}
       </div>
-      <RolePermissionMatrix roles={roles} permissions={permissions} />
+      <RolePermissionMatrix roles={safeRoles} permissions={permissions} />
     </section>
   );
 }
 
 function VendorManagementPanel({ vendors, projects, editingVendor, onStartNew, onEdit, onChange, onCancel, onSave }) {
+  const safeVendors = Array.isArray(vendors) ? vendors : [];
+  const safeProjects = Array.isArray(projects) ? projects : [];
+  const editingProjectIds = Array.isArray(editingVendor?.assignedProjectIds) ? editingVendor.assignedProjectIds : [];
+  const editingProjectIdSet = new Set(editingProjectIds.map(String));
+
   function update(field, value) {
-    onChange({ ...editingVendor, [field]: value });
+    onChange({ ...editingVendor, assignedProjectIds: editingProjectIds, [field]: value });
   }
 
   function toggleProject(projectId) {
-    const current = new Set(editingVendor.assignedProjectIds || []);
-    if (current.has(projectId)) current.delete(projectId);
-    else current.add(projectId);
+    const current = new Set(editingProjectIds.map(String));
+    const normalizedProjectId = String(projectId);
+    if (current.has(normalizedProjectId)) current.delete(normalizedProjectId);
+    else current.add(normalizedProjectId);
     update('assignedProjectIds', [...current]);
+  }
+
+  function projectNamesFor(projectIds = []) {
+    const ids = new Set((Array.isArray(projectIds) ? projectIds : []).map(String));
+    return safeProjects.filter((project) => ids.has(String(project.id))).map((project) => project.name);
   }
 
   return (
@@ -5245,7 +5323,7 @@ function VendorManagementPanel({ vendors, projects, editingVendor, onStartNew, o
         <div>
           <p className="eyebrow">Operations</p>
           <h2>Vendors</h2>
-          <p>Track external data collection partners, contact details, and assigned project scope.</p>
+          <p>Onboard field vendors, assign survey projects, and monitor each partner only within their approved scope.</p>
         </div>
         <button className="primary" onClick={onStartNew}><Plus size={17} /> New Vendor</button>
       </div>
@@ -5287,17 +5365,27 @@ function VendorManagementPanel({ vendors, projects, editingVendor, onStartNew, o
             Notes
             <textarea value={editingVendor.notes || ''} onChange={(event) => update('notes', event.target.value)} />
           </label>
-          <div className="project-check-list">
-            {projects.map((project) => (
+          <div className="access-scope-panel">
+            <div className="project-check-list-head">
+              <span>
+                <strong>Assigned survey projects</strong>
+                <small>Vendor users should be created in Users & RBAC with the Vendor Admin role and the same project scope.</small>
+              </span>
+              <em>{editingProjectIds.length} assigned</em>
+            </div>
+            <div className="project-check-list">
+              {safeProjects.map((project) => (
               <label className="check-row" key={project.id}>
                 <input
                   type="checkbox"
-                  checked={(editingVendor.assignedProjectIds || []).includes(project.id)}
+                  checked={editingProjectIdSet.has(String(project.id))}
                   onChange={() => toggleProject(project.id)}
                 />
                 {project.name}
               </label>
-            ))}
+              ))}
+              {safeProjects.length === 0 && <p className="empty">Create a project before assigning vendor scope.</p>}
+            </div>
           </div>
           <div className="actions">
             <button className="secondary" onClick={onCancel}>Cancel</button>
@@ -5306,15 +5394,25 @@ function VendorManagementPanel({ vendors, projects, editingVendor, onStartNew, o
         </div>
       )}
       <div className="phase1-vendor-grid">
-        {vendors.map((vendor) => (
-          <button className="phase1-vendor-card" key={vendor.id} onClick={() => onEdit(vendor)}>
-            <span>{vendor.status}</span>
-            <strong>{vendor.name}</strong>
-            <small>{vendor.contactName || 'No contact'}{vendor.contactEmail ? ' · ' + vendor.contactEmail : ''}</small>
-            <em>{vendor.assignedProjectIds?.length || 0} assigned project{vendor.assignedProjectIds?.length === 1 ? '' : 's'}</em>
-          </button>
-        ))}
-        {vendors.length === 0 && <p className="empty">No vendors yet.</p>}
+        {safeVendors.map((vendor) => {
+          const assignedProjectIds = Array.isArray(vendor.assignedProjectIds) ? vendor.assignedProjectIds : [];
+          const assignedProjectNames = projectNamesFor(assignedProjectIds);
+          return (
+            <button className="phase1-vendor-card" key={vendor.id} onClick={() => onEdit({ ...vendor, assignedProjectIds })}>
+              <span>{vendor.status}</span>
+              <strong>{vendor.name}</strong>
+              <small>{vendor.contactName || 'No contact'}{vendor.contactEmail ? ' · ' + vendor.contactEmail : ''}</small>
+              <em>{assignedProjectIds.length} assigned project{assignedProjectIds.length === 1 ? '' : 's'}</em>
+              {assignedProjectNames.length > 0 && (
+                <div className="assigned-project-list">
+                  {assignedProjectNames.slice(0, 3).map((name) => <small key={name}>{name}</small>)}
+                  {assignedProjectNames.length > 3 && <small>+{assignedProjectNames.length - 3} more</small>}
+                </div>
+              )}
+            </button>
+          );
+        })}
+        {safeVendors.length === 0 && <p className="empty">No vendors yet.</p>}
       </div>
     </section>
   );
@@ -5340,16 +5438,23 @@ function ClientAccessManager({ clients, projects, editingClient, recoveryRequest
   const safeProjects = Array.isArray(projects) ? projects : [];
   const safeRecoveryRequests = Array.isArray(recoveryRequests) ? recoveryRequests : [];
   const editingProjectIds = Array.isArray(editingClient?.projectIds) ? editingClient.projectIds : [];
+  const editingProjectIdSet = new Set(editingProjectIds.map(String));
 
   function update(field, value) {
     onChange({ ...(editingClient || {}), projectIds: editingProjectIds, [field]: value });
   }
 
   function toggleProject(projectId) {
-    const current = new Set(editingProjectIds);
-    if (current.has(projectId)) current.delete(projectId);
-    else current.add(projectId);
+    const current = new Set(editingProjectIds.map(String));
+    const normalizedProjectId = String(projectId);
+    if (current.has(normalizedProjectId)) current.delete(normalizedProjectId);
+    else current.add(normalizedProjectId);
     update('projectIds', [...current]);
+  }
+
+  function projectNamesFor(projectIds = []) {
+    const ids = new Set((Array.isArray(projectIds) ? projectIds : []).map(String));
+    return safeProjects.filter((project) => ids.has(String(project.id))).map((project) => project.name);
   }
 
   return (
@@ -5358,6 +5463,7 @@ function ClientAccessManager({ clients, projects, editingClient, recoveryRequest
         <div>
           <p className="eyebrow">Client Access</p>
           <h2>Client logins and project visibility</h2>
+          <p>Onboard clients and map the exact surveys/projects they can view. Client dashboards and exports remain scoped to these assignments.</p>
         </div>
         <button className="primary" onClick={onStartNew}><Plus size={18} /> New Client</button>
       </div>
@@ -5383,17 +5489,27 @@ function ClientAccessManager({ clients, projects, editingClient, recoveryRequest
             <input type="password" value={editingClient.password || ''} onChange={(event) => update('password', event.target.value)} />
             <span className="hint-text">{editingClient.email ? 'Email sends a secure setup/reset link. Password is not emailed.' : 'Without email, share this password manually.'}</span>
           </label>
-          <div className="project-check-list">
-            {safeProjects.map((project) => (
-              <label className="check-row" key={project.id}>
-                <input
-                  type="checkbox"
-                  checked={editingProjectIds.includes(project.id)}
-                  onChange={() => toggleProject(project.id)}
-                />
-                {project.name}
-              </label>
-            ))}
+          <div className="access-scope-panel">
+            <div className="project-check-list-head">
+              <span>
+                <strong>Enabled client survey projects</strong>
+                <small>Only checked projects appear in this client user's dashboard, reports, downloads, and project summaries.</small>
+              </span>
+              <em>{editingProjectIds.length} assigned</em>
+            </div>
+            <div className="project-check-list">
+              {safeProjects.map((project) => (
+                <label className="check-row" key={project.id}>
+                  <input
+                    type="checkbox"
+                    checked={editingProjectIdSet.has(String(project.id))}
+                    onChange={() => toggleProject(project.id)}
+                  />
+                  {project.name}
+                </label>
+              ))}
+              {safeProjects.length === 0 && <p className="empty">Create a project before assigning client access.</p>}
+            </div>
           </div>
           <label className="check-row">
             <input type="checkbox" checked={editingClient.isActive !== false} onChange={(event) => update('isActive', event.target.checked)} />
@@ -5410,11 +5526,17 @@ function ClientAccessManager({ clients, projects, editingClient, recoveryRequest
         {safeClients.length === 0 && <p className="empty">No client logins yet.</p>}
         {safeClients.map((client) => {
           const assignedProjectIds = Array.isArray(client.projectIds) ? client.projectIds : [];
+          const assignedProjectNames = projectNamesFor(assignedProjectIds);
           return (
             <button className="client-list-row" key={client.id} onClick={() => onEdit({ ...client, projectIds: assignedProjectIds })}>
               <span>
                 <strong>{client.displayName || client.username || 'Client user'}</strong>
                 <small>{client.username}{client.email ? ' · ' + client.email : ''} · {client.isActive !== false ? 'Active' : 'Inactive'}</small>
+                {assignedProjectNames.length > 0 && (
+                  <small className="assigned-project-line">
+                    {assignedProjectNames.slice(0, 3).join(' · ')}{assignedProjectNames.length > 3 ? ` · +${assignedProjectNames.length - 3} more` : ''}
+                  </small>
+                )}
               </span>
               <em>{assignedProjectIds.length} project{assignedProjectIds.length === 1 ? '' : 's'}</em>
             </button>

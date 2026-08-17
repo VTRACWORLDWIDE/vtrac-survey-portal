@@ -4591,6 +4591,66 @@ textarea {
   gap: 8px;
 }
 
+.access-scope-panel {
+  background: #ffffff;
+  border: 1px solid #dbe9e6;
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.project-check-list-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.project-check-list-head span {
+  display: grid;
+  gap: 3px;
+}
+
+.project-check-list-head strong {
+  color: #17243f;
+  font-size: 0.92rem;
+}
+
+.project-check-list-head small,
+.assigned-project-line {
+  color: #687a84;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.project-check-list-head em {
+  background: #e9f8f7;
+  border-radius: 999px;
+  color: #0a7777;
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  font-style: normal;
+  font-weight: 900;
+  padding: 5px 9px;
+}
+
+.assigned-project-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.assigned-project-list small {
+  background: #eef6ff;
+  border-radius: 999px;
+  color: #164493;
+  font-size: 0.7rem;
+  font-weight: 850;
+  padding: 5px 7px;
+}
+
 .client-list-row {
   align-items: center;
   background: #ffffff;
@@ -11588,6 +11648,35 @@ body:has(.admin-console) {
   font-size: 0.88rem;
   font-weight: 750;
   line-height: 1.42;
+}
+
+.admin-console .access-scope-panel {
+  background: #f8fbff;
+  border-color: #d7e4ef;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.admin-console .project-check-list .check-row {
+  background: #ffffff;
+  border: 1px solid #d7e4ef;
+  border-radius: 12px;
+  color: #081f44;
+  font-weight: 800;
+  padding: 10px 12px;
+}
+
+.admin-console .project-check-list-head strong {
+  color: #061b3d;
+}
+
+.admin-console .project-check-list-head small,
+.admin-console .assigned-project-line {
+  color: #647391;
+}
+
+.admin-console .assigned-project-list small {
+  background: #eef6ff;
+  color: #164493;
 }
 
 .admin-console .rbac-role-card small,

@@ -11449,3 +11449,80 @@ body:has(.admin-console) {
   }
 }
 /* End VTRAC light workspace theme */
+
+/* Sidebar contrast correction: keep navigation fully blue, not washed-out cards */
+.admin-console .surveyos-app-sidebar.admin-sidebar {
+  background:
+    radial-gradient(circle at 36% 12%, rgba(8, 170, 164, 0.22), transparent 28%),
+    linear-gradient(180deg, #07244d 0%, #0a3a79 48%, #07316d 100%);
+  color: #f8fbff;
+}
+
+.admin-console .surveyos-sidebar-nav {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  display: grid !important;
+  gap: 6px;
+  padding: 0 2px 0 0;
+}
+
+.admin-console .surveyos-sidebar-nav button,
+.admin-console .surveyos-sidebar-projects button {
+  background: transparent;
+  border: 1px solid transparent;
+  color: rgba(235, 244, 255, 0.82);
+  min-height: 40px;
+}
+
+.admin-console .surveyos-sidebar-nav button svg,
+.admin-console .surveyos-sidebar-projects button svg {
+  color: rgba(235, 244, 255, 0.78);
+}
+
+.admin-console .surveyos-sidebar-nav button:not(.active):hover,
+.admin-console .surveyos-sidebar-projects button:not(.active):hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.admin-console .surveyos-sidebar-nav button.active,
+.admin-console .surveyos-sidebar-projects button.active {
+  background: linear-gradient(135deg, #2176ff, #1c66f2);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+  box-shadow: 0 14px 28px rgba(4, 18, 52, 0.2);
+}
+
+.admin-console .surveyos-sidebar-nav button.active svg,
+.admin-console .surveyos-sidebar-projects button.active svg {
+  color: #ffffff;
+}
+
+.admin-console .surveyos-nav-section-title {
+  color: rgba(218, 234, 255, 0.68);
+}
+
+.admin-console .surveyos-sidebar-count {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.admin-console .surveyos-sidebar-projects {
+  background: transparent;
+  border-top-color: rgba(255, 255, 255, 0.16);
+}
+
+.admin-console .surveyos-sidebar-projects > div {
+  color: rgba(218, 234, 255, 0.68);
+}
+
+.admin-console .surveyos-selected-project.admin-selected-card {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.admin-console .surveyos-selected-project.admin-selected-card strong {
+  color: #ffffff;
+}

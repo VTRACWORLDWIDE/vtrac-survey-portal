@@ -2950,13 +2950,20 @@ function AdminDashboard({ token, session, onLogout }) {
       contactPhone: '',
       serviceArea: '',
       status: 'Active',
+      loginUsername: '',
+      loginPassword: '',
       assignedProjectIds: selectedProject?.id ? [selectedProject.id] : [],
       notes: ''
     });
   }
 
   function editVendor(vendor) {
-    setEditingVendor({ ...vendor });
+    setEditingVendor({
+      ...vendor,
+      loginUsername: vendor.loginUsername || '',
+      loginPassword: '',
+      assignedProjectIds: Array.isArray(vendor.assignedProjectIds) ? vendor.assignedProjectIds : []
+    });
   }
 
   async function saveVendorAccess(vendor) {
@@ -5361,6 +5368,38 @@ function VendorManagementPanel({ vendors, projects, editingVendor, onStartNew, o
               </select>
             </label>
           </div>
+          <div className="access-scope-panel vendor-login-panel">
+            <div className="project-check-list-head">
+              <span>
+                <strong>Vendor portal login</strong>
+                <small>Create a scoped Vendor Admin login for this partner. Leave username blank if this vendor does not need portal access.</small>
+              </span>
+              <em>{editingVendor.loginUsername ? 'Login enabled' : 'No login'}</em>
+            </div>
+            <div className="inline-grid">
+              <label>
+                Login username
+                <input
+                  value={editingVendor.loginUsername || ''}
+                  onChange={(event) => update('loginUsername', event.target.value)}
+                  placeholder="vendorname"
+                />
+              </label>
+              <label>
+                Temporary password {editingVendor.loginUserId && <span className="hint-text">leave blank to keep existing password</span>}
+                <input
+                  type="password"
+                  value={editingVendor.loginPassword || ''}
+                  onChange={(event) => update('loginPassword', event.target.value)}
+                  placeholder={editingVendor.loginUserId ? 'Unchanged' : 'Minimum 8 characters'}
+                />
+              </label>
+              <label>
+                Login role
+                <input value="Vendor Admin" readOnly />
+              </label>
+            </div>
+          </div>
           <label>
             Notes
             <textarea value={editingVendor.notes || ''} onChange={(event) => update('notes', event.target.value)} />
@@ -5369,7 +5408,7 @@ function VendorManagementPanel({ vendors, projects, editingVendor, onStartNew, o
             <div className="project-check-list-head">
               <span>
                 <strong>Assigned survey projects</strong>
-                <small>Vendor users should be created in Users & RBAC with the Vendor Admin role and the same project scope.</small>
+                <small>Vendor login access, monitoring, reports, and data visibility are limited to these checked surveys/projects.</small>
               </span>
               <em>{editingProjectIds.length} assigned</em>
             </div>
@@ -5397,11 +5436,13 @@ function VendorManagementPanel({ vendors, projects, editingVendor, onStartNew, o
         {safeVendors.map((vendor) => {
           const assignedProjectIds = Array.isArray(vendor.assignedProjectIds) ? vendor.assignedProjectIds : [];
           const assignedProjectNames = projectNamesFor(assignedProjectIds);
+          const hasLogin = Boolean(vendor.hasLogin || vendor.loginUsername);
           return (
             <button className="phase1-vendor-card" key={vendor.id} onClick={() => onEdit({ ...vendor, assignedProjectIds })}>
               <span>{vendor.status}</span>
               <strong>{vendor.name}</strong>
               <small>{vendor.contactName || 'No contact'}{vendor.contactEmail ? ' · ' + vendor.contactEmail : ''}</small>
+              <em>{hasLogin ? `Login: ${vendor.loginUsername || 'enabled'}` : 'No vendor login'}</em>
               <em>{assignedProjectIds.length} assigned project{assignedProjectIds.length === 1 ? '' : 's'}</em>
               {assignedProjectNames.length > 0 && (
                 <div className="assigned-project-list">

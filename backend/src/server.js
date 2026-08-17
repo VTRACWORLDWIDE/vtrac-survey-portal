@@ -184,7 +184,7 @@ app.get('/api/admin/me', requireAdmin, (req, res) => {
 
 app.get('/api/admin/foundation', requireAdmin, async (req, res, next) => {
   try {
-    res.json(await loadFoundation(req.admin.role));
+    res.json(await loadFoundation(req.admin));
   } catch (error) {
     next(error);
   }
@@ -1429,6 +1429,8 @@ async function ensureDatabase() {
       service_area TEXT,
       status TEXT NOT NULL DEFAULT 'Active',
       assigned_project_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+      login_user_id BIGINT,
+      login_username TEXT,
       notes TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -1662,6 +1664,8 @@ async function ensureDatabase() {
     ALTER TABLE staff_accounts ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES survey_organisations(id);
     ALTER TABLE staff_accounts ADD COLUMN IF NOT EXISTS workspace_id BIGINT REFERENCES survey_workspaces(id);
     ALTER TABLE staff_accounts ADD COLUMN IF NOT EXISTS assigned_project_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+    ALTER TABLE vendors ADD COLUMN IF NOT EXISTS login_user_id BIGINT;
+    ALTER TABLE vendors ADD COLUMN IF NOT EXISTS login_username TEXT;
     ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS email TEXT;
     ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES survey_organisations(id);
     ALTER TABLE account_recovery_requests ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES survey_organisations(id);
@@ -1673,6 +1677,8 @@ async function ensureDatabase() {
     CREATE INDEX IF NOT EXISTS idx_staff_accounts_organisation ON staff_accounts (organisation_id, workspace_id);
     CREATE INDEX IF NOT EXISTS idx_client_accounts_organisation ON client_accounts (organisation_id);
     CREATE INDEX IF NOT EXISTS idx_vendors_organisation ON vendors (organisation_id, workspace_id);
+    CREATE INDEX IF NOT EXISTS idx_vendors_login_user ON vendors (login_user_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_vendors_login_username_unique ON vendors (LOWER(login_username)) WHERE login_username IS NOT NULL AND login_username <> '';
     CREATE INDEX IF NOT EXISTS idx_survey_responses_project ON survey_responses (project_id);
     CREATE INDEX IF NOT EXISTS idx_survey_responses_submitted_at ON survey_responses (submitted_at DESC);
     CREATE INDEX IF NOT EXISTS idx_survey_responses_enumerator ON survey_responses (LOWER(enumerator_name));
@@ -1929,14 +1935,16 @@ async function loadOrganisationContext() {
   };
 }
 
-async function loadFoundation(adminRole = 'admin') {
+async function loadFoundation(adminContext = 'admin') {
   const context = await getDefaultFoundationContext();
   await ensurePhaseOneRoles(context.organisationId);
   await backfillOrganisationContext(context);
+  const admin = typeof adminContext === 'object' ? adminContext : { role: adminContext };
+  const adminRole = admin.role || 'admin';
   const canManageUsers = roleHasPermission(adminRole, 'users.manage');
   const canManageVendors = roleHasPermission(adminRole, 'vendors.manage');
   const canManageClients = roleHasPermission(adminRole, 'clients.manage');
-  const [{ organisation, workspace }, roles, users, vendors, clients, projects, counts] = await Promise.all([
+  const [{ organisation, workspace }, roles, users, vendors, clients, allProjects, counts] = await Promise.all([
     loadOrganisationContext(),
     loadRoles(),
     canManageUsers ? loadUsers() : Promise.resolve([]),
@@ -1945,6 +1953,7 @@ async function loadFoundation(adminRole = 'admin') {
     loadProjects(),
     loadFoundationCounts()
   ]);
+  const projects = filterProjectsForAdmin(admin, allProjects);
   return {
     organisation,
     workspace,
@@ -2133,7 +2142,10 @@ async function saveVendor(payload = {}) {
   const context = await getDefaultFoundationContext();
   const name = String(payload.name || '').trim();
   const contactEmail = normalizeEmail(payload.contactEmail || '');
-  const projectIds = Array.isArray(payload.assignedProjectIds) ? payload.assignedProjectIds.map(String) : [];
+  const projectIds = Array.isArray(payload.assignedProjectIds) ? payload.assignedProjectIds.map(String).filter(Boolean) : [];
+  const loginUsername = normalizeLoginIdentifier(payload.loginUsername || '');
+  const loginPassword = String(payload.loginPassword || '');
+  const status = payload.status || 'Active';
   if (!name) {
     const error = new Error('Vendor name is required.');
     error.status = 400;
@@ -2144,21 +2156,142 @@ async function saveVendor(payload = {}) {
     error.status = 400;
     throw error;
   }
+  if (loginUsername && !/^[a-z0-9._-]{3,64}$/.test(loginUsername)) {
+    const error = new Error('Vendor login username can use letters, numbers, dot, underscore, or hyphen.');
+    error.status = 400;
+    throw error;
+  }
+  const existingVendor = payload.id
+    ? (await query('SELECT * FROM vendors WHERE id = $1', [payload.id])).rows[0] || null
+    : null;
+  if (loginUsername) {
+    const existingLoginUser = existingVendor?.login_user_id
+      ? (await query('SELECT * FROM staff_accounts WHERE id = $1', [existingVendor.login_user_id])).rows[0] || null
+      : (await query('SELECT * FROM staff_accounts WHERE LOWER(username) = LOWER($1)', [loginUsername])).rows[0] || null;
+    const conflictingLoginUser = existingVendor?.login_user_id
+      ? (await query('SELECT * FROM staff_accounts WHERE LOWER(username) = LOWER($1) AND id <> $2', [loginUsername, existingVendor.login_user_id])).rows[0] || null
+      : null;
+    if (conflictingLoginUser) {
+      const error = new Error('That username already belongs to another staff account.');
+      error.status = 409;
+      throw error;
+    }
+    if (existingLoginUser && existingLoginUser.role !== 'vendorAdmin') {
+      const error = new Error('That username already belongs to a non-vendor staff account.');
+      error.status = 409;
+      throw error;
+    }
+    if (!existingLoginUser && loginPassword.length < 8) {
+      const error = new Error('New vendor login password must be at least 8 characters.');
+      error.status = 400;
+      throw error;
+    }
+  }
   const result = payload.id
     ? await query(
       `UPDATE vendors
-      SET organisation_id = $1, workspace_id = $2, name = $3, contact_name = $4, contact_email = $5, contact_phone = $6, service_area = $7, status = $8, assigned_project_ids = $9, notes = $10, updated_at = NOW()
-      WHERE id = $11
+      SET organisation_id = $1, workspace_id = $2, name = $3, contact_name = $4, contact_email = $5, contact_phone = $6, service_area = $7, status = $8, assigned_project_ids = $9, login_username = $10, notes = $11, updated_at = NOW()
+      WHERE id = $12
       RETURNING *`,
-      [context.organisationId, context.workspaceId, name, payload.contactName || null, contactEmail || null, payload.contactPhone || null, payload.serviceArea || null, payload.status || 'Active', projectIds, payload.notes || null, payload.id]
+      [context.organisationId, context.workspaceId, name, payload.contactName || null, contactEmail || null, payload.contactPhone || null, payload.serviceArea || null, status, projectIds, loginUsername || null, payload.notes || null, payload.id]
     )
     : await query(
-      `INSERT INTO vendors (organisation_id, workspace_id, name, contact_name, contact_email, contact_phone, service_area, status, assigned_project_ids, notes)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      `INSERT INTO vendors (organisation_id, workspace_id, name, contact_name, contact_email, contact_phone, service_area, status, assigned_project_ids, login_username, notes)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
       RETURNING *`,
-      [context.organisationId, context.workspaceId, name, payload.contactName || null, contactEmail || null, payload.contactPhone || null, payload.serviceArea || null, payload.status || 'Active', projectIds, payload.notes || null]
+      [context.organisationId, context.workspaceId, name, payload.contactName || null, contactEmail || null, payload.contactPhone || null, payload.serviceArea || null, status, projectIds, loginUsername || null, payload.notes || null]
     );
-  return normalizeVendor(result.rows[0]);
+  let vendor = result.rows[0];
+  if (!vendor) {
+    const error = new Error('Vendor not found.');
+    error.status = 404;
+    throw error;
+  }
+  if (loginUsername) {
+    const linkedUser = await upsertVendorStaffLogin({
+      vendor,
+      context,
+      loginUsername,
+      loginPassword,
+      projectIds,
+      contactEmail,
+      contactName: payload.contactName,
+      status
+    });
+    const linkedVendor = await query(
+      `UPDATE vendors
+      SET login_user_id = $1, login_username = $2, updated_at = NOW()
+      WHERE id = $3
+      RETURNING *`,
+      [linkedUser.id, linkedUser.username, vendor.id]
+    );
+    return normalizeVendor(linkedVendor.rows[0]);
+  }
+  if (!loginUsername && existingVendor?.login_user_id) {
+    await query(
+      `UPDATE staff_accounts
+      SET is_active = FALSE, assigned_project_ids = ARRAY[]::TEXT[], updated_at = NOW()
+      WHERE id = $1 AND role = 'vendorAdmin'`,
+      [existingVendor.login_user_id]
+    );
+    const clearedVendor = await query(
+      `UPDATE vendors
+      SET login_user_id = NULL, login_username = NULL, updated_at = NOW()
+      WHERE id = $1
+      RETURNING *`,
+      [vendor.id]
+    );
+    vendor = clearedVendor.rows[0] || vendor;
+  }
+  return normalizeVendor(vendor);
+}
+
+async function upsertVendorStaffLogin({ vendor, context, loginUsername, loginPassword, projectIds, contactEmail, contactName, status }) {
+  const displayName = String(contactName || vendor.contact_name || vendor.name || loginUsername).trim();
+  const active = status === 'Active';
+  let existingUser = null;
+  if (vendor.login_user_id) {
+    existingUser = (await query('SELECT * FROM staff_accounts WHERE id = $1', [vendor.login_user_id])).rows[0] || null;
+  }
+  if (!existingUser) {
+    existingUser = (await query('SELECT * FROM staff_accounts WHERE LOWER(username) = LOWER($1)', [loginUsername])).rows[0] || null;
+  }
+  if (existingUser && existingUser.role !== 'vendorAdmin') {
+    const error = new Error('That username already belongs to a non-vendor staff account.');
+    error.status = 409;
+    throw error;
+  }
+  if (!existingUser && loginPassword.length < 8) {
+    const error = new Error('New vendor login password must be at least 8 characters.');
+    error.status = 400;
+    throw error;
+  }
+
+  const branch = vendor.service_area || 'Vendor';
+  const team = vendor.name || 'Vendor partner';
+  const result = existingUser
+    ? loginPassword
+      ? await query(
+        `UPDATE staff_accounts
+        SET organisation_id = $1, workspace_id = $2, username = $3, email = $4, display_name = $5, role = 'vendorAdmin', branch = $6, team = $7, assigned_project_ids = $8, password_hash = $9, is_active = $10, updated_at = NOW()
+        WHERE id = $11
+        RETURNING *`,
+        [context.organisationId, context.workspaceId, loginUsername, contactEmail || null, displayName, branch, team, projectIds, hashPassword(loginPassword), active, existingUser.id]
+      )
+      : await query(
+        `UPDATE staff_accounts
+        SET organisation_id = $1, workspace_id = $2, username = $3, email = $4, display_name = $5, role = 'vendorAdmin', branch = $6, team = $7, assigned_project_ids = $8, is_active = $9, updated_at = NOW()
+        WHERE id = $10
+        RETURNING *`,
+        [context.organisationId, context.workspaceId, loginUsername, contactEmail || null, displayName, branch, team, projectIds, active, existingUser.id]
+      )
+    : await query(
+      `INSERT INTO staff_accounts (organisation_id, workspace_id, username, email, display_name, role, branch, team, assigned_project_ids, password_hash, must_change_password, is_active)
+      VALUES ($1,$2,$3,$4,$5,'vendorAdmin',$6,$7,$8,$9,FALSE,$10)
+      RETURNING *`,
+      [context.organisationId, context.workspaceId, loginUsername, contactEmail || null, displayName, branch, team, projectIds, hashPassword(loginPassword), active]
+    );
+  return normalizeUser(result.rows[0]);
 }
 
 function normalizeOrganisation(row = {}) {
@@ -2219,7 +2352,10 @@ function normalizeVendor(row = {}) {
     contactPhone: row.contact_phone || '',
     serviceArea: row.service_area || '',
     status: row.status || 'Active',
-    assignedProjectIds: row.assigned_project_ids || [],
+    assignedProjectIds: Array.isArray(row.assigned_project_ids) ? row.assigned_project_ids.map(String) : [],
+    loginUserId: row.login_user_id ? String(row.login_user_id) : '',
+    loginUsername: row.login_username || '',
+    hasLogin: Boolean(row.login_user_id || row.login_username),
     notes: row.notes || '',
     createdAt: formatTimestamp(row.created_at),
     updatedAt: formatTimestamp(row.updated_at)

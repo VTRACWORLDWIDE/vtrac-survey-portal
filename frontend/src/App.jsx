@@ -4671,6 +4671,35 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
   const qualityRuleCount = componentControls.filter((component) => getComponentMode(settings, component.key) !== 'off').length;
   const estimatedMinutes = Math.max(4, Math.round(questions.length * 1.35));
   const optionRows = optionRowsFor(selectedQuestion);
+  const surveyLanguages = Array.isArray(settings.surveyLanguages) && settings.surveyLanguages.length
+    ? settings.surveyLanguages
+    : ['English'];
+  const studioVersions = Array.isArray(settings.studioVersions) ? settings.studioVersions : [];
+
+  function addSurveyLanguage() {
+    const nextLanguage = `Language ${surveyLanguages.length + 1}`;
+    updateSetting('surveyLanguages', [...surveyLanguages, nextLanguage]);
+  }
+
+  function updateSurveyLanguage(index, value) {
+    updateSetting('surveyLanguages', surveyLanguages.map((language, currentIndex) => currentIndex === index ? value : language));
+  }
+
+  function removeSurveyLanguage(index) {
+    if (surveyLanguages.length === 1) return;
+    updateSetting('surveyLanguages', surveyLanguages.filter((_, currentIndex) => currentIndex !== index));
+  }
+
+  function createVersionSnapshot() {
+    const nextVersion = {
+      id: Date.now(),
+      label: `v1.${studioVersions.length + 1}`,
+      createdAt: new Date().toISOString(),
+      questionCount: questions.length,
+      status: 'Draft snapshot'
+    };
+    updateSetting('studioVersions', [nextVersion, ...studioVersions]);
+  }
 
   return (
     <div className="survey-studio-shell">
@@ -4709,6 +4738,116 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
           );
         })}
       </div>
+
+      {studioTab !== 'builder' && (
+        <section className="studio-workspace-page">
+          {studioTab === 'logic' && (
+            <>
+              <div className="studio-workspace-heading">
+                <div><span className="section-kicker"><Layers size={16} /> Branching</span><h3>Survey logic</h3><p>Control when questions appear and where the interview continues.</p></div>
+                <button type="button" className="primary" onClick={addQuestion}><Plus size={16} /> Add question</button>
+              </div>
+              <div className="studio-workspace-list">
+                {questions.length === 0 ? <div className="studio-workspace-empty">Add questions in Builder before configuring logic.</div> : questions.map((question, index) => (
+                  <article className="studio-config-row" key={`${question.id || 'question'}-logic-${index}`}>
+                    <div className="studio-config-index">Q{index + 1}</div>
+                    <div><strong>{question.label || 'Untitled question'}</strong><small>{question.id || variableFromLabel(question.label, index)}</small></div>
+                    <label>Show when
+                      <select value={question.logicMode || 'always'} onChange={(event) => patchQuestion(index, { logicMode: event.target.value })}>
+                        <option value="always">Always</option><option value="answered">Previous question is answered</option><option value="equals">Previous answer equals...</option><option value="not-equals">Previous answer does not equal...</option>
+                      </select>
+                    </label>
+                    <label>Then continue to
+                      <select value={question.logicTarget || 'next'} onChange={(event) => patchQuestion(index, { logicTarget: event.target.value })}>
+                        <option value="next">Next question</option><option value="end">End survey</option>
+                        {questions.slice(index + 1).map((target, offset) => <option key={`${target.id}-${offset}`} value={target.id || `q${index + offset + 2}`}>Q{index + offset + 2}: {target.label}</option>)}
+                      </select>
+                    </label>
+                    <label className="studio-inline-check"><input type="checkbox" checked={Boolean(question.logicEnabled)} onChange={(event) => patchQuestion(index, { logicEnabled: event.target.checked })} /> Active</label>
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
+
+          {studioTab === 'quality-rules' && (
+            <>
+              <div className="studio-workspace-heading"><div><span className="section-kicker"><ShieldCheck size={16} /> Field quality</span><h3>Quality rules</h3><p>Enable project-level checks and decide whether each issue warns or blocks submission.</p></div></div>
+              <div className="studio-rule-grid">
+                {[
+                  ['speedCheck', 'Interview speed check', 'Flag interviews completed faster than the expected duration.'],
+                  ['duplicateCheck', 'Duplicate response check', 'Detect repeated respondent, device, or GPS patterns.'],
+                  ['locationCheck', 'Location consistency', 'Flag submissions outside the assigned survey location.'],
+                  ['completenessCheck', 'Required-answer completeness', 'Block submissions with missing mandatory answers.']
+                ].map(([key, title, description]) => (
+                  <article className="studio-quality-card" key={key}>
+                    <div><ShieldCheck size={20} /><span><strong>{title}</strong><small>{description}</small></span></div>
+                    <label className="studio-toggle-row"><span>Enabled</span><input type="checkbox" checked={Boolean(settings[key])} onChange={(event) => updateSetting(key, event.target.checked)} /></label>
+                    <label>Action<select value={settings[`${key}Action`] || 'warn'} onChange={(event) => updateSetting(`${key}Action`, event.target.value)}><option value="warn">Warn enumerator</option><option value="flag">Submit and flag</option><option value="block">Block submission</option></select></label>
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
+
+          {studioTab === 'languages' && (
+            <>
+              <div className="studio-workspace-heading"><div><span className="section-kicker"><FileText size={16} /> Translation</span><h3>Survey languages</h3><p>Set the base language and add the languages required for data collection.</p></div><button type="button" className="primary" onClick={addSurveyLanguage}><Plus size={16} /> Add language</button></div>
+              <div className="studio-language-list">
+                {surveyLanguages.map((language, index) => (
+                  <article className="studio-language-row" key={`${language}-${index}`}>
+                    <span>{index === 0 ? 'Base' : `L${index + 1}`}</span>
+                    <input value={language} onChange={(event) => updateSurveyLanguage(index, event.target.value)} aria-label={`Language ${index + 1}`} />
+                    <strong>{index === 0 ? 'Source questionnaire' : `${questions.length} labels ready for translation`}</strong>
+                    <button type="button" className="icon-button" title="Remove language" disabled={surveyLanguages.length === 1 || index === 0} onClick={() => removeSurveyLanguage(index)}><Trash2 size={16} /></button>
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
+
+          {studioTab === 'variables' && (
+            <>
+              <div className="studio-workspace-heading"><div><span className="section-kicker"><Table2 size={16} /> Data dictionary</span><h3>Survey variables</h3><p>Review and edit export-ready variable names for every question.</p></div></div>
+              <div className="studio-variable-table-wrap"><table className="studio-variable-table"><thead><tr><th>#</th><th>Question</th><th>Variable name</th><th>Type</th><th>Required</th></tr></thead><tbody>
+                {questions.map((question, index) => <tr key={`${question.id}-${index}-variable`}><td>Q{index + 1}</td><td>{question.label || 'Untitled question'}</td><td><input value={question.id || ''} onChange={(event) => updateQuestion(index, 'id', event.target.value.replace(/[^a-zA-Z0-9_]/g, '_'))} /></td><td>{questionTypeLabel(question)}</td><td>{question.required ? 'Yes' : 'No'}</td></tr>)}
+                {questions.length === 0 && <tr><td colSpan="5">No variables yet. Add questions in Builder.</td></tr>}
+              </tbody></table></div>
+            </>
+          )}
+
+          {studioTab === 'versions' && (
+            <>
+              <div className="studio-workspace-heading"><div><span className="section-kicker"><RefreshCw size={16} /> Change history</span><h3>Survey versions</h3><p>Create named snapshots before major questionnaire changes or deployment.</p></div><button type="button" className="primary" onClick={createVersionSnapshot}><Plus size={16} /> Create snapshot</button></div>
+              <div className="studio-version-list">
+                <article className="studio-version-row current"><span>Current</span><div><strong>Working draft</strong><small>{questions.length} questions · Unsaved changes included</small></div><em>Editing</em></article>
+                {studioVersions.map((version) => <article className="studio-version-row" key={version.id}><span>{version.label}</span><div><strong>{version.status}</strong><small>{version.questionCount} questions · {new Date(version.createdAt).toLocaleString('en-IN')}</small></div><em>Snapshot</em></article>)}
+              </div>
+            </>
+          )}
+
+          {studioTab === 'settings' && (
+            <>
+              <div className="studio-workspace-heading"><div><span className="section-kicker"><Settings size={16} /> Configuration</span><h3>Survey settings</h3><p>Manage project identity, field locations, and reusable collection components.</p></div><button type="button" className="primary" onClick={() => onSave(project)}><Save size={16} /> Save settings</button></div>
+              <div className="studio-settings-grid">
+                <label>Project name<input value={project.name} onChange={(event) => update('name', event.target.value)} /></label>
+                <label>URL slug<input value={project.slug} onChange={(event) => update('slug', event.target.value)} /></label>
+                <label className="wide">Description<textarea value={project.description} onChange={(event) => update('description', event.target.value)} /></label>
+                <label className="wide">Survey locations<textarea value={project.locations} onChange={(event) => update('locations', event.target.value)} /></label>
+              </div>
+              <div className="studio-rule-grid">
+                {componentControls.map((component) => {
+                  const mode = getComponentMode(settings, component.key);
+                  return <article className={`studio-quality-card ${mode}`} key={component.key}><div><CheckCircle2 size={20} /><span><strong>{component.title}</strong><small>{component.description}</small></span></div><label>Collection policy<select value={mode} onChange={(event) => updateComponentPolicy(component.key, event.target.value)}>{componentModes.map((option) => <option key={option} value={option}>{componentModeLabels[option]}</option>)}</select></label></article>;
+                })}
+              </div>
+            </>
+          )}
+        </section>
+      )}
+
+      {studioTab === 'builder' && (
+        <>
 
       <div className="studio-project-setup">
         <label>
@@ -5101,6 +5240,8 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
           </div>
         ))}
       </div>
+        </>
+      )}
     </div>
   );
 }

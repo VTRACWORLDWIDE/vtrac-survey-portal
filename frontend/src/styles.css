@@ -5121,6 +5121,239 @@ textarea {
   color: #133e98;
 }
 
+.studio-top-tabs button:hover {
+  background: #f0f7f8;
+  color: #133e98;
+}
+
+.studio-workspace-page {
+  background: #ffffff;
+  border: 1px solid #dce9ec;
+  border-radius: 8px;
+  display: grid;
+  gap: 18px;
+  min-height: 420px;
+  padding: 18px;
+}
+
+.studio-workspace-heading {
+  align-items: center;
+  border-bottom: 1px solid #e3edef;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding-bottom: 14px;
+}
+
+.studio-workspace-heading h3 {
+  color: #17243f;
+  font-size: 1.18rem;
+  margin: 5px 0 2px;
+}
+
+.studio-workspace-heading p,
+.studio-config-row small,
+.studio-quality-card small,
+.studio-version-row small {
+  color: #68788c;
+  display: block;
+  font-weight: 650;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.studio-workspace-list,
+.studio-language-list,
+.studio-version-list {
+  display: grid;
+  gap: 10px;
+}
+
+.studio-config-row {
+  align-items: end;
+  background: #f8fbfc;
+  border: 1px solid #dfeaec;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 48px minmax(180px, 1.2fr) minmax(190px, 0.8fr) minmax(190px, 0.8fr) auto;
+  padding: 12px;
+}
+
+.studio-config-index {
+  align-items: center;
+  background: #eaf8f7;
+  border-radius: 7px;
+  color: #087f8c;
+  display: flex;
+  font-weight: 950;
+  height: 42px;
+  justify-content: center;
+}
+
+.studio-config-row label,
+.studio-quality-card label,
+.studio-settings-grid label {
+  color: #516379;
+  display: grid;
+  font-size: 0.74rem;
+  font-weight: 900;
+  gap: 5px;
+}
+
+.studio-inline-check {
+  align-items: center;
+  display: flex !important;
+  min-height: 40px;
+}
+
+.studio-inline-check input {
+  min-height: auto;
+  width: auto;
+}
+
+.studio-rule-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+}
+
+.studio-quality-card {
+  border: 1px solid #dce9ec;
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
+.studio-quality-card > div {
+  align-items: flex-start;
+  color: #087f8c;
+  display: flex;
+  gap: 10px;
+}
+
+.studio-quality-card > div strong {
+  color: #17243f;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.studio-language-row,
+.studio-version-row {
+  align-items: center;
+  border: 1px solid #dfeaec;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 70px minmax(180px, 0.8fr) minmax(220px, 1fr) 42px;
+  padding: 12px;
+}
+
+.studio-language-row > span,
+.studio-version-row > span {
+  background: #eaf8f7;
+  border-radius: 6px;
+  color: #087f8c;
+  font-size: 0.75rem;
+  font-weight: 950;
+  padding: 7px;
+  text-align: center;
+}
+
+.studio-version-row {
+  grid-template-columns: 90px minmax(220px, 1fr) auto;
+}
+
+.studio-version-row.current {
+  border-color: #83cbc8;
+  box-shadow: inset 3px 0 0 #0aa7a4;
+}
+
+.studio-version-row em {
+  color: #133e98;
+  font-size: 0.75rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.studio-variable-table-wrap {
+  border: 1px solid #dfeaec;
+  border-radius: 8px;
+  overflow: auto;
+}
+
+.studio-variable-table {
+  border-collapse: collapse;
+  min-width: 760px;
+  width: 100%;
+}
+
+.studio-variable-table th,
+.studio-variable-table td {
+  border-bottom: 1px solid #e5edef;
+  color: #40536a;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.studio-variable-table th {
+  background: #f4f8fa;
+  color: #17243f;
+  font-size: 0.75rem;
+}
+
+.studio-variable-table input {
+  min-height: 36px;
+}
+
+.studio-settings-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(240px, 1fr));
+}
+
+.studio-settings-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.studio-settings-grid textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.studio-workspace-empty {
+  background: #f8fbfc;
+  border: 1px dashed #aacdd1;
+  border-radius: 8px;
+  color: #657589;
+  font-weight: 750;
+  padding: 28px;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .studio-config-row,
+  .studio-language-row,
+  .studio-version-row {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-rule-grid,
+  .studio-settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-settings-grid .wide {
+    grid-column: auto;
+  }
+
+  .studio-workspace-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
 .studio-project-setup {
   align-items: end;
   background: #ffffff;

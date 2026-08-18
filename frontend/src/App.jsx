@@ -4286,6 +4286,9 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
   const settings = normalizeSurveySettings(project.settings, project.slug);
   const questions = Array.isArray(project.questions) ? project.questions : [];
   const [studioTab, setStudioTab] = useState('builder');
+  const [importText, setImportText] = useState('');
+  const [importStatus, setImportStatus] = useState('Paste questionnaire text or upload a TXT/CSV file to auto-draft questions.');
+  const [parsedImportQuestions, setParsedImportQuestions] = useState([]);
   const [propertiesTab, setPropertiesTab] = useState('properties');
   const [questionSearch, setQuestionSearch] = useState('');
   const [activeSection, setActiveSection] = useState('Vehicle Ownership');
@@ -4459,6 +4462,115 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
     setActiveSection(activeSection || 'Draft Section');
   }
 
+  function splitOptionText(value) {
+    return String(value || '')
+      .split(/[,;|]/)
+      .map((option) => option.replace(/^\s*(?:\d+|[a-z])(?:[.)-])\s*/i, '').trim())
+      .filter(Boolean);
+  }
+
+  function inferImportedQuestionType(label, options) {
+    const text = String(label || '').toLowerCase();
+    if (options.length > 0) return 'select';
+    if (/date|dob|day of|survey day/.test(text)) return 'date';
+    if (/age|amount|income|count|number|minutes|hours|duration|distance|fare|cost|salary|year/.test(text)) return 'number';
+    if (/explain|describe|remarks|comments|address|reason|details|suggestion|feedback/.test(text)) return 'textarea';
+    return 'text';
+  }
+
+  function parseQuestionnaireText(rawText) {
+    const rows = String(rawText || '')
+      .replace(/\u00a0/g, ' ')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const parsed = [];
+    for (const row of rows) {
+      if (/^(section|module|group)\s*[:.-]/i.test(row)) continue;
+      if (/^(project|survey|questionnaire)\s*[:.-]/i.test(row)) continue;
+
+      const cells = row.includes('\t') ? row.split('\t').map((cell) => cell.trim()).filter(Boolean) : [];
+      const sourceLabel = cells[0] || row;
+      let label = sourceLabel
+        .replace(/^\s*(?:q(?:uestion)?\s*)?\d+[.)-]?\s*/i, '')
+        .replace(/^[-*]+\s*/, '')
+        .trim();
+
+      let options = [];
+      const parenthetical = label.match(/\(([^()]{3,240})\)\s*$/);
+      if (parenthetical && /\d+[.)]|,|;|\|/.test(parenthetical[1])) {
+        options = splitOptionText(parenthetical[1]);
+        label = label.replace(parenthetical[0], '').trim();
+      }
+
+      if (cells.length > 1) options = cells.slice(1);
+      const colonOptions = label.match(/^(.+?)\s*[:]\s*(.+)$/);
+      if (colonOptions && /,|;|\|/.test(colonOptions[2])) {
+        label = colonOptions[1].trim();
+        options = splitOptionText(colonOptions[2]);
+      }
+
+      if (!label || label.length < 3) continue;
+      const index = parsed.length;
+      const type = inferImportedQuestionType(label, options);
+      parsed.push({
+        ...blankQuestion,
+        id: variableFromLabel(label, questions.length + index),
+        label,
+        type,
+        options: type === 'select' ? options.join('\n') : '',
+        required: true
+      });
+    }
+    return parsed;
+  }
+
+  function previewQuestionnaireImport(text) {
+    const nextQuestions = parseQuestionnaireText(text);
+    setParsedImportQuestions(nextQuestions);
+    setImportStatus(nextQuestions.length ? `${nextQuestions.length} questions detected. Review and add them to the survey.` : 'No questions detected yet. Use one question per line, or paste spreadsheet rows.');
+  }
+
+  function updateImportText(value) {
+    setImportText(value);
+    previewQuestionnaireImport(value);
+  }
+
+  async function handleQuestionnaireFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    if (['txt', 'csv', 'tsv'].includes(extension)) {
+      const text = await file.text();
+      setImportText(text);
+      previewQuestionnaireImport(text);
+      setImportStatus(`Imported ${file.name}. Review detected questions before adding.`);
+      return;
+    }
+    setImportStatus(`${file.name} uploaded. PDF, Word, and Excel extraction needs the server-side parser connector; paste the questionnaire text here meanwhile and it will convert now.`);
+  }
+
+  function applyImportedQuestions() {
+    if (!parsedImportQuestions.length) return;
+    const nextQuestions = [...questions, ...parsedImportQuestions.map((question, offset) => ({
+      ...question,
+      id: question.id || variableFromLabel(question.label, questions.length + offset)
+    }))];
+    onChange({ ...project, questions: nextQuestions });
+    setSelectedQuestionIndex(questions.length);
+    setActiveSection(activeSection || 'Imported Questionnaire');
+    setImportStatus(`${parsedImportQuestions.length} questions added. You can edit labels, options, and required settings before saving.`);
+  }
+
+  function replaceWithImportedQuestions() {
+    if (!parsedImportQuestions.length) return;
+    onChange({ ...project, questions: parsedImportQuestions });
+    setSelectedQuestionIndex(0);
+    setActiveSection(activeSection || 'Imported Questionnaire');
+    setImportStatus(`${parsedImportQuestions.length} imported questions replaced the current draft.`);
+  }
+
   const componentControls = [
     {
       key: 'gps',
@@ -4615,6 +4727,46 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
           Locations
           <textarea value={project.locations} onChange={(event) => update('locations', event.target.value)} />
         </label>
+      </div>
+
+      <div className="studio-import-panel">
+        <div className="studio-import-copy">
+          <div className="section-kicker"><Upload size={16} /> Questionnaire import</div>
+          <h3>Auto-create questions from pasted questionnaire text</h3>
+          <p>Paste one question per line, or paste rows from Excel with options in columns. The detected draft stays editable before publishing.</p>
+        </div>
+        <div className="studio-import-controls">
+          <label className="studio-file-drop">
+            <Upload size={18} />
+            <span>Upload TXT, CSV, Excel, Word, or PDF</span>
+            <input type="file" accept=".txt,.csv,.tsv,.xls,.xlsx,.pdf,.doc,.docx" onChange={handleQuestionnaireFile} />
+          </label>
+          <textarea
+            value={importText}
+            onChange={(event) => updateImportText(event.target.value)}
+            placeholder={'Enumerator name\nRespondent name\nMode of transport: Car, Taxi, Bus, Metro, Two-wheeler, Other\nTravel purpose (1. Work, 2. Business, 3. Personal, 4. Tourism, 5. Education)\nApproximate travel time in minutes'}
+          />
+          <div className="studio-import-actions">
+            <span>{importStatus}</span>
+            <button type="button" className="secondary" disabled={!parsedImportQuestions.length} onClick={replaceWithImportedQuestions}>Replace draft</button>
+            <button type="button" className="primary" disabled={!parsedImportQuestions.length} onClick={applyImportedQuestions}><Plus size={15} /> Add {parsedImportQuestions.length || ''} questions</button>
+          </div>
+        </div>
+        <div className="studio-import-preview">
+          <strong>Detected questions</strong>
+          {parsedImportQuestions.length === 0 ? (
+            <p>No preview yet.</p>
+          ) : (
+            parsedImportQuestions.slice(0, 6).map((question, index) => (
+              <div key={`${question.id}-${index}`}>
+                <span>Q{index + 1}</span>
+                <p>{question.label}</p>
+                <em>{questionTypeLabel(question)}</em>
+              </div>
+            ))
+          )}
+          {parsedImportQuestions.length > 6 && <small>+{parsedImportQuestions.length - 6} more questions</small>}
+        </div>
       </div>
 
       <div className="survey-studio-grid">
@@ -6074,6 +6226,7 @@ function SurveyOSFoundationDashboard({
   users = [],
   vendors = []
 }) {
+  const [dateMenuOpen, setDateMenuOpen] = useState(false);
   const portfolioProjects = projects.filter((project) => project.slug !== 'pilot-survey');
   const dashboardRoleName = roleInfo?.name || displayRoleName(session?.role || 'admin', foundation?.roles || []);
   const dashboardScope = roleInfo?.scope || 'workspace';
@@ -6264,7 +6417,18 @@ function SurveyOSFoundationDashboard({
               <span>{dashboardScope}</span>
             </div>
             <div className="superadmin-header-actions">
-              <button type="button" className="superadmin-date" onClick={onRefresh}>{dateRangeLabel} <CalendarClock size={14} /></button>
+              <div className="superadmin-date-menu">
+                <button type="button" className="superadmin-date" onClick={() => setDateMenuOpen((open) => !open)}>
+                  {dateRangeLabel} <CalendarClock size={14} />
+                </button>
+                {dateMenuOpen && (
+                  <div className="superadmin-date-popover">
+                    <button type="button" onClick={() => { setDateMenuOpen(false); onRefresh(); }}>Refresh live range</button>
+                    <button type="button" onClick={() => { setDateMenuOpen(false); onOpenAnalytics(); }}>Open analytics timeline</button>
+                    <button type="button" onClick={() => { setDateMenuOpen(false); onOpenProjects(); }}>View project dates</button>
+                  </div>
+                )}
+              </div>
               <button type="button" aria-label="Search projects" onClick={onFocusSearch}><Search size={17} /></button>
               <button type="button" aria-label="Refresh platform data" onClick={onRefresh}><RefreshCw size={17} /></button>
               <button type="button" aria-label="Open projects" onClick={onOpenProjects}><ClipboardList size={17} /></button>
@@ -6979,7 +7143,9 @@ function TrendLineChart({ rows, labelKey, valueKey, compact = false }) {
         <polygon points={areaPoints} className="trend-area" />
         <polyline points={linePoints} className="trend-line" />
         {points.map((point) => (
-          <circle key={`${point.label}-${point.x}`} cx={point.x} cy={point.y} r="3.5" />
+          <circle key={`${point.label}-${point.x}`} cx={point.x} cy={point.y} r="3.5">
+            <title>{`${point.label}: ${formatStatNumber(point.value)}`}</title>
+          </circle>
         ))}
       </svg>
       <div className="trend-chart-foot">

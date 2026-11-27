@@ -149,7 +149,7 @@ nav button.active {
 
 .survey-hero {
   align-items: end;
-  background: #173f3b;
+  background: #123f73;
   border-radius: 8px;
   color: #ffffff;
   display: flex;
@@ -162,7 +162,7 @@ nav button.active {
 }
 
 .survey-hero::after {
-  background: linear-gradient(135deg, rgba(216, 155, 56, 0.36), rgba(255, 255, 255, 0));
+  background: linear-gradient(135deg, rgba(7, 174, 169, 0.38), rgba(49, 100, 198, 0.1));
   content: "";
   inset: auto 0 0 auto;
   height: 130px;
@@ -170,11 +170,14 @@ nav button.active {
   width: 42%;
 }
 
-.survey-hero .eyebrow,
 .admin-heading .eyebrow,
 .editor-panel .eyebrow,
 .login-panel .eyebrow {
   color: #d9a23d;
+}
+
+.survey-hero .eyebrow {
+  color: #54d7d1;
 }
 
 .survey-hero h2 {
@@ -12394,5 +12397,68 @@ body:has(.admin-console) {
 
   .admin-console .phase1-access-row em {
     justify-self: start;
+  }
+}
+
+@media (max-width: 760px) {
+  .survey-hero {
+    align-items: stretch;
+    background: #123f73;
+    display: grid;
+    gap: 16px;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 18px;
+  }
+
+  .survey-hero::after {
+    background: linear-gradient(145deg, rgba(7, 174, 169, 0.28), rgba(49, 100, 198, 0.08));
+    height: 112px;
+    width: 52%;
+  }
+
+  .survey-hero-copy {
+    grid-row: 2;
+    max-width: none;
+    padding: 0;
+  }
+
+  .survey-hero h2 {
+    font-size: 1.7rem;
+    line-height: 1.16;
+    margin: 6px 0 12px;
+  }
+
+  .survey-hero p:not(.eyebrow) {
+    font-size: 0.92rem;
+    line-height: 1.5;
+    max-width: none;
+  }
+
+  .survey-hero-brand {
+    display: contents;
+  }
+
+  .survey-hero-logo {
+    grid-row: 1;
+    justify-self: end;
+    width: 112px;
+  }
+
+  .survey-hero-brand img {
+    height: 57px;
+    width: 112px;
+  }
+
+  .survey-hero-logo span {
+    color: #ffffff;
+    font-size: 8px;
+  }
+
+  .survey-hero .hero-pill {
+    background: rgba(7, 174, 169, 0.18);
+    border-color: rgba(84, 215, 209, 0.48);
+    grid-row: 3;
+    justify-self: start;
+    padding: 8px 10px;
   }
 }

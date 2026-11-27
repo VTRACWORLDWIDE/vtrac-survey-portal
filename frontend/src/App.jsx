@@ -5007,7 +5007,7 @@ function ProjectEditor({ project, onChange, onCancel, onSave, onPublish }) {
                 <label>Project name<input value={project.name} onChange={(event) => update('name', event.target.value)} /></label>
                 <label>URL slug<input value={project.slug} onChange={(event) => update('slug', event.target.value)} /></label>
                 <label className="wide">Description<textarea value={project.description} onChange={(event) => update('description', event.target.value)} /></label>
-                <label className="wide">Survey locations<textarea value={projectLocationsText} onChange={(event) => update('locations', event.target.value)} /></label>
+                <label className="wide">Survey City<textarea value={projectLocationsText} onChange={(event) => update('locations', event.target.value)} /></label>
               </div>
               <div className="studio-rule-grid">
                 {componentControls.map((component) => {
@@ -5037,7 +5037,7 @@ function ProjectEditor({ project, onChange, onCancel, onSave, onPublish }) {
           <input value={project.description} onChange={(event) => update('description', event.target.value)} />
         </label>
         <label>
-          Locations
+          Survey City
           <textarea value={projectLocationsText} onChange={(event) => update('locations', event.target.value)} />
         </label>
       </div>

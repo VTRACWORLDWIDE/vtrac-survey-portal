@@ -1119,7 +1119,7 @@ function SurveyForm({ projectSlug }) {
             <h2>Collection Status</h2>
             <div className="info-list">
               <span><ShieldCheck size={17} /> Public field link</span>
-              <span><MapPin size={17} /> {config.locations?.length || 0} locations</span>
+              <span><MapPin size={17} /> {config.locations?.length || 0} survey {config.locations?.length === 1 ? 'city' : 'cities'}</span>
               <span><ClipboardList size={17} /> {config.questions?.length || 0} questions</span>
             </div>
           </div>
@@ -1445,9 +1445,9 @@ function SurveyLocationInput({ locations, value, onChange, airportMode = false }
   if (!usesAirportFlow) {
     return (
       <label>
-        Survey location
+        Survey city
         <select value={value} onChange={(event) => onChange(event.target.value)} required>
-          <option value="">Select location</option>
+          <option value="">Select city</option>
           {locations.map((location) => <option key={location}>{location}</option>)}
         </select>
       </label>

@@ -5898,7 +5898,7 @@ function ClientAccessManager({ clients, projects, editingClient, recoveryRequest
                   {request.email ? ' · ' + request.email : ''}
                 </small>
               </span>
-              <em>{formatDateTime(request.requestedAt)}</em>
+              <em>{formatProjectDateTime(request.requestedAt)}</em>
               <button className="secondary compact-button" disabled={isResolved || !onResolveRecovery} onClick={() => onResolveRecovery(request.id)}>
                 {isResolved ? 'Resolved' : 'Mark resolved'}
               </button>

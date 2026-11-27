@@ -1015,9 +1015,9 @@ function SurveyForm({ projectSlug }) {
     <section className="survey-shell">
       <div className="survey-hero survey-cover">
         <div className="survey-cover-top">
-          <div className="survey-cover-heading">
-            <p className="eyebrow">Field Collection</p>
-            <h2>{config.name || 'Survey'}</h2>
+          <div className="survey-cover-platform">
+            <strong>VTRAC WORLDWIDE</strong>
+            <span>Digital Survey Platform</span>
           </div>
           <div className="survey-cover-logo">
             <img src="/vtrac-logo-mark.png" alt="VTRAC" />
@@ -1025,6 +1025,10 @@ function SurveyForm({ projectSlug }) {
           </div>
         </div>
         <div className="survey-cover-divider" />
+        <div className="survey-cover-heading">
+          <p className="eyebrow">Field Collection</p>
+          <h2>{config.name || 'Survey'}</h2>
+        </div>
         <div className="survey-cover-brief">
           <p className="eyebrow">Transportation &amp; Mobility Studies</p>
           <p>{config.description || 'Submit accurate field data from any mobile browser.'}</p>

@@ -12498,6 +12498,27 @@ body:has(.admin-console) {
 .survey-cover-heading {
   align-self: center;
   min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.survey-cover-platform {
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.survey-cover-platform strong {
+  color: #54d7d1;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.survey-cover-platform span {
+  color: #dce9f5;
+  font-size: 0.92rem;
 }
 
 .survey-cover-heading h2 {
@@ -12673,6 +12694,14 @@ body:has(.admin-console) {
   .survey-cover-heading .eyebrow,
   .survey-cover-brief .eyebrow {
     font-size: 0.7rem;
+  }
+
+  .survey-cover-platform strong {
+    font-size: 0.72rem;
+  }
+
+  .survey-cover-platform span {
+    font-size: 0.74rem;
   }
 
   .survey-cover-logo {

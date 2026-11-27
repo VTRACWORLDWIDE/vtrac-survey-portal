@@ -12920,3 +12920,393 @@ body:has(.admin-console) {
     min-height: 52px;
   }
 }
+
+/* Corporate SaaS UI stabilization: final typography and responsive authority */
+:root {
+  --vtrac-font-ui: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --vtrac-ink: #0b2346;
+  --vtrac-copy: #425570;
+  --vtrac-muted: #6b7b91;
+  --vtrac-line: #d9e3ef;
+  --vtrac-surface: #ffffff;
+}
+
+.admin-console,
+.survey-page {
+  font-family: var(--vtrac-font-ui);
+  font-size: 15px;
+  letter-spacing: 0;
+  text-rendering: optimizeLegibility;
+}
+
+.admin-console *,
+.survey-page * {
+  letter-spacing: 0;
+}
+
+.admin-console :where(.panel, .metric, .summary-kpi-card, .superadmin-panel, .superadmin-kpi-card, .project-info-card),
+.admin-console :where(.summary-card-head, .superadmin-card-head, .section-title, .project-workspace-header, .admin-project-toolbar) > *,
+.admin-console :where(.admin-main, .admin-section, .superadmin-main, .superadmin-dashboard-grid, .superadmin-kpi-grid) > * {
+  min-width: 0;
+}
+
+.admin-console :where(h1, h2, h3, h4, p, span, strong, small, label, button, th, td),
+.survey-page :where(h1, h2, h3, h4, p, span, strong, small, label, button) {
+  overflow-wrap: anywhere;
+}
+
+.admin-console :where(h1, h2, h3, h4) {
+  font-family: var(--vtrac-font-ui);
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.admin-console :where(p, small) {
+  line-height: 1.5;
+}
+
+.admin-console button,
+.admin-console input,
+.admin-console select,
+.admin-console textarea {
+  font: inherit;
+}
+
+.admin-console button {
+  line-height: 1.2;
+}
+
+.admin-console .admin-brand-mark span,
+.admin-console .admin-topbar-context strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-console .summary-performance-head h2,
+.admin-console .project-workspace-header h2,
+.admin-console .admin-project-toolbar h2,
+.admin-console .section-title h2 {
+  color: var(--vtrac-ink);
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+  line-height: 1.18;
+}
+
+.admin-console .summary-performance-head > div > p:last-child,
+.admin-console .project-workspace-header p,
+.admin-console .admin-project-toolbar p,
+.admin-console .section-title p {
+  color: var(--vtrac-copy);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.admin-console .summary-kpi-card {
+  align-content: start;
+  min-height: 116px;
+  padding: 17px;
+}
+
+.admin-console .summary-kpi-card strong {
+  color: var(--vtrac-ink) !important;
+  font-size: clamp(1.65rem, 2.3vw, 2.2rem);
+  line-height: 1.05;
+}
+
+.admin-console .summary-kpi-card span {
+  color: #53647e;
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1.3;
+}
+
+.admin-console .summary-kpi-card p {
+  color: var(--vtrac-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.admin-console .summary-card-head,
+.admin-console .superadmin-card-head {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.admin-console .summary-card-head h3 {
+  color: var(--vtrac-ink);
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.admin-console .summary-card-head span,
+.admin-console .eyebrow {
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.surveyos-super-admin .superadmin-header {
+  gap: 18px;
+}
+
+.surveyos-super-admin .superadmin-header > div:first-child {
+  min-width: 0;
+}
+
+.surveyos-super-admin .superadmin-header h2 {
+  font-size: clamp(1.18rem, 1.7vw, 1.55rem);
+  line-height: 1.2;
+}
+
+.surveyos-super-admin .superadmin-header-actions {
+  flex: 0 1 auto;
+}
+
+.surveyos-super-admin .superadmin-kpi-card span {
+  color: #53647e;
+  font-size: 0.76rem;
+  line-height: 1.28;
+}
+
+.surveyos-super-admin .superadmin-kpi-card strong {
+  color: var(--vtrac-ink);
+  font-size: clamp(1.35rem, 1.8vw, 1.8rem);
+  line-height: 1.08;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.surveyos-super-admin .superadmin-kpi-card small {
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.surveyos-super-admin .superadmin-card-head span {
+  font-size: 0.76rem;
+  line-height: 1.3;
+}
+
+.surveyos-super-admin .superadmin-card-head button {
+  min-height: 34px;
+  white-space: normal;
+}
+
+.surveyos-super-admin .superadmin-table-panel,
+.surveyos-super-admin .superadmin-audit-panel {
+  overflow-x: auto;
+  scrollbar-color: #9db7d4 #edf3f8;
+}
+
+.surveyos-super-admin .superadmin-table-panel table,
+.surveyos-super-admin .superadmin-audit-panel table {
+  font-size: 0.78rem;
+  min-width: 720px;
+}
+
+.surveyos-super-admin .superadmin-table-panel th,
+.surveyos-super-admin .superadmin-audit-panel th {
+  font-size: 0.72rem;
+}
+
+.surveyos-super-admin .superadmin-alert-row span,
+.surveyos-super-admin .superadmin-usage-row span,
+.surveyos-super-admin .superadmin-progress-row span {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.surveyos-super-admin .donut-chart-wrap,
+.surveyos-super-admin .donut-legend {
+  min-width: 0;
+}
+
+.surveyos-super-admin .donut-legend-row {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.surveyos-super-admin .donut-legend-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.survey-page .survey-question-card,
+.survey-page .choice-option,
+.survey-page .survey-form-card {
+  min-width: 0;
+}
+
+.survey-page .survey-question-card label,
+.survey-page .choice-option span {
+  line-height: 1.35;
+}
+
+@media (max-width: 900px) {
+  .admin-console-topbar {
+    align-items: center;
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 9px 12px;
+  }
+
+  .admin-console-topbar .admin-brand-mark {
+    overflow: hidden;
+  }
+
+  .admin-console-topbar .admin-brand-mark span {
+    font-size: 0.86rem;
+    max-width: min(54vw, 360px);
+  }
+
+  .admin-console-topbar .admin-search {
+    display: none;
+  }
+
+  .admin-console-topbar .admin-topbar-context {
+    display: none;
+  }
+
+  .admin-main,
+  .admin-console:has(.surveyos-super-admin) .admin-main {
+    padding: 12px;
+  }
+
+  .admin-console .section-title,
+  .admin-console .project-workspace-header,
+  .admin-console .admin-project-toolbar,
+  .admin-console .summary-performance-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .admin-console .section-title .actions,
+  .admin-console .project-workspace-header .actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .admin-console :where(.admin-project-table, .data-grid-shell, .table-panel, .exports-table, .response-grid-table) {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .surveyos-super-admin .superadmin-header-actions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(40px, 1fr));
+    width: 100%;
+  }
+
+  .surveyos-super-admin .superadmin-date-menu {
+    grid-column: 1 / -1;
+  }
+
+  .surveyos-super-admin .superadmin-header-actions .superadmin-date {
+    width: 100%;
+  }
+
+  .surveyos-super-admin .superadmin-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .admin-console,
+  .survey-page {
+    font-size: 14px;
+  }
+
+  .admin-console-topbar .admin-brand-mark span {
+    max-width: 44vw;
+  }
+
+  .admin-console .summary-performance-head h2,
+  .admin-console .project-workspace-header h2,
+  .admin-console .admin-project-toolbar h2,
+  .admin-console .section-title h2 {
+    font-size: 1.35rem;
+  }
+
+  .surveyos-super-admin .superadmin-header {
+    border-radius: 12px;
+    padding: 14px;
+  }
+
+  .surveyos-super-admin .superadmin-header-actions {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .surveyos-super-admin .superadmin-header-actions > button {
+    min-width: 0;
+    padding: 0;
+  }
+
+  .surveyos-super-admin .superadmin-kpi-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .surveyos-super-admin .superadmin-kpi-card {
+    min-height: 106px;
+    padding: 15px;
+  }
+
+  .surveyos-super-admin .superadmin-panel {
+    border-radius: 12px;
+    padding: 14px;
+  }
+
+  .surveyos-super-admin .superadmin-card-head.compact {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .surveyos-super-admin .superadmin-alert-row {
+    align-items: start;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .surveyos-super-admin .superadmin-alert-row strong {
+    grid-column: 2;
+  }
+
+  .surveyos-super-admin .donut-chart-wrap {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+
+  .surveyos-super-admin .donut-legend {
+    width: 100%;
+  }
+
+  .surveyos-super-admin .superadmin-coverage-map {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .surveyos-super-admin .superadmin-map-orbit {
+    justify-self: center;
+    max-width: 150px;
+    width: 100%;
+  }
+
+  .surveyos-super-admin .superadmin-progress-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .surveyos-super-admin .superadmin-progress-row i {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .surveyos-super-admin .superadmin-progress-row strong {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .survey-page .survey-question-card {
+    padding: 16px;
+  }
+}

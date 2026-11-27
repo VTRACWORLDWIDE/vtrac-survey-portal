@@ -804,6 +804,40 @@ function SurveyForm({ projectSlug }) {
     );
   }
 
+  function fetchGeoReference() {
+    if (!navigator.geolocation) {
+      setGpsStatus('GPS is not supported on this browser.');
+      return;
+    }
+    gpsAttemptedRef.current = true;
+    setGpsStatus('Requesting location permission...');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const nextPosition = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          gpsAccuracy: position.coords.accuracy
+        };
+        const latitude = nextPosition.latitude.toFixed(6);
+        const longitude = nextPosition.longitude.toFixed(6);
+        const accuracy = Number.isFinite(Number(nextPosition.gpsAccuracy)) ? Math.round(nextPosition.gpsAccuracy) : null;
+        const coordinateText = `${latitude}, ${longitude}${accuracy !== null ? ` (accuracy ±${accuracy} m)` : ''}`;
+        setGpsPosition(nextPosition);
+        setGpsStatus(`Captured ${coordinateText}`);
+        updateAnswer('geo_reference', coordinateText);
+      },
+      (error) => {
+        const message = error?.code === 1
+          ? 'Location permission was denied. Allow location access in browser settings and try again.'
+          : error?.code === 3
+            ? 'Location request timed out. Move to an open area and try again.'
+            : 'Location is unavailable. Check GPS and try again.';
+        setGpsStatus(message);
+      },
+      { enableHighAccuracy: true, maximumAge: 30000, timeout: 15000 }
+    );
+  }
+
   function finalizeAudioRecording() {
     const activeRecorder = mediaRecorderRef.current || mediaRecorder;
     if (!activeRecorder || activeRecorder.state !== 'recording') return Promise.resolve(audioRef.current || audio);
@@ -1049,6 +1083,9 @@ function SurveyForm({ projectSlug }) {
                 index={index}
                 value={form.answers[question.id] || ''}
                 onChange={(value) => updateAnswer(question.id, value)}
+                onFetchCoordinates={question.id === 'geo_reference' ? fetchGeoReference : undefined}
+                coordinateStatus={question.id === 'geo_reference' ? gpsStatus : ''}
+                hasCoordinates={question.id === 'geo_reference' && Boolean(gpsPosition)}
               />
             ))}
           </div>
@@ -1508,7 +1545,7 @@ function parseAirportLocation(location = '') {
   return { location, terminal, movement, point: 'Other', otherText: normalizedPoint };
 }
 
-function QuestionInput({ question, index, value, onChange, disabled = false }) {
+function QuestionInput({ question, index, value, onChange, disabled = false, onFetchCoordinates, coordinateStatus = '', hasCoordinates = false }) {
   const numberProps = question.id.includes('minutes')
     ? { min: 0, max: 59, inputMode: 'numeric' }
     : question.id.includes('hours')
@@ -1547,6 +1584,14 @@ function QuestionInput({ question, index, value, onChange, disabled = false }) {
           <input value={value} onChange={(event) => onChange(event.target.value)} required={question.required} disabled={disabled} />
         )}
       </label>
+      {onFetchCoordinates && (
+        <div className={`geo-reference-capture ${hasCoordinates ? 'captured' : ''}`}>
+          <button type="button" className="secondary" onClick={onFetchCoordinates} disabled={disabled}>
+            <MapPin size={17} /> {hasCoordinates ? 'Refresh coordinates' : 'Fetch coordinates'}
+          </button>
+          <span>{coordinateStatus || 'Tap to capture latitude, longitude, and GPS accuracy.'}</span>
+        </div>
+      )}
     </div>
   );
 }

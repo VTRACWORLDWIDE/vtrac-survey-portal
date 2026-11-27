@@ -5153,6 +5153,39 @@ textarea {
   border-top: 1px solid #dce9ec;
 }
 
+.geo-reference-capture {
+  align-items: center;
+  background: #f5fafb;
+  border: 1px solid #d4e6e8;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 10px;
+}
+
+.geo-reference-capture button {
+  min-height: 40px;
+}
+
+.geo-reference-capture span {
+  color: #607287;
+  flex: 1 1 220px;
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.geo-reference-capture.captured {
+  background: #ecfaf7;
+  border-color: #8ccfc7;
+}
+
+.geo-reference-capture.captured span {
+  color: #087f75;
+}
+
 .studio-avatar-stack {
   display: inline-flex;
   margin-right: 2px;

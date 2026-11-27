@@ -2422,6 +2422,31 @@ async function loadProjectForPublic(identifier) {
   };
 }
 
+async function loadProjectForAdmin(identifier) {
+  const projectResult = await query(
+    `SELECT *
+    FROM survey_projects
+    WHERE slug = $1 OR id::text = $1
+    LIMIT 1`,
+    [String(identifier)]
+  );
+  const project = projectResult.rows[0];
+  if (!project) return null;
+
+  const questions = await query(
+    `SELECT *
+    FROM survey_questions
+    WHERE project_id = $1
+    ORDER BY sort_order ASC, id ASC`,
+    [project.id]
+  );
+
+  return {
+    ...normalizeProject(project),
+    questions: questions.rows.map(normalizeQuestion)
+  };
+}
+
 async function ensureDefaultClientAccount() {
   const foundationContext = await getDefaultFoundationContext();
   const existing = await query(`SELECT id FROM client_accounts WHERE username = $1 LIMIT 1`, [clientUsername]);
@@ -2887,7 +2912,7 @@ async function saveProject(payload) {
     );
   }
 
-  return loadProjectForPublic(project.id);
+  return loadProjectForAdmin(project.id);
 }
 
 function buildFilters(queryParams, assignedProjectIds = null) {

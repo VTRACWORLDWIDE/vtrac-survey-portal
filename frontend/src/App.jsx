@@ -2768,6 +2768,25 @@ function AdminDashboard({ token, session, onLogout }) {
     return payload.project;
   }
 
+  async function deployProject(project = selectedProject) {
+    if (!project) return null;
+    const confirmed = window.confirm(`Deploy "${project.name}"? Its public survey link will begin accepting submissions.`);
+    if (!confirmed) return null;
+    const deployedProject = await saveProject({
+      ...project,
+      isActive: true,
+      settings: {
+        ...(project.settings || {}),
+        status: 'deployed',
+        archivedAt: ''
+      }
+    }, 'Survey deployed. The public link is ready for testing and data collection.');
+    if (!deployedProject) return null;
+    setSelectedId(deployedProject.id);
+    setProjectStatusFilter('deployed');
+    return deployedProject;
+  }
+
   async function saveGeneralSettings() {
     if (!selectedProject) return;
     await saveProject({
@@ -3389,6 +3408,7 @@ function AdminDashboard({ token, session, onLogout }) {
                   onChange={setEditing}
                   onCancel={() => setEditing(null)}
                   onSave={saveProject}
+                  onPublish={deployProject}
                 />
               )}
             </>
@@ -3406,6 +3426,11 @@ function AdminDashboard({ token, session, onLogout }) {
                   <button className="secondary compact-button" onClick={refreshAdminData} disabled={loading}>
                     <RefreshCw size={15} /> {loading ? 'Refreshing...' : 'Refresh data'}
                   </button>
+                  {selectedProjectStatus === 'draft' ? (
+                    <button className="primary compact-button" onClick={() => deployProject(selectedProject)}><Upload size={15} /> Deploy survey</button>
+                  ) : selectedProjectStatus === 'deployed' ? (
+                    <button className="primary compact-button" onClick={() => window.open(selectedProject.publicUrl, '_blank')}><Eye size={15} /> Test survey</button>
+                  ) : null}
                   <span className={`project-status ${selectedProjectStatus}`}>{selectedProjectStatus}</span>
                 </div>
               </div>
@@ -3472,10 +3497,14 @@ function AdminDashboard({ token, session, onLogout }) {
 
                   <div className="quick-link-stack">
                     <h2>Quick Links</h2>
-                    <button onClick={() => window.open(selectedProject.publicUrl, '_blank')}><ClipboardList size={19} /> Collect data <ExternalLink size={17} /></button>
-                    <button onClick={copyPublicLink}><Share2 size={19} /> Copy survey link <Copy size={17} /></button>
+                    {selectedProjectStatus === 'draft' ? (
+                      <button onClick={() => deployProject(selectedProject)}><Upload size={19} /> Deploy survey <ExternalLink size={17} /></button>
+                    ) : (
+                      <button onClick={() => window.open(selectedProject.publicUrl, '_blank')}><ClipboardList size={19} /> Collect data <ExternalLink size={17} /></button>
+                    )}
+                    <button disabled={selectedProjectStatus !== 'deployed'} onClick={copyPublicLink}><Share2 size={19} /> Copy survey link <Copy size={17} /></button>
                     <button onClick={() => { setProjectWorkspaceTab('form'); editProject(selectedProject); }}><Pencil size={19} /> Edit form <ExternalLink size={17} /></button>
-                    <button onClick={() => window.open(selectedProject.publicUrl, '_blank')}><Eye size={19} /> Preview form <ExternalLink size={17} /></button>
+                    <button disabled={selectedProjectStatus !== 'deployed'} onClick={() => window.open(selectedProject.publicUrl, '_blank')}><Eye size={19} /> Test survey <ExternalLink size={17} /></button>
                   </div>
 
                   <div className="summary-submissions span-2">
@@ -3498,11 +3527,17 @@ function AdminDashboard({ token, session, onLogout }) {
                       <div className="collect-card">
                         <div>
                           <h2>Collect data</h2>
-                          <p>Online and offline-enabled public survey link for field data collection.</p>
+                          <p>{selectedProjectStatus === 'deployed' ? 'Online and offline-enabled public survey link for field data collection.' : 'Deploy this draft to activate its public survey link for testing and field collection.'}</p>
                         </div>
                         <div className="collect-actions">
-                          <button className="secondary" onClick={copyPublicLink}><Copy size={17} /> Copy</button>
-                          <button className="primary" onClick={() => window.open(selectedProject.publicUrl, '_blank')}><ExternalLink size={17} /> Open</button>
+                          {selectedProjectStatus === 'deployed' ? (
+                            <>
+                              <button className="secondary" onClick={copyPublicLink}><Copy size={17} /> Copy link</button>
+                              <button className="primary" onClick={() => window.open(selectedProject.publicUrl, '_blank')}><ExternalLink size={17} /> Test survey</button>
+                            </>
+                          ) : (
+                            <button className="primary" onClick={() => deployProject(selectedProject)}><Upload size={17} /> Deploy survey</button>
+                          )}
                         </div>
                       </div>
                       <label className="check-row form-access-row">
@@ -3517,6 +3552,7 @@ function AdminDashboard({ token, session, onLogout }) {
                       onChange={setEditing}
                       onCancel={() => isSurveyDesignerMode ? openAdminSection('projects') : setEditing(null)}
                       onSave={saveProject}
+                      onPublish={deployProject}
                     />
                   )}
                 </div>
@@ -4282,7 +4318,7 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-function ProjectEditor({ project, onChange, onCancel, onSave }) {
+function ProjectEditor({ project, onChange, onCancel, onSave, onPublish }) {
   const settings = normalizeSurveySettings(project.settings, project.slug);
   const questions = Array.isArray(project.questions) ? project.questions : [];
   const [studioTab, setStudioTab] = useState('builder');
@@ -4718,7 +4754,7 @@ function ProjectEditor({ project, onChange, onCancel, onSave }) {
           <span className="studio-avatar-stack"><span>NR</span><span>QA</span><span>+3</span></span>
           <button type="button" className="secondary"><Eye size={16} /> Preview</button>
           <button type="button" className="secondary"><Send size={16} /> Run Test</button>
-          <button type="button" className="primary" onClick={() => onSave(project)}><Upload size={16} /> Publish</button>
+          <button type="button" className="primary" onClick={() => onPublish(project)}><Upload size={16} /> Deploy survey</button>
           <button type="button" className="primary" onClick={() => onSave(project)}><Save size={16} /> Save</button>
         </div>
       </div>

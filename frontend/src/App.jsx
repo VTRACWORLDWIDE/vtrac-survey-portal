@@ -1578,20 +1578,13 @@ function QuestionInput({ question, index, value, onChange, disabled = false, onF
         {question.type === 'textarea' && (
           <textarea value={value} onChange={(event) => onChange(event.target.value)} required={question.required} disabled={disabled} />
         )}
-        {question.type === 'select' && question.options.length > 8 && (
-          <SearchableSelect
-            options={question.options}
+        {['select', 'radio'].includes(question.type) && (
+          <ChoiceInput
+            question={question}
             value={value}
             onChange={onChange}
-            required={question.required}
             disabled={disabled}
           />
-        )}
-        {question.type === 'select' && question.options.length <= 8 && (
-          <select value={value} onChange={(event) => onChange(event.target.value)} required={question.required} disabled={disabled}>
-            <option value="">Select answer</option>
-            {question.options.map((option) => <option key={option}>{option}</option>)}
-          </select>
         )}
         {question.type === 'number' && (
           <input type="number" value={value} onChange={(event) => onChange(event.target.value)} required={question.required} disabled={disabled} {...numberProps} />
@@ -1619,6 +1612,74 @@ function QuestionInput({ question, index, value, onChange, disabled = false, onF
           </button>
           <span>{coordinateStatus || 'Tap to capture latitude, longitude, and GPS accuracy.'}</span>
         </div>
+      )}
+    </div>
+  );
+}
+
+function isOtherOption(option = '') {
+  return /^others?$/i.test(String(option).trim());
+}
+
+function parseOtherAnswer(value = '') {
+  const match = String(value).match(/^Others?:\s*(.*)$/i);
+  return match ? { selected: true, text: match[1] || '' } : { selected: isOtherOption(value), text: '' };
+}
+
+function ChoiceInput({ question, value, onChange, disabled = false }) {
+  const options = Array.isArray(question.options) ? question.options : [];
+  const otherAnswer = parseOtherAnswer(value);
+  const selectedValue = otherAnswer.selected ? (options.find(isOtherOption) || 'Other') : value;
+  const name = `question-${question.id}`;
+
+  function updateOther(text) {
+    onChange(text.trim() ? `Other: ${text}` : 'Other');
+  }
+
+  return (
+    <div className={`choice-input ${question.type === 'radio' ? 'choice-buttons' : 'choice-dropdown'}`}>
+      {question.type === 'radio' ? (
+        <div className="choice-option-grid" role="radiogroup" aria-label={question.label}>
+          {options.map((option) => (
+            <label className={`choice-option ${selectedValue === option ? 'selected' : ''}`} key={option}>
+              <input
+                type="radio"
+                name={name}
+                value={option}
+                checked={selectedValue === option}
+                onChange={() => onChange(option)}
+                required={question.required}
+                disabled={disabled}
+              />
+              <span>{option}</span>
+            </label>
+          ))}
+        </div>
+      ) : options.length > 8 ? (
+        <SearchableSelect
+          options={options}
+          value={selectedValue}
+          onChange={onChange}
+          required={question.required}
+          disabled={disabled}
+        />
+      ) : (
+        <select value={selectedValue} onChange={(event) => onChange(event.target.value)} required={question.required} disabled={disabled}>
+          <option value="">Select answer</option>
+          {options.map((option) => <option key={option}>{option}</option>)}
+        </select>
+      )}
+      {otherAnswer.selected && (
+        <input
+          className="choice-other-input"
+          value={otherAnswer.text}
+          onChange={(event) => updateOther(event.target.value)}
+          placeholder="Enter other name or category"
+          aria-label={`Other response for ${question.label}`}
+          required={question.required}
+          disabled={disabled}
+          autoFocus={!disabled}
+        />
       )}
     </div>
   );
@@ -4595,9 +4656,8 @@ function ProjectEditor({ project, onChange, onCancel, onSave, onPublish }) {
     if (type === 'long-text' || type === 'textarea' || type === 'consent') return 'textarea';
     if (['number', 'decimal', 'slider', 'rating', 'nps'].includes(type)) return 'number';
     if (['date', 'time'].includes(type)) return 'date';
-    if (
-      ['yes-no', 'single-choice', 'multiple-choice', 'dropdown', 'ranking', 'autocomplete', 'likert', 'matrix'].includes(type)
-    ) {
+    if (['yes-no', 'single-choice', 'multiple-choice', 'likert'].includes(type)) return 'radio';
+    if (['dropdown', 'ranking', 'autocomplete', 'matrix'].includes(type)) {
       return 'select';
     }
     return 'text';
@@ -4619,7 +4679,8 @@ function ProjectEditor({ project, onChange, onCancel, onSave, onPublish }) {
       textarea: 'Long Text',
       number: 'Number',
       date: 'Date',
-      select: 'Choice'
+      select: 'Dropdown',
+      radio: 'Multiple Choice'
     };
     return labels[question?.type] || 'Short Text';
   }
@@ -4654,6 +4715,13 @@ function ProjectEditor({ project, onChange, onCancel, onSave, onPublish }) {
     if (!selectedQuestion) return;
     const rows = optionRowsFor(selectedQuestion).filter((_, index) => index !== optionIndex);
     patchQuestion(selectedIndex, { options: rows.map((row) => row.label).join('\n') });
+  }
+
+  function toggleOtherOption(enabled) {
+    if (!selectedQuestion || !['select', 'radio'].includes(selectedQuestion.type)) return;
+    const labels = optionRowsFor(selectedQuestion).map((row) => row.label).filter(Boolean);
+    const withoutOther = labels.filter((label) => !isOtherOption(label));
+    patchQuestion(selectedIndex, { options: [...withoutOther, ...(enabled ? ['Other'] : [])].join('\n') });
   }
 
   function addQuestionFromBank(item) {
@@ -4882,7 +4950,7 @@ function ProjectEditor({ project, onChange, onCancel, onSave, onPublish }) {
     'Enumerator Observation'
   ];
   const surveyHealth = Math.min(98, Math.max(58, 70 + Math.round(questions.length * 1.8) + (questions.some((question) => question.required) ? 8 : 0)));
-  const logicRuleCount = questions.filter((question) => question.type === 'select').length;
+  const logicRuleCount = questions.filter((question) => ['select', 'radio'].includes(question.type)).length;
   const qualityRuleCount = componentControls.filter((component) => getComponentMode(settings, component.key) !== 'off').length;
   const estimatedMinutes = Math.max(4, Math.round(questions.length * 1.35));
   const optionRows = optionRowsFor(selectedQuestion);
@@ -4963,6 +5031,10 @@ function ProjectEditor({ project, onChange, onCancel, onSave, onPublish }) {
                   <span>{index + 1}. {question.label || 'Untitled question'}{question.required ? ' *' : ''}</span>
                   {question.type === 'select' ? (
                     <select disabled={previewMode === 'preview'} defaultValue=""><option value="" disabled>Select an option</option>{optionRowsFor(question).map((row) => <option key={`${question.id}-${row.code}`}>{row.label}</option>)}</select>
+                  ) : question.type === 'radio' ? (
+                    <div className="studio-preview-choice">
+                      {optionRowsFor(question).map((row) => <span key={`${question.id}-${row.code}`}><i />{row.label}</span>)}
+                    </div>
                   ) : question.type === 'textarea' ? (
                     <textarea disabled={previewMode === 'preview'} placeholder="Enter response" />
                   ) : (
@@ -5266,12 +5338,12 @@ function ProjectEditor({ project, onChange, onCancel, onSave, onPublish }) {
                         </div>
                         <span className="studio-pill">{questionTypeLabel(question)}</span>
                         {question.required && <span className="studio-pill danger">Required</span>}
-                        {question.type === 'select' && <span className="studio-pill blue">Logic ready</span>}
+                        {['select', 'radio'].includes(question.type) && <span className="studio-pill blue">Logic ready</span>}
                         <button type="button" className="icon-button" onClick={(event) => { event.stopPropagation(); duplicateQuestion(index); }} title="Duplicate question"><Copy size={15} /></button>
                         <button type="button" className="icon-button" onClick={(event) => { event.stopPropagation(); removeQuestion(index); }} title="Delete question"><Trash2 size={15} /></button>
                       </div>
 
-                      {question.type === 'select' && rows.length > 0 ? (
+                      {['select', 'radio'].includes(question.type) && rows.length > 0 ? (
                         <div className="studio-option-preview">
                           {rows.map((row) => (
                             <span key={`${question.id}-${row.code}-${row.label}`}>
@@ -5345,10 +5417,11 @@ function ProjectEditor({ project, onChange, onCancel, onSave, onPublish }) {
                   </div>
                   <label>
                     Question Type
-                    <select value={selectedQuestion.type} onChange={(event) => patchQuestion(selectedIndex, { type: event.target.value, options: event.target.value === 'select' ? selectedQuestion.options || 'Option 1\nOption 2' : '' })}>
+                    <select value={selectedQuestion.type} onChange={(event) => patchQuestion(selectedIndex, { type: event.target.value, options: ['select', 'radio'].includes(event.target.value) ? selectedQuestion.options || 'Option 1\nOption 2' : '' })}>
                       <option value="text">Short Text</option>
                       <option value="textarea">Long Text</option>
                       <option value="select">Choice / Dropdown</option>
+                      <option value="radio">Multiple Choice (Buttons)</option>
                       <option value="number">Number</option>
                       <option value="date">Date</option>
                     </select>
@@ -5366,7 +5439,7 @@ function ProjectEditor({ project, onChange, onCancel, onSave, onPublish }) {
                     <input value={selectedQuestion.id || ''} onChange={(event) => updateQuestion(selectedIndex, 'id', event.target.value)} />
                   </label>
 
-                  {selectedQuestion.type === 'select' && (
+                  {['select', 'radio'].includes(selectedQuestion.type) && (
                     <div className="studio-option-editor">
                       <div className="studio-option-editor-header">
                         <strong>Response Options</strong>
@@ -5394,7 +5467,12 @@ function ProjectEditor({ project, onChange, onCancel, onSave, onPublish }) {
                     </label>
                     <label className="studio-toggle-row">
                       <span>Show Other option</span>
-                      <input type="checkbox" checked={selectedQuestion.type === 'select' && /other/i.test(selectedQuestion.options || '')} readOnly />
+                      <input
+                        type="checkbox"
+                        checked={['select', 'radio'].includes(selectedQuestion.type) && optionRowsFor(selectedQuestion).some((row) => isOtherOption(row.label))}
+                        onChange={(event) => toggleOtherOption(event.target.checked)}
+                        disabled={!['select', 'radio'].includes(selectedQuestion.type)}
+                      />
                     </label>
                   </div>
                 </>
@@ -7712,7 +7790,7 @@ function buildFrequencyRows(values, answered, options, questionType) {
     }))
     .sort((a, b) => {
       if (b.frequency !== a.frequency) return b.frequency - a.frequency;
-      if (questionType === 'select') {
+      if (['select', 'radio'].includes(questionType)) {
         const aIndex = options.indexOf(a.value);
         const bIndex = options.indexOf(b.value);
         if (aIndex !== -1 || bIndex !== -1) return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
@@ -7763,6 +7841,7 @@ function truncateText(value, maxLength) {
 
 function reportTypeLabel(type) {
   if (type === 'select') return 'TYPE: SELECT ONE';
+  if (type === 'radio') return 'TYPE: MULTIPLE CHOICE';
   if (type === 'number') return 'TYPE: NUMERIC';
   if (type === 'date') return 'TYPE: DATE';
   if (type === 'textarea') return 'TYPE: LONG TEXT';

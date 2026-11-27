@@ -1535,7 +1535,7 @@ async function ensureDatabase() {
       project_id BIGINT NOT NULL REFERENCES survey_projects(id) ON DELETE CASCADE,
       question_key TEXT NOT NULL,
       label TEXT NOT NULL,
-      type TEXT NOT NULL CHECK (type IN ('text', 'textarea', 'select', 'number', 'date')),
+      type TEXT NOT NULL CHECK (type IN ('text', 'textarea', 'select', 'radio', 'number', 'date')),
       options JSONB NOT NULL DEFAULT '[]'::jsonb,
       required BOOLEAN NOT NULL DEFAULT FALSE,
       sort_order INT NOT NULL DEFAULT 0,
@@ -1678,6 +1678,9 @@ async function ensureDatabase() {
     ALTER TABLE account_recovery_requests ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES survey_organisations(id);
     ALTER TABLE account_recovery_requests ADD COLUMN IF NOT EXISTS matched_display_name TEXT;
     ALTER TABLE account_access_tokens ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES survey_organisations(id);
+    ALTER TABLE survey_questions DROP CONSTRAINT IF EXISTS survey_questions_type_check;
+    ALTER TABLE survey_questions ADD CONSTRAINT survey_questions_type_check
+      CHECK (type IN ('text', 'textarea', 'select', 'radio', 'number', 'date'));
 
     CREATE INDEX IF NOT EXISTS idx_survey_projects_organisation ON survey_projects (organisation_id, workspace_id);
     CREATE INDEX IF NOT EXISTS idx_survey_responses_organisation ON survey_responses (organisation_id, workspace_id);
@@ -3852,12 +3855,12 @@ function normalizeQuestions(questions = []) {
   return questions
     .map((question, index) => {
       const label = question.label?.trim();
-      const type = ['text', 'textarea', 'select', 'number', 'date'].includes(question.type) ? question.type : 'text';
+      const type = ['text', 'textarea', 'select', 'radio', 'number', 'date'].includes(question.type) ? question.type : 'text';
       return {
         id: slugify(question.id || label || `question-${index + 1}`).replaceAll('-', '_'),
         label,
         type,
-        options: type === 'select' ? normalizeLines(question.options) : [],
+        options: ['select', 'radio'].includes(type) ? normalizeLines(question.options) : [],
         required: Boolean(question.required)
       };
     })

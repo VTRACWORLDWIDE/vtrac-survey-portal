@@ -217,14 +217,31 @@ nav button.active {
   z-index: 2;
 }
 
+.survey-hero-logo {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  width: 132px;
+}
+
 .survey-hero-brand img {
   background: transparent;
   border: 0;
   border-radius: 0;
-  height: 58px;
+  height: 66px;
   object-fit: contain;
   padding: 0;
-  width: 118px;
+  width: 132px;
+}
+
+.survey-hero-logo span {
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-top: 3px;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .page-grid {
@@ -7006,7 +7023,7 @@ tbody tr:hover {
 
   .survey-hero-copy {
     max-width: 100%;
-    padding-right: 74px;
+    padding-right: 120px;
     padding-bottom: 70px;
   }
 
@@ -7023,8 +7040,16 @@ tbody tr:hover {
   }
 
   .survey-hero-brand img {
-    height: 48px;
-    width: 82px;
+    height: 54px;
+    width: 108px;
+  }
+
+  .survey-hero-logo {
+    width: 108px;
+  }
+
+  .survey-hero-logo span {
+    font-size: 8px;
   }
 
   .summary-performance-head {

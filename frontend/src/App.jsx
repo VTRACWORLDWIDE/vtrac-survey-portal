@@ -191,6 +191,7 @@ const defaultComponentPolicy = {
   airportLocationFlow: 'off',
   gps: 'off',
   audio: 'off',
+  respondentName: 'optional',
   respondentPhone: 'optional',
   householdId: 'off'
 };
@@ -199,6 +200,7 @@ const defaultProjectSettings = {
   airportLocationMode: false,
   captureGps: false,
   captureAudio: false,
+  showRespondentName: true,
   showRespondentPhone: true,
   showHouseholdId: false
 };
@@ -219,6 +221,10 @@ function normalizeSurveySettings(rawSettings = {}, slug = '') {
     ),
     gps: normalizeComponentMode(providedPolicy.gps, parsed.captureGps ? 'optional' : defaultComponentPolicy.gps),
     audio: normalizeComponentMode(providedPolicy.audio, parsed.captureAudio ? 'optional' : defaultComponentPolicy.audio),
+    respondentName: normalizeComponentMode(
+      providedPolicy.respondentName,
+      parsed.showRespondentName === false ? 'off' : defaultComponentPolicy.respondentName
+    ),
     respondentPhone: normalizeComponentMode(
       providedPolicy.respondentPhone,
       parsed.showRespondentPhone === false ? 'off' : defaultComponentPolicy.respondentPhone
@@ -233,6 +239,7 @@ function withComponentPolicy(settings, componentPolicy) {
     airportLocationFlow: normalizeComponentMode(componentPolicy.airportLocationFlow, defaultComponentPolicy.airportLocationFlow),
     gps: normalizeComponentMode(componentPolicy.gps, defaultComponentPolicy.gps),
     audio: normalizeComponentMode(componentPolicy.audio, defaultComponentPolicy.audio),
+    respondentName: normalizeComponentMode(componentPolicy.respondentName, defaultComponentPolicy.respondentName),
     respondentPhone: normalizeComponentMode(componentPolicy.respondentPhone, defaultComponentPolicy.respondentPhone),
     householdId: normalizeComponentMode(componentPolicy.householdId, defaultComponentPolicy.householdId)
   };
@@ -242,6 +249,7 @@ function withComponentPolicy(settings, componentPolicy) {
     airportLocationMode: normalizedPolicy.airportLocationFlow !== 'off',
     captureGps: normalizedPolicy.gps !== 'off',
     captureAudio: normalizedPolicy.audio !== 'off',
+    showRespondentName: normalizedPolicy.respondentName !== 'off',
     showRespondentPhone: normalizedPolicy.respondentPhone !== 'off',
     showHouseholdId: normalizedPolicy.householdId !== 'off'
   };
@@ -572,6 +580,8 @@ function SurveyForm({ projectSlug }) {
   const gpsRequired = isComponentMandatory(settings, 'gps');
   const audioEnabled = isComponentEnabled(settings, 'audio');
   const audioRequired = isComponentMandatory(settings, 'audio');
+  const respondentNameEnabled = isComponentEnabled(settings, 'respondentName');
+  const respondentNameRequired = isComponentMandatory(settings, 'respondentName');
   const phoneEnabled = isComponentEnabled(settings, 'respondentPhone');
   const phoneRequired = isComponentMandatory(settings, 'respondentPhone');
   const householdEnabled = isComponentEnabled(settings, 'householdId');
@@ -1001,13 +1011,16 @@ function SurveyForm({ projectSlug }) {
             />
           </div>
 
-          <div className="form-section">
-            <div className="section-kicker"><FileText size={16} /> Respondent</div>
-            <div className="inline-grid">
-              <label>
-                Respondent name
-                <input value={form.respondentName} onChange={(event) => update('respondentName', event.target.value)} />
-              </label>
+          {(respondentNameEnabled || phoneEnabled || householdEnabled) && (
+            <div className="form-section">
+              <div className="section-kicker"><FileText size={16} /> Respondent</div>
+              <div className="inline-grid">
+              {respondentNameEnabled && (
+                <label>
+                  Respondent name {respondentNameRequired && <span className="required-note">Required</span>}
+                  <input value={form.respondentName} onChange={(event) => update('respondentName', event.target.value)} required={respondentNameRequired} />
+                </label>
+              )}
               {phoneEnabled && (
                 <label>
                   Phone {phoneRequired && <span className="required-note">Required</span>}
@@ -1020,8 +1033,9 @@ function SurveyForm({ projectSlug }) {
                   <input value={form.householdId} onChange={(event) => update('householdId', event.target.value)} required={householdRequired} />
                 </label>
               )}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="form-section">
             <div className="section-kicker"><ClipboardList size={16} /> Questions</div>
@@ -4650,6 +4664,11 @@ function ProjectEditor({ project, onChange, onCancel, onSave, onPublish }) {
       key: 'audio',
       title: 'Audio verification',
       description: 'Attach compressed browser audio when required for audit or QA.'
+    },
+    {
+      key: 'respondentName',
+      title: 'Respondent name field',
+      description: 'Show, require, or hide respondent name collection for this survey.'
     },
     {
       key: 'respondentPhone',

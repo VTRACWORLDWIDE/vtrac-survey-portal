@@ -38,6 +38,7 @@ const defaultComponentPolicy = {
   airportLocationFlow: 'off',
   gps: 'off',
   audio: 'off',
+  respondentName: 'optional',
   respondentPhone: 'optional',
   householdId: 'off'
 };
@@ -46,6 +47,7 @@ const defaultProjectSettings = {
   airportLocationMode: false,
   captureGps: false,
   captureAudio: false,
+  showRespondentName: true,
   showRespondentPhone: true,
   showHouseholdId: false,
   status: 'deployed',
@@ -644,6 +646,8 @@ app.post('/api/responses', async (req, res, next) => {
     const gpsRequired = isComponentMandatory(settings, 'gps');
     const audioEnabled = isComponentEnabled(settings, 'audio');
     const audioRequired = isComponentMandatory(settings, 'audio');
+    const respondentNameEnabled = isComponentEnabled(settings, 'respondentName');
+    const respondentNameRequired = isComponentMandatory(settings, 'respondentName');
     const phoneEnabled = isComponentEnabled(settings, 'respondentPhone');
     const phoneRequired = isComponentMandatory(settings, 'respondentPhone');
     const householdEnabled = isComponentEnabled(settings, 'householdId');
@@ -670,6 +674,9 @@ app.post('/api/responses', async (req, res, next) => {
 
     if (phoneRequired && !respondentPhone?.trim()) {
       return res.status(400).json({ error: 'Respondent phone is mandatory for this project.' });
+    }
+    if (respondentNameRequired && !respondentName?.trim()) {
+      return res.status(400).json({ error: 'Respondent name is mandatory for this project.' });
     }
     if (householdRequired && !householdId?.trim()) {
       return res.status(400).json({ error: 'Household ID is mandatory for this project.' });
@@ -718,7 +725,7 @@ app.post('/api/responses', async (req, res, next) => {
         project.id,
         enumeratorName.trim(),
         location.trim(),
-        respondentName?.trim() || null,
+        respondentNameEnabled ? respondentName?.trim() || null : null,
         phoneEnabled ? respondentPhone?.trim() || null : null,
         householdEnabled ? householdId?.trim() || null : null,
         answers,
@@ -3774,6 +3781,7 @@ function normalizeProjectSettings(settings = {}, slug = '') {
     airportLocationMode: componentPolicy.airportLocationFlow !== 'off',
     captureGps: componentPolicy.gps !== 'off',
     captureAudio: componentPolicy.audio !== 'off',
+    showRespondentName: componentPolicy.respondentName !== 'off',
     showRespondentPhone: componentPolicy.respondentPhone !== 'off',
     showHouseholdId: componentPolicy.householdId !== 'off',
     sector: parsed.sector?.trim?.() || 'Other',
@@ -3794,6 +3802,10 @@ function normalizeComponentPolicy(settings = {}, slug = '') {
     ),
     gps: normalizeComponentMode(providedPolicy.gps, settings.captureGps ? 'optional' : defaultComponentPolicy.gps),
     audio: normalizeComponentMode(providedPolicy.audio, settings.captureAudio ? 'optional' : defaultComponentPolicy.audio),
+    respondentName: normalizeComponentMode(
+      providedPolicy.respondentName,
+      settings.showRespondentName === false ? 'off' : defaultComponentPolicy.respondentName
+    ),
     respondentPhone: normalizeComponentMode(
       providedPolicy.respondentPhone,
       settings.showRespondentPhone === false ? 'off' : defaultComponentPolicy.respondentPhone

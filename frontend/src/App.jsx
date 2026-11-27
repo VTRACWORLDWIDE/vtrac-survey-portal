@@ -5426,6 +5426,28 @@ function ProjectEditor({ project, onChange, onCancel, onSave, onPublish }) {
                       <option value="date">Date</option>
                     </select>
                   </label>
+                  {['select', 'radio'].includes(selectedQuestion.type) && (
+                    <div className="studio-answer-layout">
+                      <span>Answer layout</span>
+                      <div className="studio-segmented-control" role="group" aria-label="Answer layout">
+                        <button
+                          type="button"
+                          className={selectedQuestion.type === 'select' ? 'active' : ''}
+                          onClick={() => patchQuestion(selectedIndex, { type: 'select' })}
+                        >
+                          Dropdown
+                        </button>
+                        <button
+                          type="button"
+                          className={selectedQuestion.type === 'radio' ? 'active' : ''}
+                          onClick={() => patchQuestion(selectedIndex, { type: 'radio' })}
+                        >
+                          Choice buttons
+                        </button>
+                      </div>
+                      <small>This changes the selected question only and keeps all response options.</small>
+                    </div>
+                  )}
                   <label>
                     Question Text
                     <textarea value={selectedQuestion.label || ''} onChange={(event) => patchQuestion(selectedIndex, { label: event.target.value, id: variableFromLabel(event.target.value, selectedIndex) })} />

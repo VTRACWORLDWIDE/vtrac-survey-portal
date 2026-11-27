@@ -6262,6 +6262,48 @@ textarea {
   gap: 8px;
 }
 
+.studio-answer-layout {
+  display: grid;
+  gap: 8px;
+}
+
+.studio-answer-layout > span {
+  color: #314458;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.studio-answer-layout small {
+  color: #6a7a89;
+  line-height: 1.4;
+}
+
+.studio-segmented-control {
+  background: #edf3f6;
+  border: 1px solid #d5e1e7;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 4px;
+}
+
+.studio-segmented-control button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #526477;
+  min-height: 38px;
+  padding: 7px 10px;
+}
+
+.studio-segmented-control button.active {
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(18, 63, 115, 0.12);
+  color: #123f73;
+  font-weight: 800;
+}
+
 .studio-toggle-row {
   align-items: center;
   background: #f8fbfc;

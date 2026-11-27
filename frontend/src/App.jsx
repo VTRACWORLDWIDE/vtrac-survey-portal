@@ -2,6 +2,7 @@ import { Component, useEffect, useMemo, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { findBengaluruLocations } from './data/bengaluruLocations.js';
 import {
   ArrowDown,
   ArrowUp,
@@ -1563,6 +1564,7 @@ function parseAirportLocation(location = '') {
 }
 
 function QuestionInput({ question, index, value, onChange, disabled = false, onFetchCoordinates, coordinateStatus = '', hasCoordinates = false }) {
+  const isOdLocation = question.id === 'origin' || question.id === 'destination';
   const numberProps = question.id.includes('minutes')
     ? { min: 0, max: 59, inputMode: 'numeric' }
     : question.id.includes('hours')
@@ -1597,7 +1599,16 @@ function QuestionInput({ question, index, value, onChange, disabled = false, onF
         {question.type === 'date' && (
           <input type="date" value={value} onChange={(event) => onChange(event.target.value)} required={question.required} disabled={disabled} />
         )}
-        {question.type === 'text' && (
+        {question.type === 'text' && isOdLocation && (
+          <LocationAutocomplete
+            value={value}
+            onChange={onChange}
+            required={question.required}
+            disabled={disabled}
+            label={question.label}
+          />
+        )}
+        {question.type === 'text' && !isOdLocation && (
           <input value={value} onChange={(event) => onChange(event.target.value)} required={question.required} disabled={disabled} />
         )}
       </label>
@@ -1607,6 +1618,60 @@ function QuestionInput({ question, index, value, onChange, disabled = false, onF
             <MapPin size={17} /> {hasCoordinates ? 'Refresh coordinates' : 'Fetch coordinates'}
           </button>
           <span>{coordinateStatus || 'Tap to capture latitude, longitude, and GPS accuracy.'}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LocationAutocomplete({ value, onChange, required, disabled = false, label = 'Location' }) {
+  const [open, setOpen] = useState(false);
+  const matches = useMemo(() => findBengaluruLocations(value), [value]);
+
+  return (
+    <div className="search-select location-autocomplete">
+      <div className="location-autocomplete-input">
+        <Search size={18} aria-hidden="true" />
+        <input
+          value={value}
+          onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+          onChange={(event) => {
+            if (disabled) return;
+            onChange(event.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => !disabled && setOpen(true)}
+          placeholder={`Search or enter ${label.toLowerCase()}`}
+          autoComplete="off"
+          aria-autocomplete="list"
+          aria-expanded={open}
+          required={required}
+          disabled={disabled}
+        />
+      </div>
+      {!disabled && open && (
+        <div className="search-menu location-autocomplete-menu" role="listbox">
+          {matches.length > 0 ? matches.map((location) => (
+            <button
+              key={location}
+              type="button"
+              role="option"
+              aria-selected={value === location}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onChange(location);
+                setOpen(false);
+              }}
+            >
+              <MapPin size={16} aria-hidden="true" />
+              <span>{location}</span>
+            </button>
+          )) : (
+            <div className="location-autocomplete-empty">No master-list match. Your typed location will be saved.</div>
+          )}
+          {value.trim() && !matches.includes(value.trim()) && (
+            <div className="location-autocomplete-manual">Manual entry: <strong>{value.trim()}</strong></div>
+          )}
         </div>
       )}
     </div>

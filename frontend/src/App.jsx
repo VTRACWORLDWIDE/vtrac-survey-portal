@@ -3372,12 +3372,12 @@ function AdminDashboard({ token, session, onLogout }) {
     { key: 'builder', label: 'Builder', section: 'projectWorkspace', permission: 'surveys.design', icon: <Layers size={17} />, action: () => selectedProject ? openProjectWorkspace(selectedProject, 'form') : openAdminSection('projects'), active: activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'form' },
     { key: 'preview', label: 'Preview Form', section: 'projectWorkspace', permission: 'surveys.design', icon: <Eye size={17} />, action: () => selectedProject && window.open(selectedProject.publicUrl, '_blank'), active: false },
     { key: 'copy-link', label: 'Copy Survey Link', section: 'projectWorkspace', permission: 'surveys.design', icon: <Link2 size={17} />, action: copyPublicLink, active: false }
-  ] : [
+  ] : activeAdminSection === 'projectWorkspace' ? [
     { key: 'data-table', label: 'Response Table', section: 'projectWorkspace', icon: <Table2 size={17} />, action: () => { if (selectedProject) { setProjectDataTab('table'); openProjectWorkspace(selectedProject, 'data'); } else openAdminSection('projects'); }, active: activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'data' && projectDataTab === 'table' },
     { key: 'downloads', label: 'Downloads', section: 'projectWorkspace', icon: <Download size={17} />, action: () => { if (selectedProject) { setProjectDataTab('downloads'); openProjectWorkspace(selectedProject, 'data'); } else openAdminSection('projects'); }, active: activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'data' && projectDataTab === 'downloads' },
     { key: 'map', label: 'Map', section: 'projectWorkspace', icon: <MapPin size={17} />, action: () => { if (selectedProject) { setProjectDataTab('map'); openProjectWorkspace(selectedProject, 'data'); } else openAdminSection('projects'); }, active: activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'data' && projectDataTab === 'map' },
     { key: 'project-settings', label: 'Project Settings', section: 'projectWorkspace', permission: 'projects.manage', icon: <Settings size={17} />, action: () => selectedProject ? openProjectWorkspace(selectedProject, 'settings') : openAdminSection('projects'), active: activeAdminSection === 'projectWorkspace' && projectWorkspaceTab === 'settings' }
-  ]).filter(isNavItemAllowed);
+  ] : []).filter(isNavItemAllowed);
   const projectStatusItems = [
     { key: 'all', label: 'All projects', count: projectCounts.all },
     { key: 'deployed', label: 'Deployed', count: projectCounts.deployed },
@@ -3439,16 +3439,7 @@ function AdminDashboard({ token, session, onLogout }) {
               </button>
             ))}
 
-            <p className="surveyos-nav-section-title">Project Status</p>
-            {projectStatusItems.map((item) => (
-              <button type="button" className={projectStatusFilter === item.key ? 'active compact' : 'compact'} key={item.key} onClick={() => filterProjects(item.key)} title={item.label}>
-                <ClipboardList size={17} />
-                <span>{item.label}</span>
-                <strong className="surveyos-sidebar-count">{item.count}</strong>
-              </button>
-            ))}
-
-            {governanceNavItems.length > 0 && <p className="surveyos-nav-section-title">Governance</p>}
+            {governanceNavItems.length > 0 && <p className="surveyos-nav-section-title">Management</p>}
             {governanceNavItems.map((item) => (
               <button type="button" className={item.active ? 'active' : ''} key={item.key} onClick={item.action} title={item.label}>
                 {item.icon}
@@ -3534,9 +3525,32 @@ function AdminDashboard({ token, session, onLogout }) {
             <>
               <div className="admin-project-toolbar">
                 <div>
-                  <h2>My Projects</h2>
-                  <p>{filteredProjects.length} shown · {projects.length} total · {projectStatusFilter}{selectedProjectIds.length > 0 ? ` · ${selectedProjectIds.length} selected` : ''}</p>
+                  <p className="eyebrow">Project portfolio</p>
+                  <h2>Projects</h2>
+                  <p>Manage survey forms, deployment, collection links, and submitted responses.</p>
                 </div>
+                <div className="project-toolbar-actions">
+                  {hasAdminPermission('projects.manage') && (
+                    <button className="primary compact-button" onClick={startNewProject}><Plus size={16} /> New project</button>
+                  )}
+                </div>
+              </div>
+
+              <div className="project-list-controls" aria-label="Project list filters">
+                <div className="project-status-switcher">
+                  {projectStatusItems.map((item) => (
+                    <button
+                      type="button"
+                      className={projectStatusFilter === item.key ? 'active' : ''}
+                      key={item.key}
+                      onClick={() => filterProjects(item.key)}
+                    >
+                      <span>{item.label}</span>
+                      <strong>{item.count}</strong>
+                    </button>
+                  ))}
+                </div>
+                <p>{filteredProjects.length} shown{selectedProjectIds.length > 0 ? ` · ${selectedProjectIds.length} selected` : ''}</p>
               </div>
 
               <div className="admin-project-table">

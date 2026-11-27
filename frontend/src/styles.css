@@ -13310,3 +13310,331 @@ body:has(.admin-console) {
     padding: 16px;
   }
 }
+
+/* Product shell redesign: quieter navigation and task-led project workspace */
+.admin-console-topbar {
+  box-shadow: 0 1px 0 rgba(11, 35, 70, 0.06);
+  min-height: 64px;
+  padding: 8px 18px;
+}
+
+.admin-brand-mark img {
+  height: 40px;
+  width: 48px;
+}
+
+.admin-brand-mark span {
+  font-size: 0.94rem;
+  font-weight: 750;
+}
+
+.admin-topbar-context {
+  border-radius: 6px;
+  min-width: 144px;
+  padding: 7px 10px;
+}
+
+.admin-search {
+  border-radius: 7px;
+  min-height: 40px;
+}
+
+.admin-console-shell.surveyos-nav-shell {
+  grid-template-columns: 244px minmax(0, 1fr);
+  min-height: calc(100vh - 64px);
+}
+
+.admin-console-shell.surveyos-nav-shell.menu-collapsed {
+  grid-template-columns: 68px minmax(0, 1fr);
+}
+
+.surveyos-app-sidebar.admin-sidebar {
+  background: #0b356d;
+  box-shadow: 8px 0 24px rgba(10, 42, 88, 0.1);
+  gap: 12px;
+  padding: 14px 12px;
+}
+
+.surveyos-sidebar-brand img {
+  height: 38px;
+  width: 44px;
+}
+
+.surveyos-sidebar-brand strong {
+  font-size: 1rem;
+}
+
+.surveyos-sidebar-brand span {
+  font-size: 0.66rem;
+}
+
+.surveyos-collapse-button.admin-collapse-button {
+  height: 34px;
+  min-height: 34px;
+  width: 34px;
+}
+
+.surveyos-new-button.admin-new-button {
+  background: #ffffff;
+  border: 0;
+  border-radius: 7px;
+  box-shadow: none;
+  color: #0b356d;
+  font-size: 0.76rem;
+  min-height: 38px;
+  text-transform: none;
+}
+
+.surveyos-new-button.admin-new-button:hover {
+  background: #eaf4ff;
+}
+
+.surveyos-nav-section-title {
+  color: rgba(225, 237, 252, 0.64);
+  font-size: 0.66rem;
+  margin: 12px 8px 5px;
+}
+
+.surveyos-sidebar-nav button,
+.surveyos-sidebar-projects button {
+  border-radius: 6px;
+  color: rgba(244, 248, 255, 0.88);
+  font-size: 0.78rem;
+  min-height: 38px;
+  padding: 8px 9px;
+}
+
+.surveyos-sidebar-nav button.active,
+.surveyos-sidebar-projects button.active {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 3px 0 0 #55d7d1;
+}
+
+.surveyos-sidebar-nav button:not(.active):hover,
+.surveyos-sidebar-projects button:not(.active):hover {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+}
+
+.admin-main {
+  gap: 18px;
+  padding: 24px;
+}
+
+.admin-main > :where(.admin-project-toolbar, .project-list-controls, .admin-project-table, .admin-public-link, .project-workspace, .surveyos-super-admin, .portfolio-dashboard-section, .admin-section) {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 1600px;
+  width: 100%;
+}
+
+.admin-project-toolbar {
+  align-items: flex-end;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0 2px;
+}
+
+.admin-project-toolbar .eyebrow {
+  margin: 0 0 6px;
+}
+
+.admin-project-toolbar h2 {
+  font-size: clamp(1.55rem, 2.2vw, 2rem);
+  margin: 0;
+}
+
+.admin-project-toolbar p:last-child {
+  margin: 6px 0 0;
+}
+
+.project-toolbar-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.project-list-controls {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--vtrac-line);
+  border-radius: 8px;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 8px 10px;
+}
+
+.project-list-controls > p {
+  color: var(--vtrac-muted);
+  font-size: 0.78rem;
+  margin: 0 4px;
+  white-space: nowrap;
+}
+
+.project-status-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.project-status-switcher button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #53647e;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 700;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.project-status-switcher button:hover {
+  background: #f3f7fb;
+}
+
+.project-status-switcher button.active {
+  background: #e9f7f6;
+  border-color: #bfe7e4;
+  color: #087b78;
+}
+
+.project-status-switcher strong {
+  align-items: center;
+  background: rgba(11, 35, 70, 0.07);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.7rem;
+  justify-content: center;
+  min-width: 22px;
+  padding: 2px 6px;
+}
+
+.admin-project-table {
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 48, 92, 0.06);
+}
+
+.admin-project-table th {
+  background: #f7f9fc;
+  color: #5c6c83;
+  font-size: 0.72rem;
+  padding-bottom: 11px;
+  padding-top: 11px;
+  text-transform: none;
+}
+
+.admin-project-table td {
+  font-size: 0.82rem;
+  padding-bottom: 13px;
+  padding-top: 13px;
+}
+
+.project-name-button {
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.project-workspace {
+  border-radius: 10px;
+  box-shadow: 0 8px 26px rgba(15, 48, 92, 0.06);
+  padding: 22px;
+}
+
+.project-workspace-header {
+  align-items: flex-start;
+  padding-bottom: 18px;
+}
+
+.project-tabs {
+  border-left: 0;
+  border-right: 0;
+  border-radius: 0;
+  box-shadow: none;
+  margin-left: -22px;
+  margin-right: -22px;
+  padding: 0 22px;
+}
+
+.project-tabs button {
+  font-size: 0.82rem;
+  min-height: 46px;
+  padding: 0 14px;
+}
+
+@media (max-width: 900px) {
+  .admin-console-shell.surveyos-nav-shell,
+  .admin-console-shell.surveyos-nav-shell.menu-collapsed {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .admin-main {
+    padding: 16px;
+  }
+
+  .admin-project-toolbar {
+    align-items: stretch;
+  }
+
+  .project-toolbar-actions .primary {
+    width: auto;
+  }
+}
+
+@media (max-width: 620px) {
+  .admin-main {
+    padding: 12px;
+  }
+
+  .admin-project-toolbar {
+    gap: 16px;
+  }
+
+  .project-toolbar-actions,
+  .project-toolbar-actions .primary {
+    width: 100%;
+  }
+
+  .project-list-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .project-status-switcher {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .project-status-switcher button {
+    justify-content: space-between;
+  }
+
+  .project-list-controls > p {
+    margin: 0 6px 4px;
+  }
+
+  .project-workspace {
+    padding: 16px;
+  }
+
+  .project-tabs {
+    margin-left: -16px;
+    margin-right: -16px;
+    overflow-x: auto;
+    padding: 0 16px;
+  }
+
+  .project-tabs button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}

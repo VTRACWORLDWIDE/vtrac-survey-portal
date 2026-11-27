@@ -12462,3 +12462,151 @@ body:has(.admin-console) {
     padding: 8px 10px;
   }
 }
+
+.survey-hero.survey-cover {
+  align-items: stretch;
+  background: #123f73;
+  display: grid;
+  gap: 22px;
+  min-height: 0;
+  padding: 28px 30px;
+}
+
+.survey-hero.survey-cover::after {
+  display: none;
+}
+
+.survey-cover-top {
+  align-items: start;
+  display: grid;
+  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  position: relative;
+  z-index: 1;
+}
+
+.survey-cover-heading {
+  align-self: center;
+  min-width: 0;
+}
+
+.survey-cover-heading h2 {
+  font-size: clamp(2rem, 4vw, 3.15rem);
+  line-height: 1.08;
+  margin: 7px 0 0;
+}
+
+.survey-cover-logo {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-self: end;
+  width: 150px;
+}
+
+.survey-cover-logo img {
+  background: transparent;
+  border: 0;
+  height: 76px;
+  object-fit: contain;
+  padding: 0;
+  width: 150px;
+}
+
+.survey-cover-logo span {
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-top: 4px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.survey-cover-divider {
+  background: rgba(84, 215, 209, 0.35);
+  height: 1px;
+  position: relative;
+  z-index: 1;
+}
+
+.survey-cover-brief {
+  position: relative;
+  z-index: 1;
+}
+
+.survey-cover-brief > p:not(.eyebrow) {
+  color: #dce9f5;
+  font-size: 1.05rem;
+  line-height: 1.55;
+  margin: 10px 0 0;
+  max-width: 980px;
+}
+
+.survey-cover-meta {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+  z-index: 1;
+}
+
+.survey-cover-meta span {
+  align-items: center;
+  color: #e9f3fa;
+  display: inline-flex;
+  font-size: 0.92rem;
+  gap: 8px;
+}
+
+.survey-cover-meta svg {
+  color: #54d7d1;
+}
+
+@media (max-width: 760px) {
+  .survey-hero.survey-cover {
+    gap: 17px;
+    padding: 18px;
+  }
+
+  .survey-cover-top {
+    align-items: start;
+    gap: 14px;
+    grid-template-columns: minmax(0, 1fr) 104px;
+  }
+
+  .survey-cover-heading h2 {
+    font-size: 1.58rem;
+    line-height: 1.16;
+    margin-top: 5px;
+  }
+
+  .survey-cover-logo {
+    width: 104px;
+  }
+
+  .survey-cover-logo img {
+    height: 54px;
+    width: 104px;
+  }
+
+  .survey-cover-logo span {
+    font-size: 7px;
+    margin-top: 2px;
+  }
+
+  .survey-cover-brief > p:not(.eyebrow) {
+    font-size: 0.92rem;
+    line-height: 1.5;
+    margin-top: 8px;
+  }
+
+  .survey-cover-meta {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .survey-cover-meta span {
+    font-size: 0.82rem;
+  }
+}

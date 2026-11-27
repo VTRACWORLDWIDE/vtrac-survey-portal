@@ -1008,23 +1008,30 @@ function SurveyForm({ projectSlug }) {
     }
   }
 
+  const surveyCityValue = config.locations?.length === 1 ? config.locations[0] : 'Bengaluru';
+  const surveyCity = /^bangalore$/i.test(String(surveyCityValue || '').trim()) ? 'Bengaluru' : surveyCityValue;
+
   return (
     <section className="survey-shell">
-      <div className="survey-hero">
-        <div className="survey-hero-copy">
-          <p className="eyebrow">Field Collection</p>
-          <h2>{config.name || 'Survey'}</h2>
-          <p>{config.description || 'Submit accurate field data from any mobile browser.'}</p>
-        </div>
-        <div className="survey-hero-brand">
-          <div className="survey-hero-logo">
+      <div className="survey-hero survey-cover">
+        <div className="survey-cover-top">
+          <div className="survey-cover-heading">
+            <p className="eyebrow">Field Collection</p>
+            <h2>{config.name || 'Survey'}</h2>
+          </div>
+          <div className="survey-cover-logo">
             <img src="/vtrac-logo-mark.png" alt="VTRAC" />
             <span>Intelligent Traffic Solutions</span>
           </div>
-          <div className="hero-pill">
-            <CalendarClock size={18} />
-            {new Date().toLocaleDateString()}
-          </div>
+        </div>
+        <div className="survey-cover-divider" />
+        <div className="survey-cover-brief">
+          <p className="eyebrow">Transportation &amp; Mobility Studies</p>
+          <p>{config.description || 'Submit accurate field data from any mobile browser.'}</p>
+        </div>
+        <div className="survey-cover-meta">
+          <span><CalendarClock size={18} /> {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+          <span><MapPin size={18} /> {surveyCity}</span>
         </div>
       </div>
 

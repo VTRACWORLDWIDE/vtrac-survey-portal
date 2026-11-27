@@ -4321,7 +4321,10 @@ function escapeHtml(value) {
 function ProjectEditor({ project, onChange, onCancel, onSave, onPublish }) {
   const settings = normalizeSurveySettings(project.settings, project.slug);
   const questions = Array.isArray(project.questions) ? project.questions : [];
+  const projectLocationsText = Array.isArray(project.locations) ? project.locations.join('\n') : project.locations || '';
   const [studioTab, setStudioTab] = useState('builder');
+  const [studioActionStatus, setStudioActionStatus] = useState('');
+  const [previewMode, setPreviewMode] = useState('');
   const [importText, setImportText] = useState('');
   const [importStatus, setImportStatus] = useState('Paste questionnaire text or upload a TXT/CSV file to auto-draft questions.');
   const [parsedImportQuestions, setParsedImportQuestions] = useState([]);
@@ -4335,6 +4338,36 @@ function ProjectEditor({ project, onChange, onCancel, onSave, onPublish }) {
 
   function update(field, value) {
     onChange({ ...project, [field]: value });
+  }
+
+  function hasSurveyLocations() {
+    const locations = Array.isArray(project.locations) ? project.locations : String(project.locations || '').split(/\r?\n/);
+    return locations.some((location) => String(location).trim());
+  }
+
+  async function saveDraft() {
+    if (!hasSurveyLocations()) {
+      setStudioActionStatus('Add at least one survey location before saving.');
+      return;
+    }
+    setStudioActionStatus('Saving draft...');
+    const saved = await onSave(project);
+    if (!saved) setStudioActionStatus('Unable to save. Review the required project fields and try again.');
+  }
+
+  async function publishSurvey() {
+    if (!hasSurveyLocations()) {
+      setStudioActionStatus('Add at least one survey location before deployment.');
+      return;
+    }
+    setStudioActionStatus('Preparing survey deployment...');
+    const deployed = await onPublish(project);
+    if (!deployed) setStudioActionStatus('Deployment was cancelled or could not be completed.');
+  }
+
+  function openStudioPreview(mode) {
+    setPreviewMode(mode);
+    setStudioActionStatus(mode === 'test' ? 'Test mode opened. Entries here are not submitted.' : 'Preview opened.');
   }
 
   function updateSetting(field, value) {
@@ -4752,12 +4785,53 @@ function ProjectEditor({ project, onChange, onCancel, onSave, onPublish }) {
         </div>
         <div className="studio-header-actions">
           <span className="studio-avatar-stack"><span>NR</span><span>QA</span><span>+3</span></span>
-          <button type="button" className="secondary"><Eye size={16} /> Preview</button>
-          <button type="button" className="secondary"><Send size={16} /> Run Test</button>
-          <button type="button" className="primary" onClick={() => onPublish(project)}><Upload size={16} /> Deploy survey</button>
-          <button type="button" className="primary" onClick={() => onSave(project)}><Save size={16} /> Save</button>
+          <button type="button" className="secondary" onClick={() => openStudioPreview('preview')}><Eye size={16} /> Preview</button>
+          <button type="button" className="secondary" onClick={() => openStudioPreview('test')}><Send size={16} /> Run Test</button>
+          <button type="button" className="primary" onClick={publishSurvey}><Upload size={16} /> Deploy survey</button>
+          <button type="button" className="primary" onClick={saveDraft}><Save size={16} /> Save</button>
+          {studioActionStatus && <span className="studio-action-status" role="status">{studioActionStatus}</span>}
         </div>
       </div>
+
+      {previewMode && (
+        <div className="studio-preview-overlay" role="dialog" aria-modal="true" aria-label={`${previewMode === 'test' ? 'Test' : 'Preview'} survey`}>
+          <div className="studio-preview-dialog">
+            <div className="studio-preview-header">
+              <div>
+                <span className="section-kicker">{previewMode === 'test' ? 'Interactive test' : 'Form preview'}</span>
+                <h3>{project.name || 'Untitled survey'}</h3>
+                <p>{previewMode === 'test' ? 'Try the fields below. Test entries are not saved or submitted.' : 'Review the mobile questionnaire layout before deployment.'}</p>
+              </div>
+              <button type="button" className="icon-button" onClick={() => setPreviewMode('')} title="Close preview"><X size={20} /></button>
+            </div>
+            <div className="studio-preview-form">
+              <label>Enumerator name<input disabled={previewMode === 'preview'} placeholder="Enter enumerator name" /></label>
+              <label>Survey location
+                <select disabled={previewMode === 'preview'} defaultValue="">
+                  <option value="" disabled>Select survey location</option>
+                  {(Array.isArray(project.locations) ? project.locations : String(project.locations || '').split(/\r?\n/)).filter(Boolean).map((location) => <option key={location}>{location}</option>)}
+                </select>
+              </label>
+              {questions.map((question, index) => (
+                <label key={`${question.id || 'preview'}-${index}`}>
+                  <span>{index + 1}. {question.label || 'Untitled question'}{question.required ? ' *' : ''}</span>
+                  {question.type === 'select' ? (
+                    <select disabled={previewMode === 'preview'} defaultValue=""><option value="" disabled>Select an option</option>{optionRowsFor(question).map((row) => <option key={`${question.id}-${row.code}`}>{row.label}</option>)}</select>
+                  ) : question.type === 'textarea' ? (
+                    <textarea disabled={previewMode === 'preview'} placeholder="Enter response" />
+                  ) : (
+                    <input disabled={previewMode === 'preview'} type={question.type === 'number' ? 'number' : question.type === 'date' ? 'date' : 'text'} placeholder={question.type === 'number' ? 'Enter number' : 'Enter response'} />
+                  )}
+                </label>
+              ))}
+            </div>
+            <div className="studio-preview-footer">
+              <span>{questions.length} questions · {previewMode === 'test' ? 'No data will be stored' : 'Read-only preview'}</span>
+              <button type="button" className="primary" onClick={() => setPreviewMode('')}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="studio-top-tabs" role="tablist" aria-label="Survey Studio workflow tabs">
         {studioTabs.map((tab) => {
@@ -4869,7 +4943,7 @@ function ProjectEditor({ project, onChange, onCancel, onSave, onPublish }) {
                 <label>Project name<input value={project.name} onChange={(event) => update('name', event.target.value)} /></label>
                 <label>URL slug<input value={project.slug} onChange={(event) => update('slug', event.target.value)} /></label>
                 <label className="wide">Description<textarea value={project.description} onChange={(event) => update('description', event.target.value)} /></label>
-                <label className="wide">Survey locations<textarea value={project.locations} onChange={(event) => update('locations', event.target.value)} /></label>
+                <label className="wide">Survey locations<textarea value={projectLocationsText} onChange={(event) => update('locations', event.target.value)} /></label>
               </div>
               <div className="studio-rule-grid">
                 {componentControls.map((component) => {
@@ -4900,7 +4974,7 @@ function ProjectEditor({ project, onChange, onCancel, onSave, onPublish }) {
         </label>
         <label>
           Locations
-          <textarea value={project.locations} onChange={(event) => update('locations', event.target.value)} />
+          <textarea value={projectLocationsText} onChange={(event) => update('locations', event.target.value)} />
         </label>
       </div>
 

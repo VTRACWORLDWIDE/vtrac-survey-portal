@@ -189,6 +189,12 @@ nav button.active {
   max-width: 620px;
 }
 
+.survey-hero-copy {
+  max-width: min(72%, 760px);
+  position: relative;
+  z-index: 1;
+}
+
 .hero-pill {
   align-items: center;
   background: rgba(255, 255, 255, 0.12);
@@ -203,23 +209,22 @@ nav button.active {
 
 .survey-hero-brand {
   align-items: flex-end;
-  align-self: stretch;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  inset: 18px 18px 18px auto;
   justify-content: space-between;
-  position: relative;
+  position: absolute;
   z-index: 2;
 }
 
 .survey-hero-brand img {
-  background: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.78);
-  border-radius: 6px;
-  height: 46px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  height: 58px;
   object-fit: contain;
-  padding: 4px 7px;
-  width: 112px;
+  padding: 0;
+  width: 118px;
 }
 
 .page-grid {
@@ -6999,20 +7004,27 @@ tbody tr:hover {
     font-size: 0.95rem;
   }
 
+  .survey-hero-copy {
+    max-width: 100%;
+    padding-right: 74px;
+    padding-bottom: 70px;
+  }
+
   .hero-pill {
     justify-self: start;
   }
 
   .survey-hero-brand {
-    align-items: flex-start;
-    flex-direction: row;
-    margin-top: 14px;
-    width: 100%;
+    align-items: flex-end;
+    flex-direction: column;
+    inset: 14px 14px 14px auto;
+    margin: 0;
+    width: auto;
   }
 
   .survey-hero-brand img {
-    height: 40px;
-    width: 98px;
+    height: 48px;
+    width: 82px;
   }
 
   .summary-performance-head {

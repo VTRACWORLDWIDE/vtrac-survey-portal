@@ -1011,13 +1011,13 @@ function SurveyForm({ projectSlug }) {
   return (
     <section className="survey-shell">
       <div className="survey-hero">
-        <div>
+        <div className="survey-hero-copy">
           <p className="eyebrow">Field Collection</p>
           <h2>{config.name || 'Survey'}</h2>
           <p>{config.description || 'Submit accurate field data from any mobile browser.'}</p>
         </div>
         <div className="survey-hero-brand">
-          <img src="/vtrac-logo.jpg" alt="VTRAC Worldwide" />
+          <img src="/vtrac-logo-transparent.png" alt="VTRAC Worldwide" />
           <div className="hero-pill">
             <CalendarClock size={18} />
             {new Date().toLocaleDateString()}

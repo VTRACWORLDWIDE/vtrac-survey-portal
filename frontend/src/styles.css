@@ -147,6 +147,12 @@ nav button.active {
   padding: 24px clamp(16px, 4vw, 48px) 48px;
 }
 
+.survey-shell {
+  margin: 0 auto;
+  max-width: 1520px;
+  width: 100%;
+}
+
 .survey-hero {
   align-items: end;
   background: #123f73;
@@ -12491,9 +12497,10 @@ body:has(.admin-console) {
 }
 
 .survey-cover-heading h2 {
-  font-size: clamp(2rem, 4vw, 3.15rem);
-  line-height: 1.08;
+  font-size: clamp(2rem, 3vw, 2.7rem);
+  line-height: 1.12;
   margin: 7px 0 0;
+  max-width: 1050px;
 }
 
 .survey-cover-logo {
@@ -12540,7 +12547,7 @@ body:has(.admin-console) {
   font-size: 1.05rem;
   line-height: 1.55;
   margin: 10px 0 0;
-  max-width: 980px;
+  max-width: 1100px;
 }
 
 .survey-cover-meta {
@@ -12561,6 +12568,35 @@ body:has(.admin-console) {
 
 .survey-cover-meta svg {
   color: #54d7d1;
+}
+
+@media (min-width: 761px) and (max-width: 1100px) {
+  .survey-hero.survey-cover {
+    gap: 19px;
+    padding: 24px;
+  }
+
+  .survey-cover-top {
+    gap: 20px;
+    grid-template-columns: minmax(0, 1fr) 126px;
+  }
+
+  .survey-cover-heading h2 {
+    font-size: 2.15rem;
+  }
+
+  .survey-cover-logo {
+    width: 126px;
+  }
+
+  .survey-cover-logo img {
+    height: 64px;
+    width: 126px;
+  }
+
+  .survey-cover-logo span {
+    font-size: 8.5px;
+  }
 }
 
 @media (max-width: 760px) {
@@ -12608,5 +12644,50 @@ body:has(.admin-console) {
 
   .survey-cover-meta span {
     font-size: 0.82rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .survey-hero.survey-cover {
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .survey-cover-top {
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr) 88px;
+  }
+
+  .survey-cover-heading h2 {
+    font-size: 1.38rem;
+    line-height: 1.18;
+  }
+
+  .survey-cover-heading .eyebrow,
+  .survey-cover-brief .eyebrow {
+    font-size: 0.7rem;
+  }
+
+  .survey-cover-logo {
+    width: 88px;
+  }
+
+  .survey-cover-logo img {
+    height: 45px;
+    width: 88px;
+  }
+
+  .survey-cover-logo span {
+    font-size: 6px;
+  }
+
+  .survey-cover-brief > p:not(.eyebrow) {
+    font-size: 0.86rem;
+    line-height: 1.45;
+  }
+
+  .survey-cover-meta {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

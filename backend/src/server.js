@@ -2484,7 +2484,7 @@ async function ensureEnvironmentAdminAccount() {
       email = COALESCE(EXCLUDED.email, staff_accounts.email),
       display_name = EXCLUDED.display_name,
       role = 'admin',
-      password_hash = EXCLUDED.password_hash,
+      password_hash = COALESCE(staff_accounts.password_hash, EXCLUDED.password_hash),
       must_change_password = FALSE,
       is_active = TRUE,
       updated_at = NOW()`,

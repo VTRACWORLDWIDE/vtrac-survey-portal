@@ -201,6 +201,27 @@ nav button.active {
   z-index: 1;
 }
 
+.survey-hero-brand {
+  align-items: flex-end;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  justify-content: space-between;
+  position: relative;
+  z-index: 2;
+}
+
+.survey-hero-brand img {
+  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  border-radius: 6px;
+  height: 46px;
+  object-fit: contain;
+  padding: 4px 7px;
+  width: 112px;
+}
+
 .page-grid {
   align-items: start;
   display: grid;
@@ -6980,6 +7001,18 @@ tbody tr:hover {
 
   .hero-pill {
     justify-self: start;
+  }
+
+  .survey-hero-brand {
+    align-items: flex-start;
+    flex-direction: row;
+    margin-top: 14px;
+    width: 100%;
+  }
+
+  .survey-hero-brand img {
+    height: 40px;
+    width: 98px;
   }
 
   .summary-performance-head {

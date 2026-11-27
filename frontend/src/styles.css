@@ -12474,8 +12474,11 @@ body:has(.admin-console) {
   background: #123f73;
   display: grid;
   gap: 22px;
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: stretch;
   min-height: 0;
   padding: 28px 30px;
+  width: 100%;
 }
 
 .survey-hero.survey-cover::after {
@@ -12488,6 +12491,7 @@ body:has(.admin-console) {
   gap: 24px;
   grid-template-columns: minmax(0, 1fr) 150px;
   position: relative;
+  width: 100%;
   z-index: 1;
 }
 
@@ -12534,11 +12538,13 @@ body:has(.admin-console) {
   background: rgba(84, 215, 209, 0.35);
   height: 1px;
   position: relative;
+  width: 100%;
   z-index: 1;
 }
 
 .survey-cover-brief {
   position: relative;
+  width: 100%;
   z-index: 1;
 }
 
@@ -12555,6 +12561,7 @@ body:has(.admin-console) {
   display: flex;
   justify-content: space-between;
   position: relative;
+  width: 100%;
   z-index: 1;
 }
 

@@ -1566,7 +1566,7 @@ function parseAirportLocation(location = '') {
 function QuestionInput({ question, index, value, onChange, disabled = false, onFetchCoordinates, coordinateStatus = '', hasCoordinates = false }) {
   const isOdLocation = question.id === 'origin' || question.id === 'destination';
   const numberProps = question.id.includes('minutes')
-    ? { min: 0, max: 59, inputMode: 'numeric' }
+    ? { min: 0, step: 1, inputMode: 'numeric' }
     : question.id.includes('hours')
       ? { min: 0, max: 12, inputMode: 'numeric' }
       : {};
